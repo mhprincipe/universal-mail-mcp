@@ -7,7 +7,7 @@ import type { SetupLog } from './log.js';
 // commands, all written down in tests/setup/gcloud.test.ts. Google's wording
 // in classify() is as documented; the live install confirms it.
 
-export const OFFICIAL_IMAGE_REPOSITORY = 'us-docker.pkg.dev/universal-mail/release/server';
+export const OFFICIAL_IMAGE_REPOSITORY = 'us-docker.pkg.dev/universal-mail-rel-zqrw/release/server';
 const REGION = 'us-central1';
 const SERVICE = 'universal-mail';
 const SERVER_IDENTITY = 'universal-mail-server';

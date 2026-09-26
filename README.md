@@ -4,8 +4,9 @@
 built and tested), awaiting the first live install. Open decisions and the
 live-install checklist: [docs/OPEN-QUESTIONS.md](docs/OPEN-QUESTIONS.md).
 
-**To install** (once a release is published): open Google Cloud Shell from the
-release branch and type `node setup.js`. Running it again later shows a menu:
+**To install** (once a release is published):
+[Open in Google Cloud Shell](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/mhprincipe/universal-mail-mcp&cloudshell_git_branch=release)
+and type `node setup.js`. Running it again later shows a menu:
 Check and fix, Update, Show my address, Remove. If anything stops,
 `node setup.js report` gives a block that's safe to paste into your AI.
 

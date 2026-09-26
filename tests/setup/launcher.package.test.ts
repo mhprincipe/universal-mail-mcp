@@ -39,6 +39,6 @@ describe('the setup.js launcher', () => {
   it('SET-78 it installs the image this release names, pinned by digest', () => {
     const r = setup(['--which-image']);
     expect(r.status).toBe(0);
-    expect(r.stdout.trim()).toMatch(/^us-docker\.pkg\.dev\/universal-mail\/release\/server@sha256:[0-9a-f]{64}$/);
+    expect(r.stdout.trim()).toMatch(/^us-docker\.pkg\.dev\/universal-mail-rel-zqrw\/release\/server@sha256:[0-9a-f]{64}$/);
   });
 });

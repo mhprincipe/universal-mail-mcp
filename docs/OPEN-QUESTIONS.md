@@ -13,7 +13,7 @@ be changed.
 | 2 | **Converting v1 installs a new service beside it**, in v1's own Google project, never touching v1. | **Confirmed 2026-09-26.** |
 | 3 | **Tool names and descriptions no longer say "Yahoo".** | **Confirmed 2026-09-26.** |
 | 4 | **A new account added on your page runs setup's sending test** without asking first. | **Confirmed 2026-09-26.** |
-| 5 | **The update feed's address** (where the server looks for new versions) and **the GitHub repository** the release pipeline publishes from. | `UPDATE_FEED_URL` is baked into the image at release; with none set, no update check is made. The workflows use repository variables you set once. |
+| 5 | **The update feed's address** (where the server looks for new versions) and **the GitHub repository** the release pipeline publishes from. | **Settled 2026-09-26:** repository `mhprincipe/universal-mail-mcp`; images in the Google project `universal-mail-rel-zqrw`; the feed is `latest.json` on the `release` branch (no GitHub Pages). `scripts/release-setup.sh` creates the Google side and prints the three variables. |
 | 6 | **`DONE-ALREADY` ("✓ Already done") was removed** from setup's messages: it was never shown and isn't in the design. | Removed (DIA-04 found it). |
 
 ## Things only the live install can settle
@@ -35,9 +35,23 @@ to diagnose each one.
 
 ## Live-install checklist (the novice test)
 
-1. Set the repository variables in `release.yml` and push a tag (`v2.0.0`): the
-   pipeline tests, builds, signs, pins the image in `release.json`, and
-   publishes the `release` branch and the feed.
+0. **Once, as the publisher (about 5 minutes).** Open
+   [Cloud Shell](https://shell.cloud.google.com), then:
+
+   ```bash
+   git clone https://github.com/mhprincipe/universal-mail-mcp.git && cd universal-mail-mcp
+   bash scripts/release-setup.sh
+   ```
+
+   It creates the project `universal-mail-rel-zqrw` (billing must be open on
+   your account), the public image store, and a keyless link that lets only
+   this repository's release workflow publish. It is safe to run again. At the
+   end it prints three lines: add each on GitHub under the repository's
+   Settings → Secrets and variables → Actions → **Variables** → New
+   repository variable.
+1. Push the tag `v2.0.0` (the version is already 2.0.0): the pipeline tests,
+   builds, signs, pins the image in `release.json`, and publishes the
+   `release` branch with the feed. Watch it under the repository's Actions tab.
 2. Open Cloud Shell from the release branch and run `node setup.js` with one
    Yahoo account. Watch for: every step's wording, the free-trial question,
    the sending test, and "All done".

@@ -1,13 +1,14 @@
 # A release: tag vX.Y.Z (add "-security" to the tag message's first line to
 # mark a security release). Everything is tested first; then the server image
 # is built, pushed, signed and pinned by digest; setup's files and the update
-# feed are published. Nothing here touches anyone's installation: people
-# update with  node setup.js  → 2 Update, which checks and can roll back.
+# feed are published on the release branch. Nothing here touches anyone's
+# installation: people update with  node setup.js  → 2 Update, which checks
+# and can roll back.
 #
-# Needs, in the repository's settings:
+# Needs, in the repository's settings (scripts/release-setup.sh prints them):
 #   vars.GCP_WORKLOAD_IDENTITY_PROVIDER  Workload Identity Federation provider
 #   vars.GCP_RELEASE_SERVICE_ACCOUNT     may push to the release repository
-#   vars.UPDATE_FEED_URL                 where latest.json is served (GitHub Pages)
+#   vars.UPDATE_FEED_URL                 the release branch's latest.json
 name: release
 on:
   push:
@@ -16,10 +17,6 @@ on:
 permissions:
   contents: write
   id-token: write
-  pages: write
-
-env:
-  REPOSITORY: us-docker.pkg.dev/universal-mail/release/server
 
 jobs:
   test:
@@ -40,6 +37,8 @@ jobs:
           node -e "if (require('./package.json').version !== process.argv[1]) { console.error('package.json version differs from the tag'); process.exit(1) }" "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME" | grep -qi security; then echo "security=true" >> "$GITHUB_OUTPUT"; else echo "security=false" >> "$GITHUB_OUTPUT"; fi
+          # The one place the image lives: the same constant setup trusts.
+          echo "REPOSITORY=$(node --input-type=module -e "import('./scripts/release-files.mjs').then(m => console.log(m.REPOSITORY))")" >> "$GITHUB_ENV"
 
       - uses: google-github-actions/auth@v2
         with:
@@ -59,26 +58,20 @@ jobs:
       - uses: sigstore/cosign-installer@v3
       - run: cosign sign --yes "$REPOSITORY@${{ steps.image.outputs.digest }}"
 
+      # Everything setup needs, and nothing else (REL-04 runs it from this
+      # folder alone): setup.js, dist, package.json, release.json, latest.json.
       - name: Setup's files, pinned to this image
         run: |
           npm ci
           npm run build
-          mkdir -p publish/site
-          node scripts/release-files.mjs publish "${{ steps.version.outputs.version }}" "${{ steps.image.outputs.digest }}" "${{ steps.version.outputs.security }}" "${{ vars.UPDATE_FEED_URL }}"
-          mv publish/latest.json publish/site/latest.json
-          cp setup.js README.md publish/
-          mkdir -p publish/dist && cp -r dist/src publish/dist/src
+          node scripts/publish-setup.mjs publish "${{ steps.version.outputs.version }}" "${{ steps.image.outputs.digest }}" "${{ steps.version.outputs.security }}" "${{ vars.UPDATE_FEED_URL }}"
 
       # "Open in Cloud Shell" clones the release branch: built, pinned, ready.
+      # The update feed (latest.json) is served from the same branch.
       - name: Publish the release branch
         run: |
           cd publish
           git init -q && git checkout -q -b release
-          git add setup.js release.json README.md dist
+          git add -A
           git -c user.name="release" -c user.email="release@users.noreply.github.com" commit -q -m "Release ${{ steps.version.outputs.version }}"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" release
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: publish/site
-      - uses: actions/deploy-pages@v4

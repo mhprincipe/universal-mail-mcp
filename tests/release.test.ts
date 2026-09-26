@@ -43,3 +43,31 @@ describe('the release files', () => {
     expect(newer('10.0.0', '9.9.9')).toBe(true);
   });
 });
+
+// REL-06 (added): one image store, named once. The one-time setup script
+// creates it, the workflow pushes to it, setup trusts only it. If any of the
+// three drifts, releases go somewhere setup refuses to install from.
+const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+describe('the release plumbing agrees with itself', () => {
+  it('REL-06 the store release-setup.sh creates is the one setup trusts and release.json names', async () => {
+    const { REPOSITORY } = await import('../scripts/release-files.mjs');
+    expect(REPOSITORY).toBe(OFFICIAL_IMAGE_REPOSITORY);
+    const script = read('scripts/release-setup.sh');
+    const project = /^PROJECT="\$\{PROJECT:-([^}]+)\}"$/m.exec(script)?.[1];
+    const location = /^LOCATION=(\S+)$/m.exec(script)?.[1];
+    expect(script).toContain('gcloud artifacts repositories create release ');
+    expect(`${location}-docker.pkg.dev/${project}/release/server`).toBe(OFFICIAL_IMAGE_REPOSITORY);
+    expect(JSON.parse(read('release.json')).image.startsWith(`${OFFICIAL_IMAGE_REPOSITORY}@sha256:`)).toBe(true);
+  });
+
+  it('REL-06 the workflow pushes to that store, publishes through publish-setup.mjs, and serves the feed from the release branch', () => {
+    const workflow = read('.github/workflows/release.yml');
+    // Read from release-files.mjs, never written out a second time.
+    expect(workflow).not.toMatch(/docker\.pkg\.dev\/[^\s"]+\/release\/server/);
+    expect(workflow).toContain("import('./scripts/release-files.mjs')");
+    expect(workflow).toContain('node scripts/publish-setup.mjs publish ');
+    expect(workflow).toContain('git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" release');
+    expect(workflow).not.toMatch(/pages/i);
+    expect(read('scripts/release-setup.sh')).toContain('UPDATE_FEED_URL = https://raw.githubusercontent.com/${REPO}/release/latest.json');
+  });
+});

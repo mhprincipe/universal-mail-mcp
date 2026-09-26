@@ -7,8 +7,9 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Must match OFFICIAL_IMAGE_REPOSITORY in src/setup/gcloud.ts (REL-01 checks it).
-const REPOSITORY = 'us-docker.pkg.dev/universal-mail/release/server';
+// Must match OFFICIAL_IMAGE_REPOSITORY in src/setup/gcloud.ts (REL-01 checks
+// it). The release workflow pushes to this same place (REL-06 checks that).
+export const REPOSITORY = 'us-docker.pkg.dev/universal-mail-rel-zqrw/release/server';
 
 export function writeReleaseFiles({ dir, version, digest, security, feedUrl }) {
   if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(version)) throw new Error(`Not a release version: ${version}`);
