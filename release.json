@@ -1,0 +1,5 @@
+{
+  "version": "2.0.0-dev",
+  "image": "us-docker.pkg.dev/universal-mail/release/server@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "note": "The release pipeline writes the real image digest here. With these zeros, setup stops at the image check (SETUP-IMAGE-UNTRUSTED): nothing unverified is ever started."
+}

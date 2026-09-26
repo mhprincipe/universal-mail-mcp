@@ -1,0 +1,102 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { startPage } from './pageHarness.js';
+
+// Your page: the accounts (design §3.6). Every change takes effect at once,
+// is saved, and is emailed to you.
+let p: Awaited<ReturnType<typeof startPage>> | undefined;
+afterEach(async () => { await p?.close(); p = undefined; });
+
+const last = (list: string[]) => JSON.parse(list.at(-1)!);
+const claude = 'https://claude.ai/oauth/mcp-oauth-client-metadata';
+
+describe('accounts on your page', () => {
+  it('PG-03 adding an account runs the same checks as setup; it is saved, usable at once, and you are told', async () => {
+    p = await startPage();
+    p.accepted['side@example.invalid'] = 'side-app-password';
+    await p.signIn();
+    const page = await p.act('/accounts/add', { email: 'side@example.invalid', password: 'side-app-password', name: 'side' });
+    expect(page.html).toContain('side was added');
+    expect(page.html).toContain('id="account-side"');
+    expect(last(p.saves.credentials).passwords.side).toBe('side-app-password');
+    expect(last(p.saves.state).accounts.at(-1)).toMatchObject({ name: 'side', email: 'side@example.invalid', imap: { port: 3 }, sending: true });
+    expect(p.app.signin!.accountNames()).toContain('side');
+    expect(p.sent.at(-1)).toMatchObject({ to: 'me@example.invalid', subject: 'An email account was added to Universal Mail' });
+    // The password is never shown back.
+    expect(page.html).not.toContain('side-app-password');
+  });
+
+  it('PG-03 a wrong password shows the same message as setup, and nothing is added', async () => {
+    p = await startPage();
+    await p.signIn();
+    const before = p.saves.credentials.length;
+    const page = await p.act('/accounts/add', { email: 'side@example.invalid', password: 'not-the-right-one', name: 'side' });
+    expect(page.html).toContain('Example Mail didn&#39;t accept that app password.');
+    expect(page.html).toContain('example.invalid/app-passwords');
+    expect(page.html).not.toContain('id="account-side"');
+    expect(p.saves.credentials.length).toBe(before);
+    expect(page.html).not.toContain('not-the-right-one');
+  });
+
+  it('PG-03 a name already taken is refused; one left blank is chosen for you', async () => {
+    p = await startPage();
+    p.accepted['side@example.invalid'] = 'side-app-password';
+    await p.signIn();
+    expect((await p.act('/accounts/add', { email: 'side@example.invalid', password: 'side-app-password', name: 'work' })).html).toContain('That name is taken');
+    const page = await p.act('/accounts/add', { email: 'side@example.invalid', password: 'side-app-password', name: '' });
+    expect(page.html).toContain('id="account-side"');
+  });
+
+  it('PG-04 Fix it changes a password: checked first, saved, and the account turns green', async () => {
+    p = await startPage();
+    p.accepted['me@example.invalid'] = 'new-app-password';
+    await p.signIn();
+    const wrong = await p.act('/accounts/password', { name: 'me', password: 'still-wrong' });
+    expect(wrong.html).toContain('Example Mail didn&#39;t accept that app password.');
+    const page = await p.act('/accounts/password', { name: 'me', password: 'new-app-password' });
+    expect(page.html).toMatch(/id="account-me">[\s\S]*?class="ok">Working/);
+    expect(last(p.saves.credentials).passwords).toEqual({ me: 'new-app-password', work: 'work-app-password' });
+    expect(p.sent.at(-1)!.subject).toBe('The app password for me was changed');
+  });
+
+  it('PG-05 removing an account stops access immediately and deletes its password', async () => {
+    p = await startPage();
+    p.app.signin!.grants.connect(claude, 'Claude', { me: ['read'], work: ['read', 'organize'] });
+    await p.signIn();
+    const refused = await p.act('/accounts/remove', { name: 'work', confirm: 'wrong' });
+    expect(refused.html).toContain('Type the account name');
+    expect(p.app.signin!.accountNames()).toContain('work');
+
+    const page = await p.act('/accounts/remove', { name: 'work', confirm: 'work' });
+    expect(page.html).toContain('work was removed');
+    expect(p.app.signin!.accountNames()).toEqual(['me']);
+    expect(last(p.saves.credentials).passwords).toEqual({ me: 'me-app-password' });
+    expect(last(p.saves.state).accounts.map((a: { name: string }) => a.name)).toEqual(['me']);
+    // No app keeps a permission for an account that's gone.
+    expect(p.app.signin!.grants.get(claude)!.accounts).toEqual({ me: ['read'] });
+    expect(p.sent.at(-1)!.subject).toBe('An email account was removed from Universal Mail');
+  });
+
+  it('PG-05 the last account can\'t be removed', async () => {
+    p = await startPage();
+    await p.signIn();
+    await p.act('/accounts/remove', { name: 'work', confirm: 'work' });
+    const page = await p.act('/accounts/remove', { name: 'me', confirm: 'me' });
+    expect(page.html).toContain('Universal Mail needs at least one account');
+    expect(p.app.signin!.accountNames()).toEqual(['me']);
+  });
+
+  it('PG-08 sending can be turned off and on per account; off means no app can send from it', async () => {
+    p = await startPage();
+    await p.signIn();
+    let page = await p.act('/accounts/sending', { name: 'work', on: 'off' });
+    expect(page.html).toMatch(/id="account-work">[\s\S]*?Sending off/);
+    expect(last(p.saves.state).accounts[1].sending).toBe(false);
+    expect(() => p!.app.signin!.mail().service('work', 'send')).toThrow(/Sending is turned off for work/);
+    expect(() => p!.app.signin!.mail().service('me', 'send')).not.toThrow();
+    const sentBefore = p.sent.length;
+    page = await p.act('/accounts/sending', { name: 'work', on: 'on' });
+    expect(() => p!.app.signin!.mail().service('work', 'send')).not.toThrow();
+    // Turning it on is a change you're told about.
+    expect(p.sent.slice(sentBefore).map(s => s.subject)).toEqual(['Sending was turned on for work']);
+  });
+});

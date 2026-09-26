@@ -1,0 +1,61 @@
+import { z } from 'zod/v4';
+
+const schema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(8080),
+  YAHOO_EMAIL: z.string().email(),
+  YAHOO_APP_PASSWORD: z.string().min(8),
+  // builtin: v2's own sign-in server (design §6.5).
+  AUTH_MODE: z.enum(['bearer', 'oauth', 'oauth-setup', 'builtin']).default('bearer'),
+  MCP_ACCESS_SECRET: z.string().min(24).optional(),
+  SENT_COPY_MODE: z.enum(['unverified', 'yahoo', 'append']).default('unverified'),
+  IMAP_HOST: z.string().default('imap.mail.yahoo.com'),
+  IMAP_PORT: z.coerce.number().int().default(993),
+  // 'none' exists for the local test mail server and is refused for any other host.
+  IMAP_TLS: z.enum(['implicit', 'starttls', 'none']).default('implicit'),
+  SMTP_HOST: z.string().default('smtp.mail.yahoo.com'),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  // Unset: implicit TLS on 465, required STARTTLS on any other port.
+  // 'none' exists for the local test mail server and is refused for any other host.
+  SMTP_TLS: z.enum(['implicit', 'starttls', 'none']).optional(),
+  MAX_MESSAGE_BYTES: z.coerce.number().int().positive().default(20 * 1024 * 1024),
+  // Caps what a tool result returns, which MAX_MESSAGE_BYTES does not: that
+  // limits the fetch. get_thread can return up to 100 bodies in one response.
+  MAX_BODY_CHARS: z.coerce.number().int().positive().default(100_000),
+  // A search the server hasn't answered by then is stopped (SEARCH_TOO_SLOW).
+  SEARCH_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
+  ALLOWED_HOSTS: z.string().optional(),
+  ALLOWED_ORIGINS: z.string().optional()
+}).superRefine((config, ctx) => {
+  if (config.AUTH_MODE === 'bearer' && !config.MCP_ACCESS_SECRET) ctx.addIssue({ code: 'custom', path: ['MCP_ACCESS_SECRET'], message: 'Bearer mode requires a secret' });
+  for (const [setting, host] of [['IMAP_TLS', config.IMAP_HOST], ['SMTP_TLS', config.SMTP_HOST]] as const) {
+    if (config[setting] === 'none' && !LOOPBACK.has(host.toLowerCase())) {
+      ctx.addIssue({ code: 'custom', path: [setting], message: 'An unencrypted mail connection is allowed only to this machine (localhost).' });
+    }
+  }
+});
+
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1']);
+
+export type AppConfig = z.infer<typeof schema>;
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  return schema.parse(env);
+}
+
+export function imapTransport(config: AppConfig): { secure: boolean; doSTARTTLS?: boolean } {
+  if (config.IMAP_TLS === 'implicit') return { secure: true, doSTARTTLS: undefined };
+  return { secure: false, doSTARTTLS: config.IMAP_TLS === 'starttls' };
+}
+
+// Encryption is required, never merely accepted if the server happens to offer it.
+export function smtpTransport(config: AppConfig): { secure: boolean; requireTLS: boolean; ignoreTLS: boolean } {
+  const mode = config.SMTP_TLS ?? (config.SMTP_PORT === 465 ? 'implicit' : 'starttls');
+  if (mode === 'implicit') return { secure: true, requireTLS: false, ignoreTLS: false };
+  if (mode === 'starttls') return { secure: false, requireTLS: true, ignoreTLS: false };
+  return { secure: false, requireTLS: false, ignoreTLS: true };
+}
+
+export function csv(value?: string): string[] {
+  return value?.split(',').map(v => v.trim()).filter(Boolean) ?? [];
+}

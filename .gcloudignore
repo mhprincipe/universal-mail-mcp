@@ -1,0 +1,12 @@
+.gcloudignore
+.git
+node_modules
+.npm-cache
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+verification/
+cloud-service-check.json

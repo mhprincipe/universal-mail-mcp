@@ -1,0 +1,38 @@
+{
+  "startedAt": "2026-09-18T21:56:50.506Z",
+  "passed": true,
+  "checks": [
+    "Docker image build",
+    "Container health works without mail secrets",
+    "Container runs as non-root user",
+    "MCP and readiness reject missing and wrong bearer tokens",
+    "Protected endpoint Host and Origin validation",
+    "Readiness fails safely with loopback-only dummy mail endpoints",
+    "Exactly 16 required MCP tools discovered in the container",
+    "Unverified Sent policy blocks sending before SMTP"
+  ],
+  "mailboxConnected": false,
+  "currentStep": "complete",
+  "updatedAt": "2026-09-18T21:57:10.002Z",
+  "dockerVersion": "29.8.0",
+  "tools": [
+    "archive_email",
+    "create_draft",
+    "create_folder",
+    "flag_email",
+    "get_email",
+    "get_thread",
+    "list_folders",
+    "mark_read",
+    "mark_unread",
+    "move_email",
+    "reply_email",
+    "restore_email",
+    "search_email",
+    "send_email",
+    "trash_email",
+    "update_draft"
+  ],
+  "imageId": "sha256:d55a3b38368cdfe929383761c33c3a281a9ec3b9a9e750cf15344f46040df2a0",
+  "finishedAt": "2026-09-18T21:57:10.602Z"
+}

@@ -1,0 +1,51 @@
+{
+  "name": "universal-mail-mcp",
+  "version": "2.0.0-dev",
+  "private": true,
+  "description": "Universal Mail MCP: one person's email accounts, on any common provider, connected to their AI apps. Built test-first from docs/TEST-PLAN-V2.md.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "npm run build && node --env-file-if-exists=.env dist/src/index.js",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/src/index.js",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "test:protocol": "vitest run --config vitest.protocol.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke:mcp": "node --env-file-if-exists=.env dist/scripts/mcp-smoke.js",
+    "smoke:local": "node dist/scripts/local-smoke.js",
+    "probe:sent": "node --env-file-if-exists=.env dist/scripts/sent-probe.js",
+    "verify": "node scripts/verify.mjs",
+    "verify:live": "node dist/scripts/verify-live.js",
+    "diagnose:oauth": "node dist/scripts/diagnose-oauth.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/express": "^2.0.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@simplewebauthn/server": "^14.0.2",
+    "@zone-eu/mailsplit": "5.4.16",
+    "express": "^5.1.0",
+    "imapflow": "^1.0.0",
+    "jose": "^6.2.12",
+    "mailparser": "^3.7.0",
+    "nodemailer": "^10.0.10",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/express": "^5.0.0",
+    "@types/mailparser": "^3.4.0",
+    "@types/node": "^24.0.0",
+    "@types/smtp-server": "^3.5.13",
+    "@vitest/coverage-v8": "^4.1.11",
+    "selfsigned": "^5.5.0",
+    "smtp-server": "^3.19.13",
+    "testcontainers": "^12.1.0",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
+  }
+}

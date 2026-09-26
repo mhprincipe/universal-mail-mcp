@@ -1,0 +1,10 @@
+node_modules
+.npm-cache
+dist
+.git
+.env
+coverage
+*.log
+.env.*
+verification/
+cloud-service-check.json
