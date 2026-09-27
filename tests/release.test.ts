@@ -55,7 +55,7 @@ describe('the release plumbing agrees with itself', () => {
     const script = read('scripts/release-setup.sh');
     const project = /^PROJECT="\$\{PROJECT:-([^}]+)\}"$/m.exec(script)?.[1];
     const location = /^LOCATION=(\S+)$/m.exec(script)?.[1];
-    expect(script).toContain('gcloud artifacts repositories create release ');
+    expect(script).toMatch(/^\s*change artifacts repositories create release /m);
     expect(`${location}-docker.pkg.dev/${project}/release/server`).toBe(OFFICIAL_IMAGE_REPOSITORY);
     expect(JSON.parse(read('release.json')).image.startsWith(`${OFFICIAL_IMAGE_REPOSITORY}@sha256:`)).toBe(true);
   });
