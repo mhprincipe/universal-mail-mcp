@@ -35,7 +35,7 @@ to diagnose each one.
 
 ## Live-install checklist (the novice test)
 
-0. **Once, as the publisher (about 5 minutes).** Open
+0. **Done 2026-09-27.** **Once, as the publisher (about 5 minutes).** Open
    [Cloud Shell](https://shell.cloud.google.com), then:
 
    ```bash
@@ -49,7 +49,7 @@ to diagnose each one.
    end it prints three lines: add each on GitHub under the repository's
    Settings → Secrets and variables → Actions → **Variables** → New
    repository variable.
-1. Push the tag `v2.0.0` (the version is already 2.0.0): the pipeline tests,
+1. **Done 2026-09-27:** image `sha256:9fffa6d4…`, signed, publicly readable; release branch and feed live. Push the tag `v2.0.0` (the version is already 2.0.0): the pipeline tests,
    builds, signs, pins the image in `release.json`, and publishes the
    `release` branch with the feed. Watch it under the repository's Actions tab.
 2. Open Cloud Shell from the release branch and run `node setup.js` with one
