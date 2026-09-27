@@ -383,7 +383,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | REL-02 | the update feed says the version and whether it is a security release, as the server reads it | U |
 | REL-03 | the server image, built from the Dockerfile and started as Cloud Run starts it: waiting before its address, serving as itself after, unhealthy with a named setting when damaged, not running as root | K (package) |
 | REL-04 | the published release branch runs on its own: `node setup.js report` with no node_modules, the pinned image, the feed, a package.json saying ES modules *(added: found release.yml omitted it)* | K (package) |
-| REL-05 | `scripts/release-setup.sh` creates the release project, public image store and keyless publishing for this repository only; safe to rerun; stops plainly without billing *(added)* | K (package) |
+| REL-05 | `scripts/release-setup.sh` creates the release project, public image store and keyless publishing for this repository only; safe to rerun; stops plainly without billing; waits and retries while a just-enabled service still refuses *(added; retry found live)* | K (package) |
 | REL-06 | one image store, named once: the setup script, the workflow and setup's trusted image agree; the workflow publishes through `publish-setup.mjs` *(added)* | U |
 
 **Failure matrix.** Each test asserts the exact message, the code, and that
@@ -552,12 +552,12 @@ also where a later reader finds out why a line of code exists.
 | Sign-in | 57 |
 | Setup | 58 |
 | Installed server | 6 |
-| Release | 6 |
+| Release | 8 |
 | Page and emails | 17 |
 | Everyday polish | 11 |
 | Diagnostics | 9 |
-| **New** | **232** |
-| **Total** | **387** |
+| **New** | **234** |
+| **Total** | **389** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

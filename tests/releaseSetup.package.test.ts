@@ -58,8 +58,16 @@ const found: GcloudStep[] = [
 
 function run(steps: GcloudStep[]) {
   fake = createFakeGcloud(steps);
-  return spawnSync(bash, [join(root, 'scripts', 'release-setup.sh')], { cwd: root, encoding: 'utf8', env: fake.env, timeout: 120_000 });
+  // No real waiting between retries in tests.
+  return spawnSync(bash, [join(root, 'scripts', 'release-setup.sh')], { cwd: root, encoding: 'utf8', env: { ...fake.env, RELEASE_SETUP_WAIT: '0' }, timeout: 120_000 });
 }
+
+// Found live, 2026-09-26: seconds after `services enable`, Google refused to
+// create the image store (PERMISSION_DENIED, "or it may not exist"), though
+// the owner owns the project. A newly enabled service needs a moment.
+const createStore = creates.find(s => s.args[2] === 'create')!;
+const denied: GcloudStep = { args: createStore.args, exitCode: 1,
+  stderr: "ERROR: (gcloud.artifacts.repositories.create) PERMISSION_DENIED: Permission 'artifactregistry.repositories.create' denied on resource (or it may not exist).\n" };
 
 describe('the one-time release setup', () => {
   it.skipIf(!existsSync(bash) && process.platform === 'win32')('REL-05 a first run creates the project, the image store and the publisher, and prints what GitHub needs (added)', () => {
@@ -85,5 +93,23 @@ describe('the one-time release setup', () => {
     expect(r.status).not.toBe(0);
     expect(r.stderr).toContain('No open billing account');
     expect(fake!.calls()).toHaveLength(1);
+  }, 120_000);
+
+  it.skipIf(!existsSync(bash) && process.platform === 'win32')('REL-05 a service Google has only just turned on refuses at first: it waits, tries again, and carries on (added: found live)', () => {
+    const r = run([...reads(false), denied, denied, ...creates, ...always]);
+    expect(r.status).toBe(0);
+    expect(fake!.unscripted()).toEqual([]);
+    expect(fake!.calls().filter(c => c.join(' ') === createStore.args.join(' '))).toHaveLength(3);
+    expect(r.stdout).toContain('Google is still switching this on; trying again');
+    expect(r.stdout).toContain(`GCP_RELEASE_SERVICE_ACCOUNT = ${SA}`);
+  }, 120_000);
+
+  it.skipIf(!existsSync(bash) && process.platform === 'win32')('REL-05 still refused after every try: it stops there, shows Google\'s words, and says to run it again', () => {
+    const r = run([...reads(false), { ...denied, repeat: true }, ...creates, ...always]);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain('PERMISSION_DENIED');
+    expect(r.stderr).toContain('Run this again in a few minutes');
+    expect(fake!.calls().filter(c => c.join(' ') === createStore.args.join(' ')).length).toBeGreaterThan(3);
+    expect(fake!.calls().some(c => c.includes('service-accounts'))).toBe(false);
   }, 120_000);
 });

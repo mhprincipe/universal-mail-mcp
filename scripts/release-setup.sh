@@ -18,8 +18,31 @@ REPO="${GITHUB_REPOSITORY:-mhprincipe/universal-mail-mcp}"
 LOCATION=us
 PUBLISHER="release-publisher@${PROJECT}.iam.gserviceaccount.com"
 
+WAIT="${RELEASE_SETUP_WAIT:-30}"
+TRIES=10
+
 say() { printf '  %s\n' "$*"; }
 exists() { gcloud "$@" >/dev/null 2>&1; }
+# For a few minutes after a service is switched on, Google can refuse even
+# the project's owner (PERMISSION_DENIED "... or it may not exist"): found
+# live. So each change waits and tries again before giving up.
+change() {
+  local out i
+  for ((i = 1; i <= TRIES; i++)); do
+    if out="$(gcloud "$@" 2>&1)"; then
+      if [ -n "$out" ]; then printf '%s\n' "$out"; fi
+      return 0
+    fi
+    if [ "$i" -lt "$TRIES" ] && grep -qE 'PERMISSION_DENIED|NOT_FOUND|FAILED_PRECONDITION' <<<"$out"; then
+      say "Google is still switching this on; trying again in ${WAIT}s (${i} of ${TRIES})"
+      sleep "$WAIT"
+      continue
+    fi
+    printf '%s\n' "$out" >&2
+    echo "Google refused: gcloud $1 $2 $3. Run this again in a few minutes: anything already made is kept." >&2
+    exit 1
+  done
+}
 
 account="$(gcloud billing accounts list --filter=open=true --format='value(name)' --limit=1)"
 account="${account#billingAccounts/}"
@@ -38,28 +61,28 @@ gcloud services enable artifactregistry.googleapis.com iam.googleapis.com iamcre
 
 if ! exists artifacts repositories describe release --location="$LOCATION" --project="$PROJECT"; then
   say "Creating the image store"
-  gcloud artifacts repositories create release --repository-format=docker --location="$LOCATION" \
+  change artifacts repositories create release --repository-format=docker --location="$LOCATION" \
     --description="Universal Mail server images" --project="$PROJECT"
 fi
-gcloud artifacts repositories add-iam-policy-binding release --location="$LOCATION" \
+change artifacts repositories add-iam-policy-binding release --location="$LOCATION" \
   --member=allUsers --role=roles/artifactregistry.reader --project="$PROJECT"
 
 if ! exists iam service-accounts describe "$PUBLISHER" --project="$PROJECT"; then
-  gcloud iam service-accounts create release-publisher --display-name="Universal Mail release publisher" --project="$PROJECT"
+  change iam service-accounts create release-publisher --display-name="Universal Mail release publisher" --project="$PROJECT"
 fi
-gcloud artifacts repositories add-iam-policy-binding release --location="$LOCATION" \
+change artifacts repositories add-iam-policy-binding release --location="$LOCATION" \
   --member="serviceAccount:${PUBLISHER}" --role=roles/artifactregistry.writer --project="$PROJECT"
 
 if ! exists iam workload-identity-pools describe github --location=global --project="$PROJECT"; then
-  gcloud iam workload-identity-pools create github --location=global --display-name=GitHub --project="$PROJECT"
+  change iam workload-identity-pools create github --location=global --display-name=GitHub --project="$PROJECT"
 fi
 if ! exists iam workload-identity-pools providers describe universal-mail --workload-identity-pool=github --location=global --project="$PROJECT"; then
-  gcloud iam workload-identity-pools providers create-oidc universal-mail --workload-identity-pool=github --location=global \
+  change iam workload-identity-pools providers create-oidc universal-mail --workload-identity-pool=github --location=global \
     --issuer-uri=https://token.actions.githubusercontent.com \
     --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository \
     --attribute-condition="assertion.repository=='${REPO}'" --project="$PROJECT"
 fi
-gcloud iam service-accounts add-iam-policy-binding "$PUBLISHER" --role=roles/iam.workloadIdentityUser \
+change iam service-accounts add-iam-policy-binding "$PUBLISHER" --role=roles/iam.workloadIdentityUser \
   --member="principalSet://iam.googleapis.com/projects/${number}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}" \
   --project="$PROJECT"
 
