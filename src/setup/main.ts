@@ -35,7 +35,7 @@ export async function main(argv: string[], io: MainIo): Promise<number> {
   const clock = io.clock ?? { now: Date.now, sleep: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)) };
   const log = createSetupLog(home, clock);
   const google = createGoogleCloud({ run: createGcloudRunner({ command: io.gcloud, env: io.env, log }), newProjectId: io.projectId });
-  const prompt = createPrompt(io.stdin, io.stdout);
+  const prompt = createPrompt(io.stdin, io.stdout, reason => log.event({ type: 'input-closed', reason }));
   try {
     const outcome = await runSetup({
       google, ui, log, clock, version: VERSION, image: io.image,

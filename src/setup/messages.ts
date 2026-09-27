@@ -68,6 +68,8 @@ export const MESSAGES = {
   // ── Problems ────────────────────────────────────────────────────────
   'SETUP-NOT-CLOUD-SHELL': problem('This needs to run in Google Cloud Shell.', 'Cloud Shell is where your Google account can build your server.',
     ['Go to the Universal Mail website', 'Click "Open in Cloud Shell"', 'Type  node setup.js  there and press Enter'], 'nothing'),
+  'SETUP-INTERRUPTED': problem('Setup stopped before it was finished.', 'Ctrl+C stops setup, even when pressed to copy text.',
+    ['Type  node setup.js  again. It picks up where it stopped.', 'To copy text from here, select it and right-click, then Copy'], 'nothing'),
   'SETUP-NOT-SIGNED-IN': problem('Cloud Shell isn\'t signed in to your Google account yet.', undefined,
     ['If Google asks you to "Authorize Cloud Shell", click Authorize', 'Otherwise close this tab and click "Open in Cloud Shell" again'], 'nothing'),
   'SETUP-UNEXPECTED': problem('Something unexpected went wrong at step {step} of 8.', 'This is often temporary, on Google\'s side.',

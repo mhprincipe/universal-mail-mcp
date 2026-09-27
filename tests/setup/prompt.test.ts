@@ -29,6 +29,52 @@ describe('the setup prompt', () => {
     expect(shown).toContain('personal');
     prompt.close();
   });
+
+  // Found live, 2026-09-27: in a real terminal, readline redraws the line it
+  // waits on (ESC[1G ESC[0J: to column 1, erase), which wiped the question's
+  // last line: "[Y/n] ›" and the address prompt "›" never showed. After every
+  // redraw the question's last line must still be on screen.
+  it('SET-22 a question\'s last line survives readline redrawing it (added: found live)', async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let shown = '';
+    output.on('data', chunk => { shown += chunk.toString(); });
+    const prompt = createPrompt(input, output);
+    const answer = prompt.question('  Update it?\n  version 1 keeps running. [Y/n] ›', { hidden: false });
+    await new Promise(r => setImmediate(r));
+    const afterLastErase = shown.slice(shown.lastIndexOf('\x1b[0J') + 1);
+    expect(shown).toContain('  Update it?\n');
+    expect(afterLastErase).toContain('version 1 keeps running. [Y/n] ›');
+    input.write('n\r');
+    expect(await answer).toBe('n');
+    prompt.close();
+  });
+
+  // Found live, 2026-09-27: Ctrl+C at a question (easily pressed to copy text
+  // from Cloud Shell) closed readline; the question was left waiting on nothing
+  // and Node quit with "Detected unsettled top-level await". A closed input
+  // must stop setup plainly, with its code, and say what closed it.
+  it('SET-22 Ctrl+C at a question stops setup plainly instead of hanging (added: found live)', async () => {
+    const input = new PassThrough();
+    const heard: string[] = [];
+    const prompt = createPrompt(input, new PassThrough(), reason => heard.push(reason));
+    const answer = prompt.question('  ›', { hidden: false });
+    input.write('\x03');
+    await expect(answer).rejects.toMatchObject({ code: 'SETUP-INTERRUPTED' });
+    expect(heard).toEqual(['ctrl-c']);
+    // Asked again after that: the same plain stop, never readline's own error.
+    await expect(prompt.question('  ›', { hidden: false })).rejects.toMatchObject({ code: 'SETUP-INTERRUPTED' });
+  });
+
+  it('SET-22 the input ending (Ctrl+D, or a closed pipe) at a question stops setup the same way', async () => {
+    const input = new PassThrough();
+    const heard: string[] = [];
+    const prompt = createPrompt(input, new PassThrough(), reason => heard.push(reason));
+    const answer = prompt.question('  ›', { hidden: true });
+    input.end();
+    await expect(answer).rejects.toMatchObject({ code: 'SETUP-INTERRUPTED' });
+    expect(heard).toEqual(['input-closed']);
+  });
 });
 
 describe('what setup needs to run', () => {

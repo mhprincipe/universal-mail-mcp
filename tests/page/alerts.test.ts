@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { VERSION } from '../../src/version.js';
 import { ImapGateway } from '../../src/yahoo/imap.js';
 import { KEY, PUBLIC_URL, startPage } from './pageHarness.js';
 
@@ -113,13 +114,15 @@ describe('emails the server sends', () => {
   });
 
   it('PG-15 nothing newer, an ordinary release, or no feed configured', async () => {
-    p = await startPage({ env: { UPDATE_FEED_URL: 'https://updates.example.invalid/latest.json' }, feed: { version: '2.0.0-dev', security: false } });
+    // Relative to the running version, so a release doesn't break the test.
+    p = await startPage({ env: { UPDATE_FEED_URL: 'https://updates.example.invalid/latest.json' }, feed: { version: VERSION, security: false } });
     await p.get();
     expect(p.sent.filter(s => /available/.test(s.subject))).toHaveLength(0);
     await p.close();
-    p = await startPage({ env: { UPDATE_FEED_URL: 'https://updates.example.invalid/latest.json' }, feed: { version: '2.0.1', security: false } });
+    const nextPatch = VERSION.replace(/^(\d+\.\d+\.)(\d+).*$/, (_m, head: string, patch: string) => `${head}${Number(patch) + 1}`);
+    p = await startPage({ env: { UPDATE_FEED_URL: 'https://updates.example.invalid/latest.json' }, feed: { version: nextPatch, security: false } });
     await p.get();
-    expect(p.sent.find(s => /available/.test(s.subject))!.subject).toBe('Universal Mail 2.0.1 is available');
+    expect(p.sent.find(s => /available/.test(s.subject))!.subject).toBe(`Universal Mail ${nextPatch} is available`);
     await p.close();
     p = await startPage({ feed: { version: '9.0.0', security: true } });
     await p.get();

@@ -349,7 +349,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | SET-19 | the $1 budget is created | M |
 | SET-20 | an unsigned or mismatched image is refused before it's started | M |
 | SET-21 | passwords never reach disk (canary scan of the Cloud Shell home folder) | M |
-| SET-22 | password prompts don't echo, and say so | U |
+| SET-22 | password prompts don't echo, and say so; each question's last line survives readline's redraw; Ctrl+C or the input ending at a question stops setup plainly (SETUP-INTERRUPTED) *(3 added: found live)* | U |
 | SET-23 | pressing Enter at every prompt produces a correct install | M |
 | SET-24 | an account can be skipped with `s`, and the rest complete | M |
 | SET-25 | the built `setup.js` needs nothing beyond Node's built-in modules | U |
@@ -374,6 +374,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | SET-79 | the menu's gcloud commands: the running image, removing our $1 alarm only, deleting the project *(added)* | M |
 | SET-80 | every stop ends with how to get help, unless its own steps already say it *(added: found by DIA-04)* | M |
 | SET-81 | Check and fix checks Google's side first: billing unlinked, services off and a missing $1 alarm are put back; closed billing is reported and nothing else is touched *(added)* | M |
+| SET-82 | the built launcher in a real terminal (Linux, Node 24, a stand-in gcloud): every question's last line stays on screen; Ctrl+C gives a plain, logged stop, never "unsettled top-level await" *(added: found live)* | K (package) |
 
 ### Release *(added during build)*
 
@@ -550,14 +551,14 @@ also where a later reader finds out why a line of code exists.
 | Test kit | 13 |
 | Engine | 55 |
 | Sign-in | 57 |
-| Setup | 58 |
+| Setup | 63 |
 | Installed server | 6 |
 | Release | 8 |
 | Page and emails | 17 |
 | Everyday polish | 11 |
 | Diagnostics | 9 |
-| **New** | **234** |
-| **Total** | **389** |
+| **New** | **239** |
+| **Total** | **394** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

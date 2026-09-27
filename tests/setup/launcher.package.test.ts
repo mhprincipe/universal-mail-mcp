@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { VERSION } from '../../src/version.js';
 
 // SET-78 (added): the file a person actually runs. Built as the release
 // builds it, then run as `node setup.js`, in a process of its own.
@@ -26,7 +27,7 @@ describe('the setup.js launcher', () => {
     const r = setup(['report']);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('Universal Mail setup report');
-    expect(r.stdout).toContain('Setup version: 2.0.0');
+    expect(r.stdout).toContain(`Setup version: ${VERSION}`);
   });
 
   it('SET-78 outside Cloud Shell it stops with the plain message and exit code 1', () => {
