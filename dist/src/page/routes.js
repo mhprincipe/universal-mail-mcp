@@ -135,7 +135,12 @@ export function mountPage(app, deps) {
     deps.extend?.({
         base,
         post: (path, handler) => {
-            app.post(`${base}${path}`, guard, form, async (req, res) => {
+            // Your page only ever uses its session. A request carrying a bearer token
+            // is setup's (its check shares /{key}/check with the page's Check button):
+            // it goes on to the routes that check tokens. Found live: the page
+            // answered setup's check with 403.
+            const notOurs = (req, _res, next) => next(req.header('authorization')?.startsWith('Bearer ') ? 'route' : undefined);
+            app.post(`${base}${path}`, notOurs, guard, form, async (req, res) => {
                 const found = verified(req, res);
                 if (!found || !signedIn(found[1]))
                     return refuse(res);

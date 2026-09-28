@@ -53,7 +53,8 @@ export function createPrompt(input, output, onClosed) {
                 muted = options.hidden;
             });
         },
-        close: () => rl.close()
+        // Setup closing its own prompt isn't the person closing the input.
+        close: () => { closed ??= 'input-closed'; rl.close(); }
     };
 }
 //# sourceMappingURL=prompt.js.map

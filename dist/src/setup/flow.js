@@ -79,9 +79,11 @@ export async function runSetup(d) {
             progress.accounts = await gatherAccounts(d, passwords);
             if (!progress.accounts.length)
                 throw new Stop('SETUP-NO-ACCOUNTS');
-            const first = progress.accounts[0].name;
-            const chosen = (await d.ask('ASK-SIGNIN', { suggested: first })).trim() || first;
-            progress.signIn = (progress.accounts.find(a => a.name === chosen) ?? progress.accounts[0]).address;
+            // It asks for an address, so it suggests one; a name works too (found live:
+            // "[yahoo]" left the owner unsure what to type).
+            const first = progress.accounts[0].address;
+            const chosen = (await d.ask('ASK-SIGNIN', { suggested: first })).trim().toLowerCase() || first;
+            progress.signIn = (progress.accounts.find(a => a.address === chosen || a.name === chosen) ?? progress.accounts[0]).address;
         }
         else if (progress.fromV1 && passwords.size) {
             // Version 1's password, checked before it's carried over; if the
@@ -155,7 +157,10 @@ export async function runSetup(d) {
                 UNIVERSAL_MAIL_STATE: STATE_SECRET, UNIVERSAL_MAIL_CREDENTIALS: CREDENTIALS_SECRET
             }));
         };
-        const url = await google.serverUrl(project) ?? await startServer();
+        // A running server is kept only if it runs this release: otherwise a fix in
+        // a newer release could never reach an unfinished install (found live).
+        const running = await google.serverUrl(project);
+        const url = running && (await google.serverImage(project)) === d.image ? running : await startServer();
         save(6);
         // ── 7 · Testing sending ──
         heading(7);

@@ -11,6 +11,8 @@ const NO_KEYS = 'Setup couldn\'t read the server\'s saved keys.';
 const REFUSED = 'The server didn\'t accept setup\'s check, so its saved keys may not match.';
 const NOT_FOUND = 'The server has no check at its address. It may not be this version.';
 const NO_ANSWER = 'The server didn\'t answer its check.';
+// Found live: 403 was retried and then called "didn't answer".
+const TURNED_AWAY = 'The server turned setup\'s check away.';
 // A network failure's code (ECONNREFUSED, ETIMEDOUT…) or name: never its words.
 function reasonOf(error) {
     const code = error?.cause?.code ?? error?.code;
@@ -57,6 +59,8 @@ export function createSelfTest(options) {
                 }
                 if (response.status === 401)
                     return unable(REFUSED);
+                if (response.status === 403)
+                    return unable(TURNED_AWAY);
                 if (response.status === 404)
                     return unable(NOT_FOUND);
                 retry = true;

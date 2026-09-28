@@ -71,6 +71,11 @@ export function createGoogleCloud(options) {
     const project = (p) => `--project=${p}`;
     const identity = (p) => `${SERVER_IDENTITY}@${p}.iam.gserviceaccount.com`;
     const budgetName = (p) => `Universal Mail $1 alarm (${p})`;
+    // Budgets live on the billing account, not in a project, so Google charges the
+    // request to Cloud Shell's current project unless told otherwise. Found live:
+    // that was version 1's project, where the budgets service is off. Our own
+    // project has it on (step 4).
+    const billedTo = (p) => `--billing-project=${p}`;
     const serverUrl = async (p) => {
         const r = await run(['run', 'services', 'describe', SERVICE, `--region=${REGION}`, project(p), '--format=value(status.url)']);
         if (r.status !== 0) {
@@ -124,7 +129,7 @@ export function createGoogleCloud(options) {
             return SERVICES.every(s => names.has(s));
         },
         async budgetExists(_p, account) {
-            const budgets = (await json(['billing', 'budgets', 'list', `--billing-account=${account}`, '--format=json'])) ?? [];
+            const budgets = (await json(['billing', 'budgets', 'list', `--billing-account=${account}`, '--format=json', billedTo(_p)])) ?? [];
             return budgets.some(b => b.displayName === budgetName(_p));
         },
         async secretExists(p, name) {
@@ -160,7 +165,7 @@ export function createGoogleCloud(options) {
         async enableServices(p) { await ok(['services', 'enable', ...SERVICES, project(p)]); },
         async createBudget(p, account, dollars) {
             await ok(['billing', 'budgets', 'create', `--billing-account=${account}`, `--display-name=${budgetName(p)}`,
-                `--budget-amount=${dollars}USD`, `--filter-projects=projects/${p}`, '--threshold-rule=percent=0.5', '--threshold-rule=percent=1.0']);
+                `--budget-amount=${dollars}USD`, `--filter-projects=projects/${p}`, '--threshold-rule=percent=0.5', '--threshold-rule=percent=1.0', billedTo(p)]);
         },
         async putSecret(p, name, value) {
             const created = await run(['secrets', 'create', name, '--replication-policy=automatic', project(p)]);
@@ -220,10 +225,10 @@ export function createGoogleCloud(options) {
             return r.stdout.trim() || undefined;
         },
         async deleteBudget(p, account) {
-            const budgets = (await json(['billing', 'budgets', 'list', `--billing-account=${account}`, '--format=json'])) ?? [];
+            const budgets = (await json(['billing', 'budgets', 'list', `--billing-account=${account}`, '--format=json', billedTo(p)])) ?? [];
             // Only our own alarm, found by its name.
             for (const budget of budgets.filter(b => b.displayName === budgetName(p) && b.name)) {
-                await ok(['billing', 'budgets', 'delete', budget.name.split('/').at(-1), `--billing-account=${account}`, '--quiet']);
+                await ok(['billing', 'budgets', 'delete', budget.name.split('/').at(-1), `--billing-account=${account}`, '--quiet', billedTo(p)]);
             }
         },
         async deleteProject(p) { await ok(['projects', 'delete', p, '--quiet']); },
