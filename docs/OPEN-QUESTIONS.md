@@ -18,6 +18,7 @@ be changed.
 | 7 | **After a lapse: read-only, or every tool refused?** (design §13.4) | **Built: read-only.** Reading and search keep working; organizing and sending answer with one sentence and the page link. The other choice is one constant away (`readOnly` in `src/multiMail.ts` gates `organize` and `send`; gating `read` too would make it a lockout). |
 | 8 | **Prices and plans.** | **Built as defaults: $4 a month or $36 a year**, per person, any number of accounts, a 30-day trial with no card, 14 days of grace. The numbers live in `src/page/views.ts` (the page) and in Paddle (the prices). |
 | 9 | **Merchant of record.** | **Built for Paddle** (global sales tax, invoices, refunds handled by them). Its webhook signature and event shapes are as documented; the first real purchase confirms them (`src/licenseService/paddle.ts`). |
+| 10 | **The free-trial reminder never fires** (seen live: `gcloud billing accounts list` has no field that says an account is on Google's free trial, so step 1 never asks the upgrade question and the day-80 email never goes). | **Not built; your call.** The plain option: step 1 asks *"Is your Google Cloud account on the free trial? [y/N]"* (one question, default no) and keeps the reminder for a yes. The other: drop §4.6 and rely on Google's own trial emails. |
 
 ## Things only the live install can settle
 
