@@ -580,9 +580,9 @@ also where a later reader finds out why a line of code exists.
 | Page and emails | 17 |
 | Everyday polish | 11 |
 | Diagnostics | 13 |
-| Subscription | 15 |
-| **New** | **267** |
-| **Total** | **422** |
+| Subscription | 33 |
+| **New** | **285** |
+| **Total** | **440** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

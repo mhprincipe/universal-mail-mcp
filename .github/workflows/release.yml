@@ -9,6 +9,7 @@
 #   vars.GCP_WORKLOAD_IDENTITY_PROVIDER  Workload Identity Federation provider
 #   vars.GCP_RELEASE_SERVICE_ACCOUNT     may push to the release repository
 #   vars.UPDATE_FEED_URL                 the release branch's latest.json
+#   vars.LICENSE_SERVICE_URL             the license service (scripts/license-setup.sh prints it); empty: no subscription gate
 name: release
 on:
   push:
@@ -49,7 +50,7 @@ jobs:
 
       - id: image
         run: |
-          docker build --build-arg UPDATE_FEED_URL="${{ vars.UPDATE_FEED_URL }}" -t "$REPOSITORY:${{ steps.version.outputs.version }}" .
+          docker build --build-arg UPDATE_FEED_URL="${{ vars.UPDATE_FEED_URL }}" --build-arg LICENSE_SERVICE_URL="${{ vars.LICENSE_SERVICE_URL }}" -t "$REPOSITORY:${{ steps.version.outputs.version }}" .
           docker push "$REPOSITORY:${{ steps.version.outputs.version }}"
           digest="$(docker inspect --format='{{index .RepoDigests 0}}' "$REPOSITORY:${{ steps.version.outputs.version }}" | cut -d@ -f2)"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"

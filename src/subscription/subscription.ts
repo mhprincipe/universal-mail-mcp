@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { decodeJwt } from 'jose';
 import type { InstallStore } from '../installed.js';
 import { GRACE_DAYS, subscriptionState, verifyLicense, type License, type SubscriptionState, type VerifiedLicense } from './state.js';
 
@@ -36,7 +37,7 @@ export function createSubscription(deps: {
   let verified: VerifiedLicense | undefined;
   let remindersChecked = -Infinity;
 
-  const noted = () => store.noted() as { installedAt?: string; installId?: string; license?: License; subscriptionNotices?: Record<string, string> };
+  const noted = () => store.noted() as { installedAt?: string; installId?: string; license?: License; subscriptionNotices?: Record<string, string>; subscriptionAskedAt?: string };
   const installId = () => {
     const id = noted().installId;
     if (typeof id === 'string' && id) return id;
@@ -64,9 +65,13 @@ export function createSubscription(deps: {
     }
   };
   // A service answer that is a license for this install becomes the license.
-  const take = async (code: string, body: Record<string, unknown>): Promise<boolean> => {
+  // Without a code (bought from the page, bound by install), the token names it.
+  const take = async (body: Record<string, unknown>, code?: string): Promise<boolean> => {
     if (typeof body.token !== 'string' || !body.keys || typeof body.keys !== 'object') return false;
-    const license: License = { code, token: body.token, keys: body.keys as License['keys'], renewedAt: new Date(clock.now()).toISOString() };
+    let named = code;
+    if (!named) { try { named = decodeJwt(body.token).sub; } catch { return false; } }
+    if (!named) return false;
+    const license: License = { code: named, token: body.token, keys: body.keys as License['keys'], renewedAt: new Date(clock.now()).toISOString() };
     const checked = await verify(license);
     if (!checked) return false;
     verified = checked;
@@ -98,13 +103,16 @@ export function createSubscription(deps: {
     else if (state.state === 'grace') await notice(state.after === 'trial' ? 'trial-ended' : 'not-renewed', state.after === 'trial' ? notices['trial-ended'](state) : notices['not-renewed'](state));
     else if (state.state === 'read-only') await notice(`read-only:${state.after}`, notices['read-only']());
   };
+  // Daily. With a license: a fresh token. Without one: whether a purchase from
+  // the page has bound this install (found by SUB-14: nothing to paste, then).
   const renew = async () => {
-    const license = noted().license;
-    if (!license || !service) return;
-    if (clock.now() - Date.parse(license.renewedAt ?? '') < DAY) return;
-    const answer = await call('/renew', { code: license.code, install: installId() });
+    const { license, subscriptionAskedAt } = noted();
+    if (!service) return;
+    if (clock.now() - Date.parse(license?.renewedAt ?? subscriptionAskedAt ?? '') < DAY) return;
+    const answer = await call('/renew', { ...(license ? { code: license.code } : {}), install: installId() });
     if (answer.kind === 'unreachable') return;
-    if (answer.status === 200 && await take(license.code, answer.body)) return;
+    if (answer.status === 200 && await take(answer.body, license?.code)) return;
+    if (!license) { store.note({ subscriptionAskedAt: new Date(clock.now()).toISOString() }); return; }
     // Refused (not paid, cancelled, unknown): the license stays, and the
     // person hears now, while what's paid for (and then grace) still runs.
     store.note({ license: { ...license, renewedAt: new Date(clock.now()).toISOString() } });
@@ -118,7 +126,8 @@ export function createSubscription(deps: {
   return {
     ready,
     current,
-    buyUrl: () => service ? `${service}/buy` : undefined,
+    // The checkout, with this install along, so a purchase binds itself (no code to paste).
+    buyUrl: () => service ? `${service}/buy?install=${encodeURIComponent(installId())}` : undefined,
     readOnlySentence() {
       const state = current();
       if (state.state !== 'read-only') return undefined;
@@ -135,7 +144,7 @@ export function createSubscription(deps: {
       if (answer.status === 404) return { ok: false, text: 'That code wasn\'t recognised. Check it against your receipt.' };
       if (answer.status === 409) return { ok: false, text: 'That code is already in use on too many servers. Remove it from one of them, or buy another.' };
       if (answer.status === 402) return { ok: false, text: `That subscription isn't paid up. Renew it first${typeof answer.body.portal === 'string' ? `: ${answer.body.portal}` : '.'}` };
-      if (answer.status !== 200 || !(await take(code, answer.body))) return { ok: false, text: 'The subscription service gave an answer that couldn\'t be verified. Try again in a few minutes.' };
+      if (answer.status !== 200 || !(await take(answer.body, code))) return { ok: false, text: 'The subscription service gave an answer that couldn\'t be verified. Try again in a few minutes.' };
       return { ok: true, state: current() };
     },
     async duty() {

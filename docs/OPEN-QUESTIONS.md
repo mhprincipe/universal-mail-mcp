@@ -15,6 +15,9 @@ be changed.
 | 4 | **A new account added on your page runs setup's sending test** without asking first. | **Confirmed 2026-09-26.** |
 | 5 | **The update feed's address** (where the server looks for new versions) and **the GitHub repository** the release pipeline publishes from. | **Settled 2026-09-26:** repository `mhprincipe/universal-mail-mcp`; images in the Google project `universal-mail-rel-zqrw`; the feed is `latest.json` on the `release` branch (no GitHub Pages). `scripts/release-setup.sh` creates the Google side and prints the three variables. |
 | 6 | **`DONE-ALREADY` ("✓ Already done") was removed** from setup's messages: it was never shown and isn't in the design. | Removed (DIA-04 found it). |
+| 7 | **After a lapse: read-only, or every tool refused?** (design §13.4) | **Built: read-only.** Reading and search keep working; organizing and sending answer with one sentence and the page link. The other choice is one constant away (`readOnly` in `src/multiMail.ts` gates `organize` and `send`; gating `read` too would make it a lockout). |
+| 8 | **Prices and plans.** | **Built as defaults: $4 a month or $36 a year**, per person, any number of accounts, a 30-day trial with no card, 14 days of grace. The numbers live in `src/page/views.ts` (the page) and in Paddle (the prices). |
+| 9 | **Merchant of record.** | **Built for Paddle** (global sales tax, invoices, refunds handled by them). Its webhook signature and event shapes are as documented; the first real purchase confirms them (`src/licenseService/paddle.ts`). |
 
 ## Things only the live install can settle
 
@@ -64,3 +67,33 @@ to diagnose each one.
 7. Run `node setup.js` again: the menu; Check and fix; Show my address.
 8. Only then convert v1 (menu appears on its own in v1's project), and keep v1
    until you're happy.
+
+## Selling it: what only you can do (design §13)
+
+Everything below the line is built and tested; nothing here needs code. Until
+step 4 is done, every release is a **permanent free trial** (no service
+address baked in), so none of this blocks the live install.
+
+1. **A business to sell from:** an LLC (or your country's equivalent), a
+   business bank account, a support email address. Terms of service and a
+   privacy policy (yours is short: you hold an install id, a license code and
+   the merchant's ids; never mail, passwords or a copy of anything).
+2. **A Paddle account** (paddle.com; they verify the business, usually a few
+   days). In it: two prices (monthly $4, yearly $36), and from its settings:
+   a **client-side token**, the two **price ids**, and a **webhook** whose
+   destination you'll get in step 3, with its **secret**.
+3. **The service, once**, in Cloud Shell, in the repository clone:
+
+   ```bash
+   PADDLE_WEBHOOK_SECRET=... PADDLE_CLIENT_TOKEN=... PADDLE_PRICE_MONTHLY=pri_... PADDLE_PRICE_YEARLY=pri_... bash scripts/license-setup.sh
+   ```
+
+   It prints `LICENSE_SERVICE_URL` (a GitHub repository variable, like the
+   three before it) and the two addresses to paste into Paddle: the webhook
+   destination and the checkout's success page.
+4. **A release** after the variable is set: from then on new installs get a
+   30-day trial, then the Subscription section on their page. Installs from
+   earlier releases join in at their next update.
+5. **Try it yourself first**, with Paddle's sandbox: buy from your own page,
+   watch "Paid through" appear within a day (or at once after Check), cancel,
+   watch the emails arrive.

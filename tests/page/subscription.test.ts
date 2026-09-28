@@ -56,21 +56,31 @@ describe('the subscription on your page', () => {
     expect(page.html).toContain(`Free trial: ${TRIAL_DAYS} days left`);
     expect(page.html).toContain(`${SERVICE_URL}/buy`);
     expect(page.html).toContain('name="code"');
+    // The daily "is this install bound?" was asked once; not again the same day.
+    expect(p.serviceCalls.map(c => c.path)).toEqual(['/renew']);
+    p.clock.advance(3 * 60 * 60_000);
+    await p.get();
+    expect(p.serviceCalls).toHaveLength(1);
+    // (The page session has expired meanwhile: sign in again.)
+    await p.signIn();
 
     page = await p.act('/subscription/activate', { code: ` ${CODE.toLowerCase()} ` });
     expect(page.html).toContain('Paid through 24 November 2026');
     expect(page.html).toContain('https://pay.example.invalid/manage');
     expect(page.html).not.toContain('Free trial');
-    // What the service was sent: the code and this install's id, never the key.
-    expect(p.serviceCalls).toHaveLength(1);
-    expect(p.serviceCalls[0]!.path).toBe('/activate');
-    expect(p.serviceCalls[0]!.body.code).toBe(CODE);
-    expect(String(p.serviceCalls[0]!.body.install)).toMatch(/^[A-Za-z0-9_-]{16,}$/);
+    // What the service was sent: first the daily "is this install bound?" (no code
+    // yet), then the activation with the code and this install's id; never the key.
+    expect(p.serviceCalls.map(c => c.path)).toEqual(['/renew', '/activate']);
+    expect(Object.keys(p.serviceCalls[0]!.body)).toEqual(['install']);
+    const activation = p.serviceCalls[1]!;
+    expect(activation.body.code).toBe(CODE);
+    expect(String(activation.body.install)).toMatch(/^[A-Za-z0-9_-]{16,}$/);
+    expect(p.serviceCalls[0]!.body.install).toBe(activation.body.install);
     expect(JSON.stringify(p.serviceCalls)).not.toContain(KEY);
     // Saved: the install id, the license and the service's keys; nothing secret about the person.
     await p.app.signin!.saved();
     const saved = last(p.saves.state);
-    expect(saved.installId).toBe(p.serviceCalls[0]!.body.install);
+    expect(saved.installId).toBe(activation.body.install);
     expect(saved.license).toMatchObject({ code: CODE, keys: s.keys });
     expect(typeof saved.license.token).toBe('string');
     // Restarted with what was saved, later the same day: still paid, no call needed (renewal is daily).
@@ -96,7 +106,8 @@ describe('the subscription on your page', () => {
     expect((await p.act('/subscription/activate', { code: CODE })).html).toContain('couldn&#39;t be verified');
     await p.app.signin!.saved();
     expect(last(p.saves.state).license ?? undefined).toBeUndefined();
-    expect(p.saves.state.length).toBe(before + 1); // the install id, once
+    // Nothing saved by any of them (the install id was saved when the page was first shown).
+    expect(p.saves.state.length).toBe(before);
     expect((await p.get()).html).toContain('Free trial');
   });
 
@@ -105,15 +116,16 @@ describe('the subscription on your page', () => {
     p = await startPage({ service: s.handle, start: day(0) });
     await p.signIn();
     await p.act('/subscription/activate', { code: CODE });
-    expect(p.serviceCalls.map(c => c.path)).toEqual(['/activate']);
+    expect(p.serviceCalls.map(c => c.path)).toEqual(['/renew', '/activate']);
     // The same day: no renewal asked for.
     await p.get();
-    expect(p.serviceCalls).toHaveLength(1);
-    // A day later, with a later paid-through date at the service.
+    expect(p.serviceCalls).toHaveLength(2);
+    // A day later, with a later paid-through date at the service: renewed with the code.
     s.paidThrough(t0 + 90 * DAY);
     p.clock.advance(DAY + 60_000);
     await p.get();
-    expect(p.serviceCalls.map(c => c.path)).toEqual(['/activate', '/renew']);
+    expect(p.serviceCalls.map(c => c.path)).toEqual(['/renew', '/activate', '/renew']);
+    expect(p.serviceCalls[2]!.body.code).toBe(CODE);
     // The page session has long expired: sign in again to look.
     expect((await p.signIn()).html).toContain('Paid through 24 December 2026');
     // The service refusing (card failed, cancelled): one email, the license kept as it was.

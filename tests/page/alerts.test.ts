@@ -99,12 +99,14 @@ describe('emails the server sends', () => {
   });
 
   it('PG-15 update-available emails mark security releases; each version is told once; the feed is asked at most daily', async () => {
-    p = await startPage({ env: { UPDATE_FEED_URL: 'https://updates.example.invalid/latest.json' }, feed: { version: '2.1.0', security: true } });
+    // The next major version: newer than whatever is running, so a release doesn't break the test.
+    const nextMajor = VERSION.replace(/^(\d+)\..*$/, (_m, major: string) => `${Number(major) + 1}.0.0`);
+    p = await startPage({ env: { UPDATE_FEED_URL: 'https://updates.example.invalid/latest.json' }, feed: { version: nextMajor, security: true } });
     await p.get();
     await p.get();
     const updates = p.sent.filter(s => /available/.test(s.subject));
     expect(updates).toHaveLength(1);
-    expect(updates[0]!.subject).toBe('Universal Mail 2.1.0 is available (security update)');
+    expect(updates[0]!.subject).toBe(`Universal Mail ${nextMajor} is available (security update)`);
     expect(updates[0]!.text).toContain('node setup.js');
     expect(p.feedAsked).toEqual(['https://updates.example.invalid/latest.json']);
     p.clock.advance(DAY + 1000);

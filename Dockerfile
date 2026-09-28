@@ -12,6 +12,10 @@ ENV NODE_ENV=production
 # empty: no update notices).
 ARG UPDATE_FEED_URL=
 ENV UPDATE_FEED_URL=${UPDATE_FEED_URL}
+# The license service this release's server talks to (design §13). Empty: a
+# permanent trial, nothing gated.
+ARG LICENSE_SERVICE_URL=
+ENV LICENSE_SERVICE_URL=${LICENSE_SERVICE_URL}
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
