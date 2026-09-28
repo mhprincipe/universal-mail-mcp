@@ -8,6 +8,7 @@ import { createProgressStore } from './progress.js';
 import { createPrompt } from './prompt.js';
 import { createMailCheck } from './realMail.js';
 import { createSelfTest } from './selfTest.js';
+import { serverLog } from './serverLog.js';
 import { createUi } from './ui.js';
 const INDENT = '  ';
 const indented = (text) => text.split('\n').map(l => (l ? `${INDENT}${l}` : l)).join('\n');
@@ -16,6 +17,13 @@ export async function main(argv, io) {
     const ui = createUi({ write: text => io.stdout.write(text) }, INDENT);
     if (argv[0] === 'report') {
         io.stdout.write(`${buildReport(home, { version: VERSION })}\n`);
+        // Once there's a project, the server's own log too (DIA-11). Reading it
+        // isn't a setup run, so it adds nothing to setup's log.
+        const project = createProgressStore(home).load()?.project;
+        if (project) {
+            const quiet = { secret: () => undefined, event: () => undefined };
+            io.stdout.write(`\n${await serverLog(createGcloudRunner({ command: io.gcloud, env: io.env, log: quiet }), project)}\n`);
+        }
         return 0;
     }
     if (argv.length) {
