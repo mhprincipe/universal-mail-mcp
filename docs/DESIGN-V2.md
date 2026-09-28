@@ -938,7 +938,6 @@ Each phase ends usable, and only when its exit test passes.
 |---|---|---|
 | Microsoft accounts and Gmail without app passwords (XOAUTH2) | needs the person to register an app with Microsoft or Google — real extra setup | first follow-up release |
 | Self-registering apps (developer tools) | fake-name risk, more to build, a mechanism the standard is moving away from | enough people ask, or a major app requires it |
-| Connection pooling | batching and the folder cache already fixed the observed slowness; free-tier CPU makes pooling fragile | measurements show logins dominate response time |
 
 ### Cut — and why
 
@@ -967,12 +966,12 @@ Each phase ends usable, and only when its exit test passes.
 | S8 address disclosure | masked until signed in |
 | S9 framing and CSRF | framing refused; CSRF tokens; `no-store` |
 | S10 persistent passkey | fingerprint required to add another; emailed; listed on the page |
-| P1 reuse against throttled CPU | pooling deferred |
+| P1 reuse against throttled CPU | **built 2026-09-28** (the live baseline showed ~3.3 s of login on every call): one kept connection per account, checked with NOOP after 30 s idle (5 s limit), never reused after a failure; see ENG-18 |
 | P2 whole-mailbox thread scans | per-provider strategy; limited fallback; full scan opt-in |
 | P3 response size | 200,000-character response budget |
 | P4 cold starts | CPU boost; secrets at start; lazy loading |
 | P5 Docker Hub pull limits | public Artifact Registry |
-| P6 serialized parallel calls | deferred with pooling |
+| P6 serialized parallel calls | calls on one account take turns on its connection (accepted: one person's AI works one step at a time) |
 | P7 state reads | in-memory, refreshed on own writes |
 | P8 slow search | timeout with a remedy |
 

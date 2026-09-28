@@ -22,7 +22,9 @@ export type MailAccess = {
   // Search one named account, or every account this caller may read.
   search(input: SearchInput, account?: string): Promise<ToolEnvelope<MessageSummary[]>>;
 };
-export type MailRouter = MailAccess & { forGrant(grant: AccountGrant): MailAccess };
+// close: logs out every account's kept connection (ENG-18), when the mail
+// access is replaced (an account changed on your page).
+export type MailRouter = MailAccess & { forGrant(grant: AccountGrant): MailAccess; close(): Promise<void> };
 
 const verbs: Record<Action, string> = { read: 'read mail in', organize: 'organize mail in', send: 'send mail from' };
 
@@ -54,7 +56,8 @@ function watched(name: string, service: MailService, hooks: RouterHooks): MailSe
 
 export function createMailRouter(accounts: Array<{ name: string; config: AppConfig; reliableHeaderSearch?: boolean; sending?: boolean }>, hooks: RouterHooks = {}): MailRouter {
   const sendingOff = new Set(accounts.filter(a => a.sending === false).map(a => a.name));
-  const services = new Map([...createAccountServices(accounts)].map(([name, service]) => [name, watched(name, service, hooks)]));
+  const plain = createAccountServices(accounts);
+  const services = new Map([...plain].map(([name, service]) => [name, watched(name, service, hooks)]));
   const directory = createAccounts(accounts.map(a => ({ name: a.name, address: a.config.YAHOO_EMAIL })));
   const multi = createMultiMail(services);
 
@@ -92,7 +95,10 @@ export function createMailRouter(accounts: Array<{ name: string; config: AppConf
 
   // Without sign-in grants (bearer and v1 modes), the caller may do everything.
   const everything = Object.fromEntries(accounts.map(a => [a.name, ['read', 'organize', 'send'] as Action[]]));
-  return { ...access(everything), forGrant: access };
+  return {
+    ...access(everything), forGrant: access,
+    close: async () => { await Promise.all([...plain.values()].map(service => service.imap.close())); }
+  };
 }
 
 export type AccountService = Pick<MailService, 'searchEmail' | 'moveEmail'>;

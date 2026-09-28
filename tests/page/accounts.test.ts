@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ImapGateway } from '../../src/yahoo/imap.js';
 import { startPage } from './pageHarness.js';
 
 // Your page: the accounts (design §3.6). Every change takes effect at once,
@@ -10,6 +11,19 @@ const last = (list: string[]) => JSON.parse(list.at(-1)!);
 const claude = 'https://claude.ai/oauth/mcp-oauth-client-metadata';
 
 describe('accounts on your page', () => {
+  // ENG-18 (added): connections are kept now, so a change of accounts must
+  // log the old ones out, not leave them open with an old password.
+  it('ENG-18 changing an account logs out the kept connections of the mail access it replaces', async () => {
+    p = await startPage();
+    const closed = vi.spyOn(ImapGateway.prototype, 'close');
+    p.app.signin!.mail();
+    await p.signIn();
+    p.accepted['me@example.invalid'] = 'me-new-app-password';
+    await p.act('/accounts/password', { name: 'me', password: 'me-new-app-password' });
+    expect(closed).toHaveBeenCalledTimes(2);
+    closed.mockRestore();
+  });
+
   it('PG-03 adding an account runs the same checks as setup; it is saved, usable at once, and you are told', async () => {
     p = await startPage();
     p.accepted['side@example.invalid'] = 'side-app-password';
