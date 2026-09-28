@@ -70,6 +70,15 @@ describe('the self-test client', () => {
     expect(w.entries()).toContainEqual(expect.objectContaining({ type: 'selfTest', attempt: 1, status: 401 }));
   });
 
+  // Found live, 2026-09-27: the server answered 403 three times and setup said
+  // "didn't answer", pointing away from the cause. An answer is an answer.
+  it('SET-75 a server that turns the check away (403) is reported as refusing, at once, not as silent (added: found live)', async () => {
+    const turnedAway: typeof fetch = async () => new Response('<html>This page expired.</html>', { status: 403 });
+    const w = await world({ fetchImpl: turnedAway });
+    expect(await w.selfTest(w.target)).toEqual({ passed: 0, total: 0, failing: 'The server turned setup\'s check away.' });
+    expect(w.entries().filter(e => e.type === 'selfTest').map(e => `${e.attempt}:${e.status}`)).toEqual(['1:403']);
+  });
+
   it('SET-75 a server that doesn\'t answer is tried three times, a few seconds apart, then reported', async () => {
     const down: typeof fetch = async () => { throw Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }) }); };
     const w = await world({ fetchImpl: down });

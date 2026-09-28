@@ -51,6 +51,7 @@ export function createPrompt(input: NodeJS.ReadableStream, output: NodeJS.Writab
         muted = options.hidden;
       });
     },
-    close: () => rl.close()
+    // Setup closing its own prompt isn't the person closing the input.
+    close: () => { closed ??= 'input-closed'; rl.close(); }
   };
 }

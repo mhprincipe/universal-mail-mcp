@@ -67,11 +67,7 @@ jobs:
           node scripts/publish-setup.mjs publish "${{ steps.version.outputs.version }}" "${{ steps.image.outputs.digest }}" "${{ steps.version.outputs.security }}" "${{ vars.UPDATE_FEED_URL }}"
 
       # "Open in Cloud Shell" clones the release branch: built, pinned, ready.
-      # The update feed (latest.json) is served from the same branch.
+      # The update feed (latest.json) is served from the same branch. Each
+      # release goes on top of the last, so a clone takes it with git pull.
       - name: Publish the release branch
-        run: |
-          cd publish
-          git init -q && git checkout -q -b release
-          git add -A
-          git -c user.name="release" -c user.email="release@users.noreply.github.com" commit -q -m "Release ${{ steps.version.outputs.version }}"
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" release
+        run: bash scripts/publish-branch.sh publish "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "${{ steps.version.outputs.version }}"

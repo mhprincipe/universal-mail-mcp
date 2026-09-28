@@ -375,6 +375,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | SET-80 | every stop ends with how to get help, unless its own steps already say it *(added: found by DIA-04)* | M |
 | SET-81 | Check and fix checks Google's side first: billing unlinked, services off and a missing $1 alarm are put back; closed billing is reported and nothing else is touched *(added)* | M |
 | SET-82 | the built launcher in a real terminal (Linux, Node 24, a stand-in gcloud): every question's last line stays on screen; Ctrl+C gives a plain, logged stop, never "unsettled top-level await" *(added: found live)* | K (package) |
+| SET-83 | rerunning an unfinished install with a newer release starts the newer server before the check; the same release leaves it alone *(added: found live)* | M |
 
 ### Release *(added during build)*
 
@@ -386,6 +387,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | REL-04 | the published release branch runs on its own: `node setup.js report` with no node_modules, the pinned image, the feed, a package.json saying ES modules *(added: found release.yml omitted it)* | K (package) |
 | REL-05 | `scripts/release-setup.sh` creates the release project, public image store and keyless publishing for this repository only; safe to rerun; stops plainly without billing; waits and retries while a just-enabled service still refuses *(added; retry found live)* | K (package) |
 | REL-06 | one image store, named once: the setup script, the workflow and setup's trusted image agree; the workflow publishes through `publish-setup.mjs` *(added)* | U |
+| REL-07 | each release is one commit on top of the last on the release branch, so a clone takes it with a plain `git pull`; the workflow never force-pushes *(added: found live)* | K (package) |
 
 **Failure matrix.** Each test asserts the exact message, the code, and that
 what it says about the person's position is true.
@@ -483,6 +485,7 @@ what it says about the person's position is true.
 | DIA-07 | the check token: minted by setup with Node's built-ins, verified by the server; five minutes, once only, only for the check route; a check token never opens the mail tools *(added)* | U |
 | DIA-08 | the `/{key}/check` route: only setup's token opens it; the report, never cached; refusals and failures logged without their words; on real servers every stage passes and no mail is marked read *(added)* | U+P |
 | DIA-09 | the `live:` stage: a test message in its own folder, found by ID, marked read and unread, flagged and unflagged, moved to Trash, each change confirmed; a change that doesn't happen fails it and the log names the step; no safe move leaves it in its folder *(added: owner's choice, 2026-09-26)* | U+P |
+| DIA-10 | on the installed server (with your page), setup's check token reaches the check and gets the report; without a token no report is given *(added: found live: the page's route answered 403)* | U |
 
 ---
 
@@ -551,14 +554,14 @@ also where a later reader finds out why a line of code exists.
 | Test kit | 13 |
 | Engine | 55 |
 | Sign-in | 57 |
-| Setup | 63 |
+| Setup | 68 |
 | Installed server | 6 |
-| Release | 8 |
+| Release | 10 |
 | Page and emails | 17 |
 | Everyday polish | 11 |
-| Diagnostics | 9 |
-| **New** | **239** |
-| **Total** | **394** |
+| Diagnostics | 11 |
+| **New** | **248** |
+| **Total** | **403** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

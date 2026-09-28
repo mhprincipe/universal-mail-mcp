@@ -75,6 +75,15 @@ describe('the setup prompt', () => {
     await expect(answer).rejects.toMatchObject({ code: 'SETUP-INTERRUPTED' });
     expect(heard).toEqual(['input-closed']);
   });
+
+  // Seen in the owner's live report: every run ended with an "input-closed"
+  // line, logged when setup itself closed the prompt. Only the person closes.
+  it('SET-22 setup closing its own prompt at the end is not logged as the input closing', () => {
+    const heard: string[] = [];
+    const prompt = createPrompt(new PassThrough(), new PassThrough(), reason => heard.push(reason));
+    prompt.close();
+    expect(heard).toEqual([]);
+  });
 });
 
 describe('what setup needs to run', () => {

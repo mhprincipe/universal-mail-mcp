@@ -46,8 +46,8 @@ describe('the gcloud adapter', { timeout: 60_000 }, () => {
       { args: ['billing', 'projects', 'link', P, `--billing-account=${ACCT}`] },
       { args: ['services', 'list', '--enabled', project, '--format=json'], stdout: '[]' },
       { args: ['services', 'enable', 'run.googleapis.com', 'secretmanager.googleapis.com', 'billingbudgets.googleapis.com', project] },
-      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json'], stdout: '[]' },
-      { args: ['billing', 'budgets', 'create', `--billing-account=${ACCT}`, `--display-name=Universal Mail $1 alarm (${P})`, '--budget-amount=1USD', `--filter-projects=projects/${P}`, '--threshold-rule=percent=0.5', '--threshold-rule=percent=1.0'] },
+      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json', `--billing-project=${P}`], stdout: '[]' },
+      { args: ['billing', 'budgets', 'create', `--billing-account=${ACCT}`, `--display-name=Universal Mail $1 alarm (${P})`, '--budget-amount=1USD', `--filter-projects=projects/${P}`, '--threshold-rule=percent=0.5', '--threshold-rule=percent=1.0', `--billing-project=${P}`] },
       { args: ['secrets', 'describe', 'universal-mail-credentials', project], stderr: 'ERROR: NOT_FOUND: Secret [universal-mail-credentials] not found.', exitCode: 1 },
       { args: ['secrets', 'create', 'universal-mail-credentials', '--replication-policy=automatic', project] },
       { args: ['secrets', 'versions', 'add', 'universal-mail-credentials', '--data-file=-', project] },
@@ -102,9 +102,9 @@ describe('the gcloud adapter', { timeout: 60_000 }, () => {
   it('SET-79 the menu\'s commands: the running image, removing the $1 alarm, deleting the project (added)', async () => {
     const { google } = adapter([
       { args: ['run', 'services', 'describe', 'universal-mail', region, project, '--format=value(spec.template.spec.containers[0].image)'], stdout: `${IMAGE}\n` },
-      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json'],
+      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json', `--billing-project=${P}`],
         stdout: JSON.stringify([{ name: `billingAccounts/${ACCT}/budgets/other-1`, displayName: 'Someone else\'s budget' }, { name: `billingAccounts/${ACCT}/budgets/um-77`, displayName: `Universal Mail $1 alarm (${P})` }]) },
-      { args: ['billing', 'budgets', 'delete', 'um-77', `--billing-account=${ACCT}`, '--quiet'] },
+      { args: ['billing', 'budgets', 'delete', 'um-77', `--billing-account=${ACCT}`, '--quiet', `--billing-project=${P}`] },
       { args: ['projects', 'delete', P, '--quiet'] }
     ]);
     expect(await google.serverImage(P)).toBe(IMAGE);
@@ -133,7 +133,7 @@ describe('the gcloud adapter', { timeout: 60_000 }, () => {
   it('SET-79 no server yet: no image; no alarm of ours: nothing deleted', async () => {
     const { google } = adapter([
       { args: ['run', 'services', 'describe', 'universal-mail', region, project, '--format=value(spec.template.spec.containers[0].image)'], stderr: 'ERROR: Cannot find service [universal-mail]', exitCode: 1 },
-      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json'], stdout: '[]' }
+      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json', `--billing-project=${P}`], stdout: '[]' }
     ]);
     expect(await google.serverImage(P)).toBeUndefined();
     await google.deleteBudget(P, ACCT);
@@ -164,9 +164,9 @@ describe('the gcloud adapter', { timeout: 60_000 }, () => {
       { args: ['services', 'list', '--enabled', project, '--format=json'], stdout: JSON.stringify([
         { config: { name: 'run.googleapis.com' } }, { name: `projects/123/services/secretmanager.googleapis.com` }, { config: { name: 'billingbudgets.googleapis.com' } }
       ]) },
-      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json'], stdout: JSON.stringify([{ displayName: 'Someone else\'s budget' }, { displayName: `Universal Mail $1 alarm (${P})` }]) },
+      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json', `--billing-project=${P}`], stdout: JSON.stringify([{ displayName: 'Someone else\'s budget' }, { displayName: `Universal Mail $1 alarm (${P})` }]) },
       // Only someone else's budget: ours still has to be created.
-      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json'], stdout: JSON.stringify([{ displayName: 'Someone else\'s budget' }]) },
+      { args: ['billing', 'budgets', 'list', `--billing-account=${ACCT}`, '--format=json', `--billing-project=${P}`], stdout: JSON.stringify([{ displayName: 'Someone else\'s budget' }]) },
       { args: ['secrets', 'describe', 'universal-mail-state', project], stdout: 'name: projects/123/secrets/universal-mail-state' },
       { args: ['secrets', 'versions', 'access', 'latest', '--secret=universal-mail-state', project], exitCode: 1, stderr: 'ERROR: NOT_FOUND: Secret Version [latest] not found.' },
       { args: ['run', 'services', 'describe', 'universal-mail', region, project, '--format=value(status.url)'], stdout: `${URL}\n` },
@@ -229,7 +229,7 @@ describe('the gcloud adapter', { timeout: 60_000 }, () => {
         stderr: 'ERROR: (gcloud.run.services.update) PERMISSION_DENIED: Permission denied on secret: projects/1/secrets/universal-mail-state/versions/latest for Revision service account' },
       { args: ['services', 'enable', 'run.googleapis.com', 'secretmanager.googleapis.com', 'billingbudgets.googleapis.com', project], exitCode: 1,
         stderr: "ERROR: FAILED_PRECONDITION: Operation denied by org policy on resource 'projects/universal-mail-a1b2c3': constraints/iam.allowedPolicyMemberDomains" },
-      { args: ['billing', 'budgets', 'create', `--billing-account=${ACCT}`, `--display-name=Universal Mail $1 alarm (${P})`, '--budget-amount=1USD', `--filter-projects=projects/${P}`, '--threshold-rule=percent=0.5', '--threshold-rule=percent=1.0'], exitCode: 1,
+      { args: ['billing', 'budgets', 'create', `--billing-account=${ACCT}`, `--display-name=Universal Mail $1 alarm (${P})`, '--budget-amount=1USD', `--filter-projects=projects/${P}`, '--threshold-rule=percent=0.5', '--threshold-rule=percent=1.0', `--billing-project=${P}`], exitCode: 1,
         stderr: 'ERROR: (gcloud.billing.budgets.create) PERMISSION_DENIED: Cloud Billing Budget API has not been used in project 1 before or it is disabled. SERVICE_DISABLED' },
       { args: ['secrets', 'create', 'universal-mail-state', '--replication-policy=automatic', project], exitCode: 1, stderr: 'ERROR: something nobody expected' }
     ]);

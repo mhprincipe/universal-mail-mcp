@@ -18,6 +18,8 @@ const NO_KEYS = 'Setup couldn\'t read the server\'s saved keys.';
 const REFUSED = 'The server didn\'t accept setup\'s check, so its saved keys may not match.';
 const NOT_FOUND = 'The server has no check at its address. It may not be this version.';
 const NO_ANSWER = 'The server didn\'t answer its check.';
+// Found live: 403 was retried and then called "didn't answer".
+const TURNED_AWAY = 'The server turned setup\'s check away.';
 
 type Options = { google: GoogleCloud; log: SetupLog; version: string; clock: { now(): number; sleep(ms: number): Promise<void> }; fetchImpl?: typeof fetch };
 
@@ -63,6 +65,7 @@ export function createSelfTest(options: Options): SetupDeps['selfTest'] {
           };
         }
         if (response.status === 401) return unable(REFUSED);
+        if (response.status === 403) return unable(TURNED_AWAY);
         if (response.status === 404) return unable(NOT_FOUND);
         retry = true;
       } catch (error) {

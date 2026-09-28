@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { scanForCanaries } from '../../testkit/src/canary.js';
-import { IMAGE, createWorld, typical } from './flowHarness.js';
+import { IMAGE, NEW_IMAGE, createWorld, typical } from './flowHarness.js';
 
 let w: ReturnType<typeof createWorld> | undefined;
 afterEach(() => { w?.cleanup(); w = undefined; });
@@ -155,6 +155,46 @@ describe('setup flow', () => {
     expect(state.accounts.map((a: { sentCopyMode: string }) => a.sentCopyMode)).toEqual(['yahoo', 'yahoo']);
     expect(w.fake.state.server?.image).toBe(IMAGE);
     expect(w.fake.state.server?.settings.PUBLIC_URL).toBe('https://universal-mail-4f2a-uc.a.run.app');
+  });
+
+  // Found live, 2026-09-27: step 8 failed on a server bug fixed in the next
+  // release, but a rerun kept the running server ("already started"), so the
+  // fix could never arrive and the check would fail on the version instead.
+  it('SET-83 rerunning an unfinished install with a newer release starts the newer server before checking (added: found live)', async () => {
+    w = createWorld({ selfTest: { failingImage: IMAGE } });
+    typical(w);
+    expect(await w.run()).toEqual({ outcome: 'stopped', code: 'SETUP-SELFTEST-FAILED' });
+    expect(w.fake.state.server!.image).toBe(IMAGE);
+
+    w.useImage(NEW_IMAGE);
+    w.answers('', w.accounts['me@yahoo.com']!.password, w.accounts['fleet@gmail.com']!.password);
+    expect(await w.run()).toEqual({ outcome: 'done' });
+    expect(w.fake.state.server!.image).toBe(NEW_IMAGE);
+    // The same server, brought up to date: not a second one, and nothing else redone.
+    expect(w.events.filter(e => e === 'google createProject')).toHaveLength(1);
+    expect(w.events.filter(e => e === 'sendTest me@yahoo.com')).toHaveLength(1);
+  });
+
+  it('SET-83 rerunning with the same release leaves the running server alone', async () => {
+    w = createWorld({ selfTest: { failing: 'Something unexpected went wrong during this check.' } });
+    typical(w);
+    expect(await w.run()).toEqual({ outcome: 'stopped', code: 'SETUP-SELFTEST-FAILED' });
+    const starts = w.fake.state.starts;
+    w.answers('', w.accounts['me@yahoo.com']!.password, w.accounts['fleet@gmail.com']!.password);
+    await w.run();
+    expect(w.fake.state.starts).toBe(starts);
+  });
+
+  // Seen live, 2026-09-27: "Which address should get your sign-in codes? [yahoo]"
+  // asked for an address but suggested a name, and the owner had to ask what to type.
+  it('SET-23 the sign-in question suggests an address, and takes an address or a name (added: found live)', async () => {
+    for (const [answer, expected] of [['', 'me@yahoo.com'], ['fleet@gmail.com', 'fleet@gmail.com'], ['FLEET@gmail.com ', 'fleet@gmail.com'], ['gmail', 'fleet@gmail.com']] as const) {
+      w = createWorld();
+      w.answers('me@yahoo.com', 'fleet@gmail.com', '', w.accounts['me@yahoo.com']!.password, '', w.accounts['fleet@gmail.com']!.password, '', answer);
+      expect(await w.run(), answer).toEqual({ outcome: 'done' });
+      expect(w.text()).toContain('Which address should get your sign-in codes? [me@yahoo.com] ›');
+      expect(stateOf(w).signInAddress, answer).toBe(expected);
+    }
   });
 
   it('SET-74 the server restarts after step 7 saves the Sent modes, so step 8 checks what was saved (added: found wiring step 8)', async () => {

@@ -66,7 +66,8 @@ describe('the release plumbing agrees with itself', () => {
     expect(workflow).not.toMatch(/docker\.pkg\.dev\/[^\s"]+\/release\/server/);
     expect(workflow).toContain("import('./scripts/release-files.mjs')");
     expect(workflow).toContain('node scripts/publish-setup.mjs publish ');
-    expect(workflow).toContain('git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" release');
+    // Published to the release branch, on top of the last release (REL-07).
+    expect(workflow).toContain('bash scripts/publish-branch.sh publish "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"');
     expect(workflow).not.toMatch(/pages/i);
     expect(read('scripts/release-setup.sh')).toContain('UPDATE_FEED_URL = https://raw.githubusercontent.com/${REPO}/release/latest.json');
   });

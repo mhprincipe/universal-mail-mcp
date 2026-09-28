@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import express, { type Express, type Request, type Response } from 'express';
+import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import type { OwnerAuth } from '../signin/owner.js';
 import { PASSKEY_SCRIPT } from '../signin/pages.js';
 import { FINGERPRINT_SCRIPT, codeEntryPage, dashboard, signInPage, type AccountView, type AppView } from './views.js';
@@ -150,7 +150,12 @@ export function mountPage(app: Express, deps: PageDeps) {
   deps.extend?.({
     base,
     post: (path, handler) => {
-      app.post(`${base}${path}`, guard, form, async (req, res) => {
+      // Your page only ever uses its session. A request carrying a bearer token
+      // is setup's (its check shares /{key}/check with the page's Check button):
+      // it goes on to the routes that check tokens. Found live: the page
+      // answered setup's check with 403.
+      const notOurs = (req: Request, _res: Response, next: NextFunction) => next(req.header('authorization')?.startsWith('Bearer ') ? 'route' : undefined);
+      app.post(`${base}${path}`, notOurs, guard, form, async (req, res) => {
         const found = verified(req, res);
         if (!found || !signedIn(found[1])) return refuse(res);
         await handler(req, res, found[1]);
