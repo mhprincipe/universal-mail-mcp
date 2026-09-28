@@ -54,7 +54,10 @@ function checkStructure(raw, limits) {
 // cross a thread boundary. Attachment bytes are left behind.
 export async function parseMessage(raw, limits = defaultLimits) {
     await checkStructure(raw, limits);
-    const parsed = await simpleParser(raw, { skipHtmlToText: true, skipTextToHtml: true });
+    // An email with only HTML gets its text made from that HTML (PAR-08, found
+    // live: "text" came back empty for newsletters). Its own text part, when it
+    // has one, is kept as it is. This runs in the parse worker, under its limits.
+    const parsed = await simpleParser(raw, { skipHtmlToText: false, skipTextToHtml: true });
     return {
         messageId: parsed.messageId || undefined,
         subject: parsed.subject || undefined,

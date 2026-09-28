@@ -16,7 +16,7 @@ export class MailService {
         this.config = config;
         this.parser = options.parser ?? sharedParser();
         this.unreliableHeaderSearch = options.unreliableHeaderSearch ?? true;
-        this.imap = new ImapGateway(config);
+        this.imap = new ImapGateway(config, { unreliableHeaderSearch: this.unreliableHeaderSearch });
         this.smtp = nodemailer.createTransport({
             host: config.SMTP_HOST,
             port: config.SMTP_PORT,

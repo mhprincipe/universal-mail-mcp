@@ -2,6 +2,10 @@ import { ImapFlow } from 'imapflow';
 import { imapTransport } from '../config.js';
 import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
 import { isSystemMessageId } from '../systemMail.js';
+// How many of a folder's newest messages a missed Message-ID search checks.
+// A message just moved or saved has the folder's highest UID, so it's among them.
+const RECENT_SCAN = 200;
+const DAY_MS = 24 * 60 * 60_000;
 // One connection per account, kept and reused (ENG-18: in the owner's live
 // baseline a new connection and login cost ~3.3 s on every call). One call
 // at a time uses it. After a pause it's checked before use; after a failure
@@ -169,10 +173,13 @@ export class ImapGateway {
                     query.to = input.to;
                 if (input.subject)
                     query.subject = input.subject;
+                // IMAP compares whole days only, so "BEFORE today" drops all of today
+                // (POL-12, found live). The server is asked for a day either side;
+                // the exact times are applied below, to what it returns.
                 if (input.since)
-                    query.since = input.since;
+                    query.since = new Date(input.since.getTime() - DAY_MS);
                 if (input.before)
-                    query.before = input.before;
+                    query.before = new Date(input.before.getTime() + DAY_MS);
                 if (input.read !== undefined)
                     query.seen = input.read;
                 if (input.flagged !== undefined)
@@ -181,6 +188,15 @@ export class ImapGateway {
                     query.or = [{ from: input.text }, { to: input.text }, { subject: input.text }, { body: input.text }];
                 const result = await this.withinSearchLimit(client, client.search(query, { uid: true }));
                 let remaining = Array.isArray(result) ? [...result].sort((a, b) => a - b) : [];
+                if (!remaining.length && input.messageId && this.options.unreliableHeaderSearch) {
+                    remaining = await this.scanForMessageId(client, input.messageId, input.beforeUid);
+                }
+                const inTime = (m) => {
+                    if (!m.date)
+                        return true;
+                    const at = Date.parse(m.date);
+                    return !(input.since && at < input.since.getTime()) && !(input.before && at >= input.before.getTime());
+                };
                 // System emails don't exist, as far as a search is concerned, so they
                 // mustn't use up the page either (SIG-82, found live: "asked for 5, got
                 // 3"). Older messages fill in until the page is full; the cursor is the
@@ -192,7 +208,7 @@ export class ImapGateway {
                     remaining = remaining.slice(0, remaining.length - batch.length);
                     lowest = batch[0];
                     const rows = await client.fetchAll(batch, { envelope: true, flags: true, size: true }, { uid: true });
-                    messages.push(...rows.sort((a, b) => b.uid - a.uid).map(m => this.summary(input.mailbox, m)).filter(m => !isSystemMessageId(m.messageId)));
+                    messages.push(...rows.sort((a, b) => b.uid - a.uid).map(m => this.summary(input.mailbox, m)).filter(m => !isSystemMessageId(m.messageId) && inTime(m)));
                 }
                 return { messages, ...(remaining.length && lowest !== undefined ? { next: lowest } : {}) };
             }
@@ -277,12 +293,26 @@ export class ImapGateway {
             const lock = await client.getMailboxLock(mailbox, { readOnly: true });
             try {
                 const r = await client.search({ header: { 'Message-ID': messageId } }, { uid: true });
-                return Array.isArray(r) ? r : [];
+                const found = Array.isArray(r) ? r : [];
+                if (found.length || !this.options.unreliableHeaderSearch)
+                    return found;
+                return await this.scanForMessageId(client, messageId);
             }
             finally {
                 lock.release();
             }
         });
+    }
+    // Found live (ENG-21): Yahoo's header search missed a message just moved into
+    // a folder. The newest messages' Message-IDs are read directly (read-only,
+    // envelope only) in the folder already selected.
+    async scanForMessageId(client, messageId, beforeUid) {
+        const all = await client.search({ all: true }, { uid: true });
+        const recent = (Array.isArray(all) ? all : []).filter(uid => beforeUid === undefined || uid < beforeUid).sort((a, b) => a - b).slice(-RECENT_SCAN);
+        if (!recent.length)
+            return [];
+        const rows = await client.fetchAll(recent, { envelope: true }, { uid: true });
+        return rows.filter(row => row.envelope?.messageId === messageId).map(row => row.uid).sort((a, b) => a - b);
     }
     async findThreadUids(mailbox, rootMessageId, options = {}) {
         const inspect = async (client) => {
@@ -409,23 +439,62 @@ export class ImapGateway {
     // connection. There is deliberately no retry: a partially applied batch
     // cannot be verified cheaply, so an unconfirmed outcome stays UNKNOWN and the
     // caller re-resolves by Message-ID.
+    // Found live (ENG-20): Yahoo's report of a batch paired the old UIDs, sorted,
+    // with the new UIDs in the order they were asked for. The batch is now sent
+    // sorted, and every pair is checked by Message-ID in the destination: a
+    // message it can't confirm is left unmapped (re-resolve), never guessed.
     async moveMany(mailbox, uids, destination) {
+        const sorted = [...new Set(uids)].sort((a, b) => a - b);
         return this.run(async (client) => {
+            let sources;
+            let reported;
             const lock = await client.getMailboxLock(mailbox);
             try {
                 if (!client.capabilities.has('MOVE') && !client.capabilities.has('UIDPLUS'))
                     throw new MailError('SAFE_MOVE_UNAVAILABLE', 'Moving requires MOVE or UIDPLUS to avoid expunging unrelated messages.');
-                await this.refuseSystemOn(client, uids);
-                const result = await client.messageMove(uids.join(','), destination, { uid: true });
+                const rows = await this.refuseSystemOn(client, sorted);
+                sources = new Map(rows.map(row => [row.uid, row.envelope?.messageId || undefined]));
+                const result = await client.messageMove(sorted.join(','), destination, { uid: true });
                 if (!result)
-                    throw new MailError('MOVE_STATUS_UNKNOWN', 'Batch move was not confirmed.', 'UNKNOWN', false, { mailbox, destination, uids });
-                const map = result.uidMap instanceof Map ? result.uidMap : new Map();
-                return new Map(uids.map(uid => [uid, map.get(uid)]));
+                    throw new MailError('MOVE_STATUS_UNKNOWN', 'Batch move was not confirmed.', 'UNKNOWN', false, { mailbox, destination, uids: sorted });
+                reported = result.uidMap instanceof Map ? result.uidMap : new Map();
             }
             finally {
                 lock.release();
             }
+            // The move is done; checking it can only improve the answer, never undo it.
+            try {
+                return await this.pairByMessageId(client, destination, sorted, sources, reported);
+            }
+            catch {
+                return new Map(sorted.map(uid => [uid, undefined]));
+            }
         }).catch(e => { throw mutationFailure(e); });
+    }
+    async pairByMessageId(client, destination, sorted, sources, reported) {
+        const newUids = [...new Set(reported.values())].filter(Boolean);
+        if (!newUids.length)
+            return new Map(sorted.map(uid => [uid, undefined]));
+        const lock = await client.getMailboxLock(destination, { readOnly: true });
+        let seen;
+        try {
+            seen = await client.fetchAll(newUids.join(','), { envelope: true }, { uid: true });
+        }
+        finally {
+            lock.release();
+        }
+        // Copies of one message (same Message-ID) are paired in order.
+        const byId = new Map();
+        for (const row of [...seen].sort((a, b) => a.uid - b.uid)) {
+            const id = row.envelope?.messageId;
+            if (id)
+                byId.set(id, [...(byId.get(id) ?? []), row.uid]);
+        }
+        return new Map(sorted.map(uid => {
+            const id = sources.get(uid);
+            // Without a Message-ID there is nothing to check: the server's word stands.
+            return [uid, id ? byId.get(id)?.shift() : reported.get(uid)];
+        }));
     }
     // A change that includes a system email is refused whole, and touches
     // nothing. Checked on the connection making the change, just before it.
@@ -433,6 +502,7 @@ export class ImapGateway {
         const rows = await client.fetchAll(uids.join(','), { envelope: true }, { uid: true });
         if (rows.some(m => isSystemMessageId(m.envelope?.messageId)))
             throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
+        return rows;
     }
     async refuseSystem(mailbox, uids) {
         await this.read(async (client) => {
