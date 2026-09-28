@@ -72,7 +72,8 @@ export async function runChecks(stages, options) {
         facts: {
             accounts: options.facts.accounts,
             providers: options.facts.providers.map(p => known.has(p) ? p : 'other'),
-            ...(options.facts.trial === undefined ? {} : { trial: options.facts.trial })
+            ...(options.facts.trial === undefined ? {} : { trial: options.facts.trial }),
+            ...(options.facts.subscription === undefined ? {} : { subscription: options.facts.subscription })
         }
     };
 }

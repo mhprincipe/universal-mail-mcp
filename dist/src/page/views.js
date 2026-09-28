@@ -1,4 +1,5 @@
 import { escape, mask } from '../signin/pages.js';
+import { longDate } from '../subscription/subscription.js';
 // Readable at phone width: one column, nothing wider than the screen.
 const layout = (title, body) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,8 +42,26 @@ ${error ? `<p class="error">${escape(error)}</p>` : ''}
 <input type="text" name="code" autocomplete="one-time-code" placeholder="K7Q2-F9XM" required> <button>Sign in</button></form>`);
 }
 const ACTIONS = [['read', 'Read'], ['organize', 'Organize'], ['send', 'Send']];
+// The subscription in one line (design §13.1).
+function subscriptionLine(s) {
+    switch (s.state) {
+        case 'trial': return `Free trial: ${s.daysLeft} day${s.daysLeft === 1 ? '' : 's'} left. Nothing to pay, and no card, until you decide to keep it.`;
+        case 'active': return `Paid through ${longDate(Date.parse(s.paidThrough))}.${s.portal ? ` <a href="${escape(s.portal)}">Manage or cancel</a>` : ''}`;
+        case 'grace': return s.after === 'trial'
+            ? `<span class="error">Your trial has ended.</span> Everything keeps working for ${s.daysLeft} more day${s.daysLeft === 1 ? '' : 's'}; then organizing and sending pause until you subscribe.`
+            : `<span class="error">Your subscription couldn't be renewed.</span> Everything keeps working for ${s.daysLeft} more day${s.daysLeft === 1 ? '' : 's'}.`;
+        case 'read-only': return '<span class="error">Universal Mail is read-only.</span> Reading and search work; organizing and sending are paused until you subscribe.';
+        case 'unlimited': return '';
+    }
+}
 export function dashboard(view) {
     const { base, csrf } = view;
+    const subscription = view.subscription && view.subscription.state !== 'unlimited' ? `<section><h2>Subscription</h2>
+<p>${subscriptionLine(view.subscription)}</p>
+${view.subscription.state === 'active' ? '' : `<p><a href="${escape(view.buyUrl ?? '')}">Subscribe</a>: $4 a month or $36 a year, any number of accounts. Your receipt shows a license code.</p>`}
+<details><summary>${view.subscription.state === 'active' ? 'Enter a different license code' : 'Enter your license code'}</summary>
+${form(base, '/subscription/activate', csrf, '<label>License code <input type="text" name="code" autocomplete="off" placeholder="UM-XXXX-XXXX-XXXX" required></label>', 'Activate')}
+</details></section>` : '';
     const accounts = view.accounts.map(a => `<div class="row" id="account-${escape(a.name)}">
 <strong>${escape(a.name)}</strong> ${escape(mask(a.email))} ·
 ${a.status === 'password' ? '<span class="error">⚠ Password not accepted</span>' : a.status === 'working' ? '<span class="ok">Working</span>' : '<span class="note">Not checked yet</span>'}
@@ -75,6 +94,7 @@ ${form(base, '/accounts/add', csrf, `<label>Email address <input type="email" na
 </details></section>
 <section><h2>Connected apps</h2>${apps}
 <details><summary>Connect an AI app</summary><p>In Claude: Settings → Connectors → Add custom connector, and paste your AI-app address (the one setup showed, ending in /mcp). In ChatGPT: Settings → Connectors → Create, and paste the same address. Then approve it with a code.</p></details></section>
+${subscription}
 <section><h2>Health</h2>${form(base, '/check', csrf, '', 'Check that everything works')}
 ${view.report ? `<p>Copy this report and paste it into your AI for help. It contains no mail and no secrets.</p><textarea readonly>${escape(view.report)}</textarea>` : ''}</section>
 <section><h2>Sign-in</h2><p><button type="button" id="fingerprint" data-csrf="${escape(csrf)}" data-base="${escape(`${base}/fingerprint`)}">Add a fingerprint</button></p>

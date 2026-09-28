@@ -1,3 +1,3 @@
 // The running version, reported by the check. Kept equal to package.json's by a test.
-export const VERSION = '2.0.4';
+export const VERSION = '2.1.0';
 //# sourceMappingURL=version.js.map

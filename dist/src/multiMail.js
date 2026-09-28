@@ -44,6 +44,13 @@ export function createMailRouter(accounts, hooks = {}) {
             if (!grant[name].includes(action)) {
                 throw new MailError('MAIL-NOT-PERMITTED', `This app isn't allowed to ${verbs[action]} ${name}. You can change that on your Universal Mail page.`);
             }
+            // A lapsed subscription: reading goes on; the paid work is paused (asked
+            // each time, so renewing takes effect at once).
+            if (action !== 'read') {
+                const paused = hooks.readOnly?.();
+                if (paused)
+                    throw new MailError('SUBSCRIPTION-READ-ONLY', paused);
+            }
             // Turned off on your page: whatever an app was granted.
             if (action === 'send' && sendingOff.has(name)) {
                 throw new MailError('MAIL-SENDING-OFF', `Sending is turned off for ${name}. It can be turned on on your Universal Mail page.`);
