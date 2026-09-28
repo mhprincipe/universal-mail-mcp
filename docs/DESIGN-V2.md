@@ -975,3 +975,99 @@ Each phase ends usable, and only when its exit test passes.
 | P6 serialized parallel calls | deferred with pooling |
 | P7 state reads | in-memory, refreshed on own writes |
 | P8 slow search | timeout with a remedy |
+
+---
+
+## 13. Subscription *(added 2026-09-28: the owner's decision to charge for it)*
+
+**The shape stays.** Universal Mail remains a private server in the person's
+own Google account. Paying buys the product, its updates and its support; it
+never buys us their mail, their passwords or a copy of anything. Nothing about
+not paying touches their mail, which lives with their provider; their page
+always works, so they can renew; Remove always works.
+
+### 13.1 What the person sees
+
+| When | What |
+|---|---|
+| Install | *"Your 30-day trial started today. Nothing to pay and no card until you decide to keep it."* (setup's All done, and the page) |
+| Day 23 | email: *"Your Universal Mail trial ends in 7 days"*, with the page link |
+| Day 30 | email: *"Your trial has ended"*; everything keeps working for 14 days |
+| Day 44 | email: *"Universal Mail is now read-only"*: reading and search still work; organizing and sending answer with one plain sentence and the page link |
+| Buying | the website (a link on the page) → the merchant of record's checkout → the receipt page shows a **license code** `UM-XXXX-XXXX-XXXX` |
+| Activating | the page's **Subscription** section: paste the code → *"Paid through 28 October 2026"* |
+| Renewing | nothing: the server renews on its own, daily |
+| Not renewed (card failed, cancelled) | email: *"Your subscription couldn't be renewed"*; 14 days of grace; then read-only |
+
+**Prices (defaults, the owner's to change):** $4 a month or $36 a year, per
+person, any number of accounts. **Merchant of record:** Paddle by default (it
+handles global sales tax, invoices, refunds and chargebacks).
+
+### 13.2 How it works
+
+- **The trial needs nothing.** It counts from `installedAt` (already saved at
+  step 6). No key, no card, no call home.
+- **A license is a signed token** (ES256, `jose`, as everything else here) from
+  the **license service**: `iss` the service, `sub` the license code, `aud`
+  this install's id, `exp` the paid-through date, `plan`, `portal` (the
+  merchant's manage-subscription link). The server verifies it locally with the
+  service's public key (`/jwks`), kept in state, so restarts and outages need
+  no network.
+- **The install id** is random, made by the server the first time it's needed
+  and saved in state. The `{key}` never leaves the server.
+- **Activation** posts `{ code, install }` to the service, which binds the
+  install to the license (up to 3 installs per license, so a reinstall works)
+  and returns the token. A wrong code: *"That code wasn't recognised."* The
+  service unreachable: *"Couldn't reach the subscription service. Try again in
+  a few minutes."* Nothing saved either way.
+- **Renewal** is a duty (§3.7), daily with the update check: the same call;
+  a fresh token moves `exp` forward. A refusal is noted (the email above). An
+  outage leaves the license as it is: grace covers it.
+- **States**, computed from the install date, the license and the clock:
+  `trial` (days left) · `active` (paid through) · `grace` (14 days after the
+  trial or the paid-through date: everything works) · `read-only`.
+- **Read-only** is enforced in one place: the mail router. `read` actions pass;
+  `organize` and `send` throw `SUBSCRIPTION-READ-ONLY` with the sentence and
+  the page link, which the AI relays. The page, sign-in, Check and Remove are
+  untouched.
+- **The report's facts** carry `subscription: { state, daysLeft }`.
+
+### 13.3 The license service
+
+One small service of ours (`src/licenseService/`), deployed once to the
+release project as `universal-mail-license`: the only thing we run.
+
+| Route | Does |
+|---|---|
+| `GET /jwks` | the public signing key |
+| `POST /activate` `{ code, install }` | binds the install, returns a token |
+| `POST /renew` `{ code, install }` | a fresh token while the subscription is paid |
+| `POST /webhook/paddle` | signature checked; `subscription.activated / updated / canceled / past_due` update the record; the first activation mints the code |
+| `GET /buy` | to the checkout |
+
+- **Storage:** Firestore (native mode, free tier) through its REST API as the
+  service's own identity, the way the server writes secrets (§6.3). One
+  document per license: email, plan, paid-through, status, installs, portal
+  link, the merchant's subscription id. No mail, no passwords: nothing of the
+  person's beyond an email address.
+- **Signing key:** generated once by `scripts/license-setup.sh` into the release
+  project's Secret Manager; the service reads it at start.
+- **Abuse:** codes are 12 random characters (~60 bits); activation is limited
+  per address; the service logs codes only as `{code}`.
+- **The server finds the service** by `LICENSE_SERVICE_URL`, baked into the
+  image at release like `UPDATE_FEED_URL`. Without it (a build from source),
+  everything behaves as a permanent trial: no gate.
+
+### 13.4 Decisions and what's deferred
+
+- **Read-only, not locked.** Reading keeps working after a lapse because the
+  person's mail is theirs and the AI reading it costs us nothing; organizing
+  and sending are the paid work. The alternative (every tool refused) is one
+  constant away, recorded in docs/OPEN-QUESTIONS.md as the owner's.
+- **Grace before any refusal**, always 14 days, so a card that fails on a
+  Friday never breaks someone's weekend.
+- **The public repository stays public.** Anyone can build the image without
+  the service address; they get the permanent trial. Paying customers buy the
+  signed releases, updates and support.
+- **Deferred:** team plans; a hosted page; offline licensing; refunds and
+  cancellation flows (the merchant of record's); the website itself.

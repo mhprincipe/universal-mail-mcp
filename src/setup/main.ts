@@ -2,12 +2,13 @@ import { homedir } from 'node:os';
 import { VERSION } from '../version.js';
 import { runSetup, type SetupDeps } from './flow.js';
 import { createGcloudRunner, createGoogleCloud } from './gcloud.js';
-import { buildReport, createSetupLog } from './log.js';
+import { buildReport, createSetupLog, type SetupLog } from './log.js';
 import { render } from './messages.js';
 import { createProgressStore } from './progress.js';
 import { createPrompt } from './prompt.js';
 import { createMailCheck } from './realMail.js';
 import { createSelfTest } from './selfTest.js';
+import { serverLog } from './serverLog.js';
 import { createUi } from './ui.js';
 
 // `node setup.js` (design §3): the real parts, wired to the flow. The launcher
@@ -28,6 +29,13 @@ export async function main(argv: string[], io: MainIo): Promise<number> {
   const ui = createUi({ write: text => io.stdout.write(text) }, INDENT);
   if (argv[0] === 'report') {
     io.stdout.write(`${buildReport(home, { version: VERSION })}\n`);
+    // Once there's a project, the server's own log too (DIA-11). Reading it
+    // isn't a setup run, so it adds nothing to setup's log.
+    const project = createProgressStore(home).load()?.project;
+    if (project) {
+      const quiet: SetupLog = { secret: () => undefined, event: () => undefined };
+      io.stdout.write(`\n${await serverLog(createGcloudRunner({ command: io.gcloud, env: io.env, log: quiet }), project)}\n`);
+    }
     return 0;
   }
   if (argv.length) { ui.say('USAGE'); return 2; }

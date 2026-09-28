@@ -472,6 +472,25 @@ what it says about the person's position is true.
 | INS-05 | saved state never holds a password or key; changes are saved one at a time, in order; a failed save is logged by status and retried with the next change | U |
 | INS-06 | saves go through Secret Manager as the server's own identity; only the newest two versions are kept (free tier); refusals carry status only; time limits | U |
 
+### Phase 6 — Subscription *(added 2026-09-28: design §13)*
+
+| ID | Behavior | Tier |
+|---|---|---|
+| SUB-01 | the state from the install date, the license and the clock: trial with days left; grace 14 days after day 30; read-only after; with a license: active until paid-through, grace, read-only; a license for another install or an expired-by-years one counts as none | U |
+| SUB-02 | a license is the service's signed token, verified with the key kept in state: tampered, another key, another audience: ignored, and the reason logged without the token | U |
+| SUB-03 | read-only in the mail router: read passes; organize and send throw `SUBSCRIPTION-READ-ONLY` with the sentence and the page link; trial, active and grace change nothing | U |
+| SUB-04 | the page's Subscription section: the state in one line; a code form; the buy/manage link; activation sends the code and the install id (never the key), saves the token and keys, and says "Paid through …" | U |
+| SUB-05 | a wrong code: "That code wasn't recognised", nothing saved; the service unreachable or slow: "Couldn't reach…", nothing saved | U |
+| SUB-06 | renewal daily with the update check: a fresh token moves paid-through; a refusal is noted once; an outage leaves the license as it is | U |
+| SUB-07 | the emails: trial ends in 7 days; trial ended; now read-only; couldn't be renewed: each once, surviving a restart; none with an active license | U |
+| SUB-08 | the report's facts carry the subscription state and days left | U |
+| SUB-09 | setup's All done says the trial started; with no service address the server is a permanent trial and nothing is ever refused | M |
+| SUB-10 | the license service: `/jwks`; activate binds the install and returns a token; a 4th install refused; renew returns a fresh token while paid and refuses when cancelled or past due; a wrong code 404 with the sentence; activation limited per address | U |
+| SUB-11 | the Paddle webhook: a bad signature refused and nothing changed; activated, updated, cancelled and past-due events update the record; the first activation mints the code and it appears in the receipt's custom data | U |
+| SUB-12 | the Firestore REST store: get and put as the service's identity, tested against a fake HTTP server; refusals carry status only | U |
+| SUB-13 | the service image and `scripts/license-setup.sh` (the key, the secret, the deploy), against the scripted gcloud | K |
+| SUB-14 | the whole loop: webhook → code → activate on the page → active → renew → cancel → grace → read-only → renew again → active | U |
+
 ### Diagnostics — across phases
 
 | ID | Behavior | Tier |
@@ -486,6 +505,7 @@ what it says about the person's position is true.
 | DIA-08 | the `/{key}/check` route: only setup's token opens it; the report, never cached; refusals and failures logged without their words; on real servers every stage passes and no mail is marked read *(added)* | U+P |
 | DIA-09 | the `live:` stage: a test message in its own folder, found by ID, marked read and unread, flagged and unflagged, moved to Trash, each change confirmed; a change that doesn't happen fails it and the log names the step; no safe move leaves it in its folder *(added: owner's choice, 2026-09-26)* | U+P |
 | DIA-10 | on the installed server (with your page), setup's check token reaches the check and gets the report; without a token no report is given *(added: found live: the page's route answered 403)* | U |
+| DIA-11 | `node setup.js report` includes the server's own log once a project exists (oldest first, JSON whole); unreadable: one plain line, still exit 0 *(added: asked for live)* | M |
 
 ---
 
@@ -559,9 +579,9 @@ also where a later reader finds out why a line of code exists.
 | Release | 10 |
 | Page and emails | 17 |
 | Everyday polish | 11 |
-| Diagnostics | 11 |
-| **New** | **250** |
-| **Total** | **405** |
+| Diagnostics | 13 |
+| **New** | **252** |
+| **Total** | **407** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

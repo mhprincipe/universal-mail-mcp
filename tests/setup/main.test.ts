@@ -126,6 +126,41 @@ describe('node setup.js', () => {
     expect(fake!.calls()).toEqual([]);
   });
 
+  // DIA-11 (added: asked for live, 2026-09-28). Diagnosing step 8 took the
+  // owner a second command, with Google's log syntax, and its first output
+  // printed blank lines (the server logs JSON). One command, one paste: the
+  // report reads the server's own log itself once there is a project.
+  const LOG_ARGS = ['logging', 'read', 'resource.type="cloud_run_revision" AND resource.labels.service_name="universal-mail"',
+    `--project=${P}`, '--freshness=1h', '--limit=80', '--format=json'];
+
+  it('DIA-11 once a project exists, report adds the server\'s own log, oldest first, JSON shown whole (added)', { timeout: 120_000 }, async () => {
+    expect(await run([], ['me@yahoo.com', '', 'app-password-1', '', '', '']).done).toBe(0);
+    // Google returns the newest first.
+    const entries = [
+      { timestamp: '2026-09-28T02:53:40.016Z', jsonPayload: { event: 'request', method: 'POST', route: '/{key}/check', status: 200, ms: 72554 } },
+      { timestamp: '2026-09-28T02:50:17.509Z', textPayload: 'Starting new instance. Reason: AUTOSCALING' },
+      { timestamp: '2026-09-28T02:50:17.499Z' }
+    ];
+    const r = run(['report'], [], { steps: [{ args: LOG_ARGS, stdout: JSON.stringify(entries) }] });
+    expect(await r.done).toBe(0);
+    expect(fake!.unscripted()).toEqual([]);
+    const screen = r.screen();
+    expect(screen).toContain('Universal Mail setup report');
+    const server = screen.slice(screen.indexOf('Server log'));
+    expect(server.split('\n').slice(0, 3)).toEqual([
+      'Server log (last hour, oldest first):',
+      '2026-09-28T02:50:17.509Z  Starting new instance. Reason: AUTOSCALING',
+      '2026-09-28T02:53:40.016Z  {"event":"request","method":"POST","route":"/{key}/check","status":200,"ms":72554}'
+    ]);
+  });
+
+  it('DIA-11 when the server\'s log can\'t be read, report says so in one line and still succeeds', { timeout: 120_000 }, async () => {
+    expect(await run([], ['me@yahoo.com', '', 'app-password-1', '', '', '']).done).toBe(0);
+    const r = run(['report'], [], { steps: [{ args: LOG_ARGS, exitCode: 1, stderr: 'ERROR: (gcloud.logging.read) PERMISSION_DENIED' }] });
+    expect(await r.done).toBe(0);
+    expect(r.screen()).toContain('Server log: couldn\'t be read (gcloud: PERMISSION_DENIED).');
+  });
+
   it('SET-77 outside Cloud Shell: the plain message, a failing exit code, and nothing asked of Google', async () => {
     const r = run([], [], { cloudShell: false });
     expect(await r.done).toBe(1);
