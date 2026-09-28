@@ -84,7 +84,8 @@ describe('IMAP recovery invariants', () => {
     expect(await gateway.listFolders()).toHaveLength(1);
     await gateway.createFolder('New');
     expect(await gateway.listFolders()).toHaveLength(2);
-    expect(lists).toBe(2);
+    // The first listing, the fresh check before creating (ENG-23), and the one after.
+    expect(lists).toBe(3);
   });
   it('uses SPECIAL-USE, excludes unselectable folders, and never invents a folder', async () => {
     const gateway = new ImapGateway(config);
@@ -95,6 +96,14 @@ describe('IMAP recovery invariants', () => {
     const gateway = new ImapGateway(config);
     const run = vi.spyOn(gateway, 'run').mockRejectedValue(new Error('already exists'));
     vi.spyOn(gateway, 'listFolders').mockResolvedValue([folder('MCP-Test')]);
+    expect(await gateway.createFolder('MCP-Test')).toEqual({ path: 'MCP-Test', created: false });
+    // Not even one attempt: the fresh listing already shows it (ENG-23).
+    expect(run).not.toHaveBeenCalled();
+  });
+  it('a folder created elsewhere between the check and the create is still success', async () => {
+    const gateway = new ImapGateway(config);
+    const run = vi.spyOn(gateway, 'run').mockRejectedValue(new Error('already exists'));
+    vi.spyOn(gateway, 'listFolders').mockResolvedValueOnce([]).mockResolvedValue([folder('MCP-Test')]);
     expect(await gateway.createFolder('MCP-Test')).toEqual({ path: 'MCP-Test', created: false });
     expect(run).toHaveBeenCalledTimes(1);
   });
@@ -316,9 +325,12 @@ describe('SMTP no-duplicate delivery', () => {
     await service.sendEmail(input); expect(append).not.toHaveBeenCalled();
   });
   it('does not append on a delayed Yahoo automatic Sent copy', async () => {
-    const { service, append } = setup('yahoo');
+    const { service, append, find } = setup('yahoo');
     const result = await service.sendEmail(input);
     expect(result.warnings).toHaveLength(1); expect(append).not.toHaveBeenCalled();
+    // Nor looks for it: it appears a minute or so later (ENG-24).
+    expect(find).not.toHaveBeenCalled();
+    expect(result.warnings?.[0]).toMatch(/files its own Sent copy.*minute.*do not resend/i);
   });
   it('blocks sends until Sent behavior is verified', async () => {
     const { service, send } = setup('unverified');

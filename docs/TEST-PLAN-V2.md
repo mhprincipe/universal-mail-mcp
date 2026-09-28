@@ -150,6 +150,10 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | ENG-19 | sent and saved mail names no one but its sender: the Message-ID uses the sender's domain; the operation header names Universal Mail *(added: found live)* | U |
 | ENG-20 | a batch move reports each message's own new UID: sent sorted, every pair checked by Message-ID in the destination; copies paired in order; one it can't confirm left unmapped, never guessed *(added: found live, Yahoo mispaired an unsorted batch)* | U+P |
 | ENG-21 | re-finding by Message-ID works where the provider's header search misses (Yahoo): the folder's newest 200 messages are checked directly; a reliable provider isn't second-guessed *(added: found live)* | U+P |
+| ENG-22 | `get_thread` and the Message-ID check read a folder's newest 200 messages by position, never asking for every UID the folder holds; an empty folder is skipped; paging is kept *(added: tuning, get_thread ~8 s live)* | U+P |
+| ENG-23 | `create_folder` on a folder that already exists answers `created: false` from a fresh listing, asking nothing to be created and keeping the connection; one created elsewhere in between is still success *(added: tuning, 4.5 s live)* | U+P |
+| ENG-24 | where the provider files its own Sent copy, a send doesn't look for it (it appears a minute later) and says so; a reply reads only the original's envelope and References, and threads exactly as before *(added: tuning, send ~4 s, reply ~5 s live)* | U+P |
+| ENG-25 | a message that arrives while its folder is open on the kept connection can be read and replied to at once: not found → NOOP → asked once more *(added: found while tuning)* | U+P |
 | ENG-14 | an unencrypted mail connection is allowed only to this machine; each transport setting maps to the right connection options *(added during build: the protocol tier's local test server is unencrypted, and the product must never allow that anywhere else)* | U |
 | ENG-15 | sending always requires encryption, on any port; a server that won't encrypt gets nothing, with a plain answer *(added during build: v1 only required it on port 587, so a custom port would have sent in whatever mode the server chose)* | U |
 | ENG-16 | several accounts load from the stored account list and a separate password list; v1's single-account settings become one account called `main`; a bad account is named in the error and its password never appears *(added during build: the accounts had no way in)* | U |
@@ -465,6 +469,7 @@ what it says about the person's position is true.
 | POL-10 | `get_thread`'s full-folder scan happens only when asked for | P |
 | POL-11 | sorting 100 messages across several folders takes 10 or fewer tool calls (counted) | P |
 | POL-12 | `since` and `before` honour the time of day: the server is asked a day either side (IMAP compares whole days) and the exact times are applied; the limit counts only what's shown *(added: found live)* | U |
+| POL-13 | a subject search returns only messages whose subject really contains what was asked (case and spacing aside): Yahoo's "Re: X" also finds "X" *(added: found live)* | U |
 
 **Exit:** POL-11 green. That's v1's 90-call cleanup done in 10 or fewer.
 
@@ -580,17 +585,17 @@ also where a later reader finds out why a line of code exists.
 |---|---|
 | v1 baseline | 155 |
 | Test kit | 13 |
-| Engine | 77 |
+| Engine | 81 |
 | Sign-in | 62 |
 | Setup | 70 |
 | Installed server | 6 |
 | Release | 10 |
 | Page and emails | 17 |
-| Everyday polish | 12 |
+| Everyday polish | 13 |
 | Diagnostics | 14 |
 | Subscription | 33 |
-| **New** | **314** |
-| **Total** | **469** |
+| **New** | **319** |
+| **Total** | **474** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

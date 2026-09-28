@@ -7,6 +7,7 @@ import { createApp } from '../src/app.js';
 import { ImapGateway } from '../src/yahoo/imap.js';
 import { composeRaw } from '../src/yahoo/mime.js';
 import { expectedTools } from '../scripts/verification-client.js';
+import { replyHeaders } from '../testkit/src/toolFixture.js';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 
 const realFetch = globalThis.fetch;
@@ -50,6 +51,7 @@ async function fixture(identity = 'bearer', extraEnv: NodeJS.ProcessEnv = {}) {
     .filter(r => r.mailbox === input.mailbox && (!input.messageId || r.messageId === input.messageId)).map(summary) }));
   vi.spyOn(ImapGateway.prototype, 'fetchSummary').mockImplementation(async (mailbox, uid) => summary(get(mailbox, uid)));
   vi.spyOn(ImapGateway.prototype, 'fetchRaw').mockImplementation(async (mailbox, uid) => ({ summary: summary(get(mailbox, uid)), raw: get(mailbox, uid).raw, envelope: {} }));
+  vi.spyOn(ImapGateway.prototype, 'fetchReplyHeaders').mockImplementation(async (mailbox, uid) => replyHeaders(get(mailbox, uid).raw));
   vi.spyOn(ImapGateway.prototype, 'findByMessageId').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.messageId === id).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'findThreadUids').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.raw.toString().includes(id)).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'append').mockImplementation(append);

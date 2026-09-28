@@ -93,7 +93,9 @@ describe('a provider that saves Sent copies itself', () => {
     try {
       const sent = await p.call('send_email', { to: ['friend@example.invalid'], subject: 'once', text: 'hello' });
       expect(sent.result.ok).toBe(true);
-      expect(sent.result.warnings ?? []).toEqual([]);
+      // Yahoo mode doesn't look for the copy (ENG-24): it only says it's coming.
+      if (sentCopyMode === 'yahoo') expect(sent.result.warnings).toEqual([expect.stringMatching(/files its own Sent copy/)]);
+      else expect(sent.result.warnings ?? []).toEqual([]);
       expect((await peek(p.server, 'Sent')).filter(m => m.messageId === sent.result.data.messageId)).toHaveLength(1);
     } finally {
       await p.stop();

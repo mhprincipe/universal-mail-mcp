@@ -10,7 +10,8 @@ describe('Yahoo thread header-search fallback', () => {
     const release = vi.fn();
     const client = {
       getMailboxLock: vi.fn(async () => ({ release })),
-      search: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([1, 2, 3]),
+      mailbox: { exists: 3 },
+      search: vi.fn().mockResolvedValueOnce([]),
       fetchAll: vi.fn(async () => [
         { uid: 1, headers: Buffer.from(`Message-ID: <seed@test.invalid>\r\nReferences: ${root}\r\n`) },
         { uid: 2, headers: Buffer.from(`Message-ID: <reply@test.invalid>\r\nReferences:\r\n ${root} <seed@test.invalid>\r\n`) },
@@ -20,18 +21,21 @@ describe('Yahoo thread header-search fallback', () => {
     vi.spyOn(gateway, 'read').mockImplementation(fn => fn(client as any));
     expect(await gateway.findThreadUids('INBOX', root, { relatedMessageId: '<seed@test.invalid>' })).toEqual([1, 2]);
     expect(client.getMailboxLock).toHaveBeenCalledWith('INBOX', { readOnly: true });
-    expect(client.fetchAll).toHaveBeenCalledWith([1, 2, 3], { headers: ['Message-ID', 'References', 'In-Reply-To'] }, { uid: true });
+    expect(client.fetchAll).toHaveBeenCalledWith('1:*', { headers: ['Message-ID', 'References', 'In-Reply-To'] });
+    expect(client.search).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledTimes(1);
   });
   it('limits fallback metadata fetches to 200 recent UIDs and retains older indexed hits', async () => {
     const gateway = new ImapGateway(config);
     const client = {
       getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
-      search: vi.fn().mockResolvedValueOnce([1]).mockResolvedValueOnce(Array.from({ length: 300 }, (_, i) => i + 1)),
-      fetchAll: vi.fn(async (uids: number[], query: unknown, options: unknown) => [])
+      mailbox: { exists: 300 },
+      search: vi.fn().mockResolvedValueOnce([1]),
+      fetchAll: vi.fn(async (range: string, query: unknown) => [])
     };
     expect(await gateway.findThreadUids('INBOX', root, { client: client as any })).toEqual([1]);
-    expect(client.fetchAll.mock.calls[0]?.[0]).toEqual(Array.from({ length: 200 }, (_, i) => i + 101));
+    expect(client.fetchAll.mock.calls[0]?.[0]).toBe('101:*');
+    expect(client.search).toHaveBeenCalledTimes(1);
   });
   it('keeps the seed and reports incomplete scans instead of silently hiding errors', async () => {
     const service = new MailService(config);

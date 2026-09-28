@@ -4,7 +4,7 @@ import { ImapGateway } from '../src/yahoo/imap.js';
 
 // Found in the owner's full live run (2026-09-28, 2.2.1, Yahoo), against a
 // stand-in server that behaves the way Yahoo did.
-type Row = { uid: number; messageId?: string; date?: Date };
+type Row = { uid: number; messageId?: string; date?: Date; subject?: string };
 
 // scrambleMoves: the report pairs source UIDs, sorted, with the new UIDs in the order they were given (Yahoo).
 // misreport: the report pairs them in reverse, whatever the order (a server no one should trust).
@@ -19,19 +19,24 @@ function server(options: { folders: Record<string, Row[]>; headerSearchWorks?: b
     usable: true, capabilities: new Set(['MOVE', 'UIDPLUS']),
     connect: async () => undefined, logout: async () => undefined, close: () => undefined, noop: async () => undefined,
     getMailboxLock: async (path: string) => { selected = path; return { release: () => undefined }; },
-    search: async (query: { uid?: string; header?: Record<string, string> }) => {
+    get mailbox() { return { path: selected, exists: (folders[selected] ?? []).length }; },
+    search: async (query: { uid?: string; header?: Record<string, string>; subject?: string }) => {
       queries.push(query);
       let rows = folders[selected] ?? [];
+      // Yahoo's subject search ignores reply prefixes: "Re: X" also finds "X".
+      if (query.subject) { const wanted = query.subject.replace(/^(re|fwd?):\s*/i, '').toLowerCase(); rows = rows.filter(r => (r.subject ?? '').toLowerCase().includes(wanted)); }
       if (query.header) rows = options.headerSearchWorks === false ? [] : rows.filter(r => r.messageId === query.header!['Message-ID']);
       const below = query.uid ? Number(query.uid.split(':')[1]) : Infinity;
       return rows.filter(r => r.uid <= below).map(r => r.uid);
     },
     fetchAll: async (set: number[] | string) => {
       envelopeFetches++;
-      const wanted = new Set((Array.isArray(set) ? set : set.split(',')).map(Number));
+      // "n:*" is by position (the newest, ENG-22); anything else is UIDs.
+      const byUid = [...(folders[selected] ?? [])].sort((a, b) => a.uid - b.uid);
+      const wanted = new Set(typeof set === 'string' && set.endsWith(':*') ? byUid.slice(Number(set.split(':')[0]) - 1).map(r => r.uid) : (Array.isArray(set) ? set : set.split(',')).map(Number));
       return (folders[selected] ?? []).filter(r => wanted.has(r.uid))
         .filter(r => !(selected !== 'INBOX' && options.hideInDestination && r.messageId === options.hideInDestination))
-        .map(r => ({ uid: r.uid, envelope: { messageId: r.messageId, date: r.date }, flags: new Set<string>(), size: 10 }));
+        .map(r => ({ uid: r.uid, envelope: { messageId: r.messageId, date: r.date, subject: r.subject }, flags: new Set<string>(), size: 10 }));
     },
     messageMove: async (set: string, destination: string) => {
       moves.push(set);
@@ -112,6 +117,20 @@ describe('re-finding a message by its Message-ID', () => {
     expect(await s.gateway(false).findByMessageId('INBOX', '<m@x>')).toEqual([]);
     expect(s.envelopeFetches()).toBe(0);
   });
+
+  it('ENG-22 the check of the newest messages keeps to the page asked for, and skips an empty folder (added: tuning)', async () => {
+    // Two copies (a copy keeps its Message-ID); the page below UID 4 has one.
+    const s = server({ headerSearchWorks: false, folders: {
+      INBOX: [{ uid: 1, messageId: '<a@x>' }, { uid: 2, messageId: '<dup@x>' }, { uid: 3, messageId: '<b@x>' }, { uid: 4, messageId: '<dup@x>' }], Empty: []
+    } });
+    const g = s.gateway(true);
+    expect((await g.searchPage({ mailbox: 'INBOX', messageId: '<dup@x>', limit: 5 })).messages.map(m => m.uid)).toEqual([4, 2]);
+    expect((await g.searchPage({ mailbox: 'INBOX', messageId: '<dup@x>', limit: 5, beforeUid: 4 })).messages.map(m => m.uid)).toEqual([2]);
+    // An empty folder has no "newest": a real server refuses the range 1:*.
+    const before = s.envelopeFetches();
+    expect(await g.findByMessageId('Empty', '<dup@x>')).toEqual([]);
+    expect(s.envelopeFetches()).toBe(before);
+  });
 });
 
 describe('dates and times in a search', () => {
@@ -133,6 +152,23 @@ describe('dates and times in a search', () => {
     expect(asked.before.getTime()).toBeGreaterThanOrEqual(at('17:00').getTime() + 24 * 3600_000);
     // The limit still counts only what's shown.
     expect((await g.searchPage({ mailbox: 'INBOX', since: at('16:00'), limit: 2 })).messages.map(m => m.uid)).toEqual([4, 3]);
+  });
+});
+
+describe('a subject search', () => {
+  // Found live (2026-09-28, third run, confirmed read-only on the owner's
+  // mailbox): Yahoo's subject search for "Re: X" also returned the originals
+  // "X", so "find my reply" could pick the original.
+  it('POL-13 only messages whose subject really contains what was asked come back, whatever the server matched (added: found live)', async () => {
+    const s = server({ folders: { Sent: [
+      { uid: 1, messageId: '<o@x>', subject: 'Universal Mail test 15:42' }, { uid: 2, messageId: '<r@x>', subject: 'Re: Universal Mail test 15:42' },
+      { uid: 3, messageId: '<p@x>', subject: 'Something else' }
+    ] } });
+    const g = s.gateway();
+    expect((await g.searchPage({ mailbox: 'Sent', subject: 'Re: Universal Mail test 15:42', limit: 10 })).messages.map(m => m.uid)).toEqual([2]);
+    // Case and spacing don't matter; a plain subject still finds both.
+    expect((await g.searchPage({ mailbox: 'Sent', subject: 're:  universal mail TEST 15:42', limit: 10 })).messages.map(m => m.uid)).toEqual([2]);
+    expect((await g.searchPage({ mailbox: 'Sent', subject: 'Universal Mail test', limit: 10 })).messages.map(m => m.uid)).toEqual([2, 1]);
   });
 });
 

@@ -11,6 +11,14 @@ import { ImapGateway } from '../../src/yahoo/imap.js';
 // tier. What the engine does on the wire is the protocol tier's job.
 export type Row = { mailbox: string; uid: number; raw: Buffer; messageId: string; read: boolean; flagged: boolean };
 
+// What fetchReplyHeaders reads from a real server, read here from the raw message.
+export async function replyHeaders(raw: Buffer) {
+  const parsed = await simpleParser(raw);
+  const list = (a: unknown) => ((Array.isArray(a) ? a : a ? [a] : []) as Array<{ value: Array<{ name?: string; address?: string }> }>).flatMap(x => x.value).filter(x => x.address).map(x => ({ name: x.name || undefined, address: x.address! }));
+  const refs = parsed.references;
+  return { messageId: parsed.messageId, subject: parsed.subject, from: list(parsed.from), replyTo: list(parsed.replyTo), to: list(parsed.to), cc: list(parsed.cc), references: Array.isArray(refs) ? refs : refs ? [refs] : [] };
+}
+
 export async function startToolFixture(options: { env?: NodeJS.ProcessEnv } = {}) {
   const folders = ['INBOX', 'Draft', 'Sent', 'Archive', 'Trash'].map(path => ({
     path, specialUse: path === 'INBOX' ? '\\Inbox' : path === 'Draft' ? '\\Drafts' : `\\${path}`, selectable: true
@@ -35,6 +43,7 @@ export async function startToolFixture(options: { env?: NodeJS.ProcessEnv } = {}
   vi.spyOn(ImapGateway.prototype, 'searchPage').mockImplementation(async input => ({ messages: [...rows.values()].filter(r => r.mailbox === input.mailbox).map(summary) }));
   vi.spyOn(ImapGateway.prototype, 'fetchSummary').mockImplementation(async (mailbox, uid) => summary(get(mailbox, uid)));
   vi.spyOn(ImapGateway.prototype, 'fetchRaw').mockImplementation(async (mailbox, uid) => ({ summary: summary(get(mailbox, uid)), raw: get(mailbox, uid).raw, envelope: {} }));
+  vi.spyOn(ImapGateway.prototype, 'fetchReplyHeaders').mockImplementation(async (mailbox, uid) => replyHeaders(get(mailbox, uid).raw));
   vi.spyOn(ImapGateway.prototype, 'findByMessageId').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.messageId === id).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'findThreadUids').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.raw.toString().includes(id)).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'append').mockImplementation(append);
