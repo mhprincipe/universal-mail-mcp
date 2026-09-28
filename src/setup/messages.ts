@@ -41,7 +41,7 @@ export const MESSAGES = {
   'SENT-SAVED-BY-PROVIDER': line('✓ {name}   {provider} saves the Sent copy'),
   'SENT-SAVED-BY-US': line('✓ {name}   Universal Mail saves the Sent copy'),
   'CHECKS-PASSED': line('✓ {passed} of {total} checks passed'),
-  'ALL-DONE': line('All done.\n\nYour Universal Mail page (bookmark it):\n    {page}\n\nFor your AI apps:\n    {mcp}\n\nYour page has step-by-step instructions for connecting Claude and ChatGPT.'),
+  'ALL-DONE': line('All done.\n\nYour Universal Mail page (bookmark it):\n    {page}\n\nFor your AI apps:\n    {mcp}\n\nYour page has step-by-step instructions for connecting Claude and ChatGPT.\nYour 30-day free trial started today: nothing to pay, and no card, until\nyou decide to keep it. Your page shows where things stand.'),
   'STUCK': line('Stuck? Type  node setup.js report  and paste what it shows into your AI.'),
   // ── The menu, on an existing installation (design §3.9) ─────────────
   'INSTALLED': line('Universal Mail is installed · version {version}'),

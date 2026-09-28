@@ -23,6 +23,7 @@ import type { MailCheck } from '../setup/flow.js';
 import { mountApproval, type SystemMail } from './approvalRoutes.js';
 import { createRefusals } from './refusals.js';
 import { DOCUMENT_LIMITS, pinnedGet, type DocumentDeps } from './clientDocument.js';
+import { createSubscription, longDate, type Subscription } from '../subscription/subscription.js';
 
 // Apps that may connect: their identity documents must live on these origins.
 // Updates add origins as more apps adopt the standard (design §6.5).
@@ -96,7 +97,9 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
     await approval.notify(`The password for ${name} stopped working`,
       `Your email provider no longer accepts the app password Universal Mail uses for ${name}, so your AI apps can't use it.\n\nMake a new app password with your provider, then paste it on your Universal Mail page.\nFix it: ${issuer}/${key}`);
   };
-  const getMail = () => mail ??= createMailRouter(getAccounts(), { onAuthFailure });
+  // The subscription (design §13): made once your page exists, below.
+  let subscription: Subscription | undefined;
+  const getMail = () => mail ??= createMailRouter(getAccounts(), { onAuthFailure, readOnly: () => subscription?.readOnlySentence() });
   store?.onAccountsChange(() => { accounts = undefined; mail = undefined; });
   const checkPath = `/${key}/check`;
   const known = new Set([mcpPath, checkPath, resourceMetadataPath, '/.well-known/oauth-authorization-server', '/health',
@@ -129,7 +132,11 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
   // What the server does on its own (reminders, update notices), checked as requests arrive.
   if (store) {
     const duties = createDuties({ store, clock, feedUrl: env.UPDATE_FEED_URL, fetchImpl: deps.fetchImpl, notify: (subject, text) => approval.notify(subject, text) });
-    app.use(async (_req, _res, next) => { await duties.run().catch(() => undefined); next(); });
+    app.use(async (_req, _res, next) => {
+      await duties.run().catch(() => undefined);
+      await subscription?.duty().catch(error => console.log(JSON.stringify({ event: 'subscription_duty_failed', error: (error as Error)?.name ?? typeof error })));
+      next();
+    });
   }
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -170,8 +177,10 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
       }))
     });
     const providers = [...new Set(listed.map(account => providerOf(account.config.IMAP_HOST)))];
+    const state = subscription?.current();
     const report = await runChecks(stages, {
-      version: VERSION, clock, facts: { accounts: listed.length, providers },
+      version: VERSION, clock,
+      facts: { accounts: listed.length, providers, ...(state && state.state !== 'unlimited' ? { subscription: { state: state.state, ...('daysLeft' in state ? { daysLeft: state.daysLeft } : {}) } } : {}) },
       onError: (stage, error) => console.log(JSON.stringify(failureEvent(stage, error)))
     });
     noteCheck(report);
@@ -190,13 +199,23 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
   // When each app last made a request (shown on your page).
   const lastUsed = new Map<string, number>();
   if (store) {
+    subscription = createSubscription({ store, clock, serviceUrl: env.LICENSE_SERVICE_URL, fetchImpl: deps.fetchImpl, pageUrl: `${issuer}/${key}`, notify: (subject, text) => approval.notify(subject, text) });
+    const sub = subscription;
     mountPage(app, {
       key, owner: approval.owner, signInAddress: () => store.signInAddress(), clock, notify: approval.notify,
       view: () => ({
         accounts: store.accounts().map(a => ({ name: a.name, email: a.email, sending: a.sending ?? true, status: status.get(a.name) ?? 'unknown' })),
-        apps: auth.grants.snapshot().apps.map(g => ({ ...g, lastUsed: lastUsed.get(g.appId) }))
+        apps: auth.grants.snapshot().apps.map(g => ({ ...g, lastUsed: lastUsed.get(g.appId) })),
+        subscription: sub.current(), buyUrl: sub.buyUrl()
       }),
       extend: tools => {
+        // Subscribing: the code from the receipt (design §13.1).
+        tools.post('/subscription/activate', async (req, res, session) => {
+          const outcome = await sub.activate(String(req.body.code ?? ''));
+          if (!outcome.ok) return tools.back(res, session, { kind: 'error', text: outcome.text });
+          const paid = outcome.state.state === 'active' ? ` Paid through ${longDate(Date.parse(outcome.state.paidThrough))}.` : '';
+          tools.back(res, session, { kind: 'ok', text: `Your subscription is active.${paid}` });
+        });
         accountActions(tools, { store, mailCheck: deps.mailCheck!, grants: auth.grants, status, notify: approval.notify });
         appActions(tools, { store, grants: auth.grants, disconnect: approval.disconnect, notify: approval.notify });
         // Check that everything works: the report, shown for copying.

@@ -1,0 +1,148 @@
+import { randomBytes } from 'node:crypto';
+import type { InstallStore } from '../installed.js';
+import { GRACE_DAYS, subscriptionState, verifyLicense, type License, type SubscriptionState, type VerifiedLicense } from './state.js';
+
+// The subscription on the installed server (design §13.2): the state right
+// now, activation from your page, daily renewal, the emails, and the one
+// sentence the mail router refuses organizing and sending with.
+
+const HOUR = 60 * 60_000;
+const DAY = 24 * HOUR;
+const TRIAL_ENDING_DAYS = 7;
+const CODE_SHAPE = /^UM-[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}$/;
+
+export const longDate = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+export type Subscription = {
+  ready: Promise<void>;
+  current(): SubscriptionState;
+  buyUrl(): string | undefined;
+  // What the mail router refuses organizing and sending with; nothing while all is well.
+  readOnlySentence(): string | undefined;
+  activate(code: string): Promise<{ ok: true; state: SubscriptionState } | { ok: false; text: string }>;
+  // Checked as requests arrive: reminders hourly, renewal daily.
+  duty(): Promise<void>;
+};
+
+type Answer = { kind: 'answered'; status: number; body: Record<string, unknown> } | { kind: 'unreachable' };
+
+export function createSubscription(deps: {
+  store: InstallStore; clock: { now(): number }; serviceUrl?: string; fetchImpl?: typeof fetch;
+  pageUrl: string; notify(subject: string, text: string): Promise<void>;
+}): Subscription {
+  const { store, clock, pageUrl } = deps;
+  const service = deps.serviceUrl?.replace(/\/$/, '');
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  let verified: VerifiedLicense | undefined;
+  let remindersChecked = -Infinity;
+
+  const noted = () => store.noted() as { installedAt?: string; installId?: string; license?: License; subscriptionNotices?: Record<string, string> };
+  const installId = () => {
+    const id = noted().installId;
+    if (typeof id === 'string' && id) return id;
+    const fresh = randomBytes(16).toString('base64url');
+    store.note({ installId: fresh });
+    return fresh;
+  };
+  const verify = async (license: License | undefined) => {
+    if (!license || !service) return undefined;
+    return verifyLicense(license, { install: installId(), service, now: clock.now() });
+  };
+  const current = (): SubscriptionState => subscriptionState({ installedAt: noted().installedAt, verified, unlimited: !service, now: clock.now() });
+
+  const call = async (path: string, body: Record<string, unknown>): Promise<Answer> => {
+    try {
+      const response = await fetchImpl(`${service}${path}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000), redirect: 'error'
+      });
+      let parsed: unknown = {};
+      try { parsed = await response.json(); } catch { /* an empty or odd body */ }
+      return { kind: 'answered', status: response.status, body: (parsed && typeof parsed === 'object' ? parsed : {}) as Record<string, unknown> };
+    } catch (error) {
+      console.log(JSON.stringify({ event: 'license_service_unreachable', path, error: (error as Error)?.name ?? typeof error }));
+      return { kind: 'unreachable' };
+    }
+  };
+  // A service answer that is a license for this install becomes the license.
+  const take = async (code: string, body: Record<string, unknown>): Promise<boolean> => {
+    if (typeof body.token !== 'string' || !body.keys || typeof body.keys !== 'object') return false;
+    const license: License = { code, token: body.token, keys: body.keys as License['keys'], renewedAt: new Date(clock.now()).toISOString() };
+    const checked = await verify(license);
+    if (!checked) return false;
+    verified = checked;
+    const { 'not-renewed': _a, 'read-only:subscription': _b, ...notices } = noted().subscriptionNotices ?? {};
+    store.note({ license, subscriptionNotices: notices });
+    return true;
+  };
+
+  type Mail = [subject: string, text: string];
+  const notices = {
+    'trial-ending': (state: Extract<SubscriptionState, { state: 'trial' }>): Mail => [`Your Universal Mail trial ends in ${state.daysLeft} days`,
+      `Your free trial of Universal Mail ends on ${longDate(clock.now() + state.daysLeft * DAY)}. After that, everything keeps working for ${GRACE_DAYS} more days; then organizing and sending pause until you subscribe. Reading always works.\n\nTo keep it: ${service}/buy\nThen paste the code from your receipt on your Universal Mail page: ${pageUrl}`],
+    'trial-ended': (state: Extract<SubscriptionState, { state: 'grace' }>): Mail => ['Your Universal Mail trial has ended',
+      `Everything keeps working for ${state.daysLeft} more days. After that, organizing and sending pause until you subscribe. Reading always works.\n\nTo keep it: ${service}/buy\nThen paste the code from your receipt on your Universal Mail page: ${pageUrl}`],
+    'not-renewed': (state: { daysLeft: number }): Mail => ['Your Universal Mail subscription couldn\'t be renewed',
+      `Everything keeps working for ${state.daysLeft} more days. After that, organizing and sending pause until it's renewed. Reading always works.\n\nCheck your payment details: ${verified?.portal ?? `${service}/buy`}\nYour Universal Mail page: ${pageUrl}`],
+    'read-only': (): Mail => ['Universal Mail is now read-only',
+      `Reading and search still work. Organizing and sending are paused until you subscribe.\n\nTo subscribe: ${service}/buy\nThen paste the code from your receipt on your Universal Mail page: ${pageUrl}`]
+  };
+  const notice = async (key: string, subjectAndText: [string, string]) => {
+    const sent = noted().subscriptionNotices ?? {};
+    if (sent[key]) return;
+    store.note({ subscriptionNotices: { ...sent, [key]: new Date(clock.now()).toISOString() } });
+    await deps.notify(...subjectAndText);
+  };
+  const reminders = async () => {
+    const state = current();
+    if (state.state === 'trial' && state.daysLeft <= TRIAL_ENDING_DAYS) await notice('trial-ending', notices['trial-ending'](state));
+    else if (state.state === 'grace') await notice(state.after === 'trial' ? 'trial-ended' : 'not-renewed', state.after === 'trial' ? notices['trial-ended'](state) : notices['not-renewed'](state));
+    else if (state.state === 'read-only') await notice(`read-only:${state.after}`, notices['read-only']());
+  };
+  const renew = async () => {
+    const license = noted().license;
+    if (!license || !service) return;
+    if (clock.now() - Date.parse(license.renewedAt ?? '') < DAY) return;
+    const answer = await call('/renew', { code: license.code, install: installId() });
+    if (answer.kind === 'unreachable') return;
+    if (answer.status === 200 && await take(license.code, answer.body)) return;
+    // Refused (not paid, cancelled, unknown): the license stays, and the
+    // person hears now, while what's paid for (and then grace) still runs.
+    store.note({ license: { ...license, renewedAt: new Date(clock.now()).toISOString() } });
+    const state = current();
+    if (state.state === 'active') await notice('not-renewed', notices['not-renewed']({ daysLeft: state.daysLeft + GRACE_DAYS }));
+    else if (state.state === 'grace' && state.after === 'subscription') await notice('not-renewed', notices['not-renewed'](state));
+  };
+
+  const ready = (async () => { verified = await verify(noted().license); })();
+
+  return {
+    ready,
+    current,
+    buyUrl: () => service ? `${service}/buy` : undefined,
+    readOnlySentence() {
+      const state = current();
+      if (state.state !== 'read-only') return undefined;
+      return state.after === 'trial'
+        ? `Your Universal Mail trial has ended, so organizing and sending are paused. Reading still works. Subscribe on your Universal Mail page: ${pageUrl}`
+        : `Your Universal Mail subscription has ended, so organizing and sending are paused. Reading still works. Renew on your Universal Mail page: ${pageUrl}`;
+    },
+    async activate(input) {
+      const code = input.trim().toUpperCase();
+      if (!service) return { ok: false, text: 'This server has no subscription service to talk to.' };
+      if (!CODE_SHAPE.test(code)) return { ok: false, text: 'That doesn\'t look like a license code. It looks like UM-XXXX-XXXX-XXXX, on your receipt.' };
+      const answer = await call('/activate', { code, install: installId() });
+      if (answer.kind === 'unreachable') return { ok: false, text: 'Couldn\'t reach the subscription service. Try again in a few minutes.' };
+      if (answer.status === 404) return { ok: false, text: 'That code wasn\'t recognised. Check it against your receipt.' };
+      if (answer.status === 409) return { ok: false, text: 'That code is already in use on too many servers. Remove it from one of them, or buy another.' };
+      if (answer.status === 402) return { ok: false, text: `That subscription isn't paid up. Renew it first${typeof answer.body.portal === 'string' ? `: ${answer.body.portal}` : '.'}` };
+      if (answer.status !== 200 || !(await take(code, answer.body))) return { ok: false, text: 'The subscription service gave an answer that couldn\'t be verified. Try again in a few minutes.' };
+      return { ok: true, state: current() };
+    },
+    async duty() {
+      if (!service) return;
+      await ready;
+      const now = clock.now();
+      if (now - remindersChecked >= HOUR) { remindersChecked = now; await renew(); await reminders(); }
+    }
+  };
+}

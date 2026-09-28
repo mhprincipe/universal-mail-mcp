@@ -38,6 +38,7 @@ export const TOOL_CODES = {
   'MAIL-NOT-PERMITTED': { remedy: 'Tell the owner this app needs that permission; they can grant it on their Universal Mail page.' },
   'MAIL-SENDING-OFF': { remedy: 'The owner turned sending off for this account. Tell them; they can turn it on on their Universal Mail page. Do not send from another account instead unless they ask.' },
   'MAIL-CROSS-ACCOUNT': { remedy: 'Mail can only move within one account. Move it within its own account instead.' },
+  'SUBSCRIPTION-READ-ONLY': { remedy: 'The owner\'s Universal Mail subscription has ended. Reading still works; tell them, and that they can renew on their Universal Mail page. Do not retry.' },
   NOT_A_SYSTEM_EMAIL: { remedy: 'Only the server\'s own emails can be discarded this way. Nothing was changed.' },
 
   // ── Opening messages safely ──

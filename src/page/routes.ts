@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
 import type { OwnerAuth } from '../signin/owner.js';
 import { PASSKEY_SCRIPT } from '../signin/pages.js';
+import type { SubscriptionState } from '../subscription/state.js';
 import { FINGERPRINT_SCRIPT, codeEntryPage, dashboard, signInPage, type AccountView, type AppView } from './views.js';
 
 // Your Universal Mail page (design §3.6), at the server's secret address
@@ -19,7 +20,7 @@ export type PageDeps = {
   clock: { now(): number };
   notify(subject: string, text: string): Promise<void>;
   // What the dashboard shows, as it is right now.
-  view(): { accounts: AccountView[]; apps: AppView[] };
+  view(): { accounts: AccountView[]; apps: AppView[]; subscription?: SubscriptionState; buyUrl?: string };
   // Routes the later slices add, given the same guard, session and helpers.
   extend?(tools: PageTools): void;
 };

@@ -11,6 +11,7 @@ import { createFakeClock } from '../../testkit/src/fakeClock.js';
 // the mail checks, time and the release feed. A browser of one cookie.
 export const PUBLIC_URL = 'https://universal-mail-4f2a-uc.a.run.app';
 export const KEY = 'page-key-0123456789abcdefghij';
+export const SERVICE_URL = 'https://license.example.invalid';
 export type Sent = { account: string; to: string; subject: string; text: string };
 
 export function records(overrides: { state?: Record<string, unknown>; passwords?: Record<string, string> } = {}) {
@@ -31,10 +32,19 @@ export function records(overrides: { state?: Record<string, unknown>; passwords?
   return { state, credentials };
 }
 
-export async function startPage(options: { state?: Record<string, unknown>; passwords?: Record<string, string>; accepted?: Record<string, string>; feed?: unknown; env?: NodeJS.ProcessEnv; start?: Date } = {}) {
+// The license service (design §13.3), faked: what it answers to each call.
+export type ServiceAnswer = { status: number; body?: unknown };
+export type ServiceCall = { path: string; body: Record<string, unknown> };
+
+export async function startPage(options: {
+  state?: Record<string, unknown>; passwords?: Record<string, string>; accepted?: Record<string, string>; feed?: unknown; env?: NodeJS.ProcessEnv; start?: Date;
+  service?: (path: string, body: Record<string, unknown>) => ServiceAnswer | Promise<ServiceAnswer>;
+} = {}) {
   const r = records(options);
   const clock = createFakeClock(options.start ?? new Date('2026-09-25T12:00:00Z'));
   const feedAsked: string[] = [];
+  const serviceCalls: ServiceCall[] = [];
+  const serviceUrl = options.service ? SERVICE_URL : undefined;
   const sent: Sent[] = [];
   const broken = new Set<string>();
   const saves: { state: string[]; credentials: string[] } = { state: [], credentials: [] };
@@ -42,7 +52,8 @@ export async function startPage(options: { state?: Record<string, unknown>; pass
   const accepted: Record<string, string> = options.accepted ?? { 'me@example.invalid': 'me-app-password', 'work@example.invalid': 'work-app-password' };
   const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   const app = createApp({
-    UNIVERSAL_MAIL_STATE: JSON.stringify(r.state), UNIVERSAL_MAIL_CREDENTIALS: JSON.stringify(r.credentials), PUBLIC_URL, ...options.env
+    UNIVERSAL_MAIL_STATE: JSON.stringify(r.state), UNIVERSAL_MAIL_CREDENTIALS: JSON.stringify(r.credentials), PUBLIC_URL,
+    ...(serviceUrl ? { LICENSE_SERVICE_URL: serviceUrl } : {}), ...options.env
   }, {
     clock,
     saveState: async json => { saves.state.push(json); },
@@ -69,8 +80,15 @@ export async function startPage(options: { state?: Record<string, unknown>; pass
         return { copies: address.startsWith('appends@') ? 0 : 1 };
       }
     },
-    fetchImpl: (async (url: string | URL | Request) => {
-      feedAsked.push(String(url));
+    fetchImpl: (async (url: string | URL | Request, init?: RequestInit) => {
+      const address = String(url);
+      if (serviceUrl && address.startsWith(serviceUrl)) {
+        const call = { path: address.slice(serviceUrl.length), body: init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {} };
+        serviceCalls.push(call);
+        const answer = await options.service!(call.path, call.body);
+        return new Response(answer.body === undefined ? null : JSON.stringify(answer.body), { status: answer.status, headers: { 'content-type': 'application/json' } });
+      }
+      feedAsked.push(address);
       if (options.feed === undefined) throw new Error('no feed in this test');
       return new Response(JSON.stringify(options.feed));
     }) as typeof fetch
@@ -137,7 +155,7 @@ export async function startPage(options: { state?: Record<string, unknown>; pass
   };
 
   return {
-    app, base, clock, sent, broken, saves, accepted, records: r, get, post, csrfIn, codeIn, signIn, act, logged, pages, mcp, feedAsked,
+    app, base, clock, sent, broken, saves, accepted, records: r, get, post, csrfIn, codeIn, signIn, act, logged, pages, mcp, feedAsked, serviceCalls,
     cookie: () => cookie, forgetCookie: () => { cookie = ''; },
     close: () => new Promise<void>(resolve => { logSpy.mockRestore(); server.close(() => resolve()); server.closeAllConnections(); })
   };

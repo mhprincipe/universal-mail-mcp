@@ -13,7 +13,7 @@ export type StageResult =
   | { stage: StageName; status: 'FAIL'; code: CheckCode; cause: string; fix: string }
   | { stage: StageName; status: 'NOT_RUN'; after: StageName };
 
-export type Facts = { accounts: number; providers: string[]; trial?: boolean };
+export type Facts = { accounts: number; providers: string[]; trial?: boolean; subscription?: { state: string; daysLeft?: number } };
 
 export type Report = {
   report: 'universal-mail-check';
@@ -100,7 +100,8 @@ export async function runChecks(stages: Stage[], options: { version: string; clo
     facts: {
       accounts: options.facts.accounts,
       providers: options.facts.providers.map(p => known.has(p) ? p : 'other'),
-      ...(options.facts.trial === undefined ? {} : { trial: options.facts.trial })
+      ...(options.facts.trial === undefined ? {} : { trial: options.facts.trial }),
+      ...(options.facts.subscription === undefined ? {} : { subscription: options.facts.subscription })
     }
   };
 }

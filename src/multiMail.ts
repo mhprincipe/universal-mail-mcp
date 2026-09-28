@@ -28,7 +28,9 @@ const verbs: Record<Action, string> = { read: 'read mail in', organize: 'organiz
 
 // onAuthFailure: the provider refused an account's saved password (the
 // "something broke" email and your page's "Fix it" come from this).
-export type RouterHooks = { onAuthFailure?(account: string): void | Promise<void> };
+// readOnly: the sentence to refuse organizing and sending with while the
+// subscription has lapsed (design §13.2); nothing while it hasn't.
+export type RouterHooks = { onAuthFailure?(account: string): void | Promise<void>; readOnly?(): string | undefined };
 
 // Every call to an account's service: a refused password is reported, then
 // the error goes on exactly as it was.
@@ -64,6 +66,12 @@ export function createMailRouter(accounts: Array<{ name: string; config: AppConf
       const name = directory.resolve(account, names).name;
       if (!grant[name]!.includes(action)) {
         throw new MailError('MAIL-NOT-PERMITTED', `This app isn't allowed to ${verbs[action]} ${name}. You can change that on your Universal Mail page.`);
+      }
+      // A lapsed subscription: reading goes on; the paid work is paused (asked
+      // each time, so renewing takes effect at once).
+      if (action !== 'read') {
+        const paused = hooks.readOnly?.();
+        if (paused) throw new MailError('SUBSCRIPTION-READ-ONLY', paused);
       }
       // Turned off on your page: whatever an app was granted.
       if (action === 'send' && sendingOff.has(name)) {
