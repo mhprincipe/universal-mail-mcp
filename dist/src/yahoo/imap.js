@@ -197,6 +197,12 @@ export class ImapGateway {
                     const at = Date.parse(m.date);
                     return !(input.since && at < input.since.getTime()) && !(input.before && at >= input.before.getTime());
                 };
+                // Yahoo's subject search ignores reply prefixes ("Re: X" finds "X"
+                // too: POL-13, found live), so what it returns is checked here: the
+                // subject must really contain what was asked (case and spacing aside).
+                const plain = (s) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+                const wantedSubject = input.subject ? plain(input.subject) : undefined;
+                const subjectMatches = (m) => !wantedSubject || plain(m.subject ?? '').includes(wantedSubject);
                 // System emails don't exist, as far as a search is concerned, so they
                 // mustn't use up the page either (SIG-82, found live: "asked for 5, got
                 // 3"). Older messages fill in until the page is full; the cursor is the
@@ -208,7 +214,7 @@ export class ImapGateway {
                     remaining = remaining.slice(0, remaining.length - batch.length);
                     lowest = batch[0];
                     const rows = await client.fetchAll(batch, { envelope: true, flags: true, size: true }, { uid: true });
-                    messages.push(...rows.sort((a, b) => b.uid - a.uid).map(m => this.summary(input.mailbox, m)).filter(m => !isSystemMessageId(m.messageId) && inTime(m)));
+                    messages.push(...rows.sort((a, b) => b.uid - a.uid).map(m => this.summary(input.mailbox, m)).filter(m => !isSystemMessageId(m.messageId) && inTime(m) && subjectMatches(m)));
                 }
                 return { messages, ...(remaining.length && lowest !== undefined ? { next: lowest } : {}) };
             }
@@ -254,7 +260,7 @@ export class ImapGateway {
         return this.read(async (client) => {
             const lock = await client.getMailboxLock(mailbox, { readOnly: true });
             try {
-                const m = await client.fetchOne(uid, { envelope: true, flags: true, size: true }, { uid: true });
+                const m = await this.fetchOneFresh(client, uid, { envelope: true, flags: true, size: true });
                 if (!m || (!options.includeSystem && isSystemMessageId(m.envelope?.messageId)))
                     throw new MailError('MESSAGE_NOT_FOUND', `UID ${uid} was not found in ${mailbox}.`, 'NOT_FOUND');
                 return this.summary(mailbox, m);
@@ -268,7 +274,7 @@ export class ImapGateway {
         const inspect = async (client) => {
             const lock = await client.getMailboxLock(mailbox, { readOnly: true });
             try {
-                const meta = await client.fetchOne(uid, { size: true, envelope: true }, { uid: true });
+                const meta = await this.fetchOneFresh(client, uid, { size: true, envelope: true });
                 // A system email gets exactly the answer a missing one does.
                 if (!meta || isSystemMessageId(meta.envelope?.messageId))
                     throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
@@ -287,6 +293,40 @@ export class ImapGateway {
             }
         };
         return options.client ? inspect(options.client) : this.read(inspect);
+    }
+    // One message by UID, on a folder the kept connection may have had open
+    // since before that message arrived (ENG-25, tuning): a server needn't tell
+    // an open folder about new mail until asked, so "not there" is checked once
+    // more after a NOOP, which is that asking. Found ones cost nothing extra.
+    async fetchOneFresh(client, uid, query) {
+        const first = await client.fetchOne(uid, query, { uid: true });
+        if (first)
+            return first;
+        await client.noop();
+        return client.fetchOne(uid, query, { uid: true });
+    }
+    // What a reply needs of the original, and nothing more (ENG-24, tuning):
+    // its envelope and References header, read-only, never the whole message.
+    async fetchReplyHeaders(mailbox, uid) {
+        return this.read(async (client) => {
+            const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+            try {
+                const m = await this.fetchOneFresh(client, uid, { envelope: true, headers: ['references'] });
+                // A system email gets exactly the answer a missing one does.
+                if (!m || isSystemMessageId(m.envelope?.messageId))
+                    throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
+                const map = (items) => (items ?? []).filter(x => x?.address).map(x => ({ name: x.name || undefined, address: x.address }));
+                // Every <id> in the header, on however many folded lines.
+                const references = (m.headers?.toString('utf8') ?? '').match(/<[^>\r\n]+>/g) ?? [];
+                return {
+                    messageId: m.envelope?.messageId || undefined, subject: m.envelope?.subject || undefined,
+                    from: map(m.envelope?.from), replyTo: map(m.envelope?.replyTo), to: map(m.envelope?.to), cc: map(m.envelope?.cc), references
+                };
+            }
+            finally {
+                lock.release();
+            }
+        });
     }
     async findByMessageId(mailbox, messageId) {
         return this.read(async (client) => {
@@ -307,12 +347,17 @@ export class ImapGateway {
     // a folder. The newest messages' Message-IDs are read directly (read-only,
     // envelope only) in the folder already selected.
     async scanForMessageId(client, messageId, beforeUid) {
-        const all = await client.search({ all: true }, { uid: true });
-        const recent = (Array.isArray(all) ? all : []).filter(uid => beforeUid === undefined || uid < beforeUid).sort((a, b) => a - b).slice(-RECENT_SCAN);
-        if (!recent.length)
+        const rows = await this.newest(client, RECENT_SCAN, { envelope: true });
+        return rows.filter(row => row.envelope?.messageId === messageId && (beforeUid === undefined || row.uid < beforeUid)).map(row => row.uid).sort((a, b) => a - b);
+    }
+    // The selected folder's newest n messages, by position (ENG-22, tuning):
+    // asking for every UID the folder holds, to keep the last n, cost a large
+    // answer per folder on a mailbox numbered in the hundreds of thousands.
+    async newest(client, n, query) {
+        const exists = client.mailbox ? client.mailbox.exists : 0;
+        if (!exists)
             return [];
-        const rows = await client.fetchAll(recent, { envelope: true }, { uid: true });
-        return rows.filter(row => row.envelope?.messageId === messageId).map(row => row.uid).sort((a, b) => a - b);
+        return client.fetchAll(`${Math.max(1, exists - n + 1)}:*`, query);
     }
     async findThreadUids(mailbox, rootMessageId, options = {}) {
         const inspect = async (client) => {
@@ -326,15 +371,10 @@ export class ImapGateway {
                 // Yahoo can return no HEADER References/In-Reply-To matches even when
                 // those headers are present. Inspect only threading headers of a bounded
                 // recent window, using read-only BODY.PEEK via ImapFlow's headers query.
-                const all = await client.search({ all: true }, { uid: true });
-                const recent = Array.isArray(all) ? all.slice(-200) : [];
-                if (recent.length) {
-                    const rows = await client.fetchAll(recent, { headers: ['Message-ID', 'References', 'In-Reply-To'] }, { uid: true });
-                    for (const row of rows) {
-                        const headerIds = (row.headers?.toString('utf8').replace(/\r?\n[ \t]+/g, ' ') ?? '').match(/<[^>\r\n]+>/g) ?? [];
-                        if (anchors.some(id => headerIds.includes(id)))
-                            hits.add(row.uid);
-                    }
+                for (const row of await this.newest(client, RECENT_SCAN, { headers: ['Message-ID', 'References', 'In-Reply-To'] })) {
+                    const headerIds = (row.headers?.toString('utf8').replace(/\r?\n[ \t]+/g, ' ') ?? '').match(/<[^>\r\n]+>/g) ?? [];
+                    if (anchors.some(id => headerIds.includes(id)))
+                        hits.add(row.uid);
                 }
                 return [...hits].sort((a, b) => a - b);
             }
@@ -519,7 +559,7 @@ export class ImapGateway {
         const desired = async () => this.read(async (client) => {
             const lock = await client.getMailboxLock(mailbox, { readOnly: true });
             try {
-                const m = await client.fetchOne(uid, { flags: true }, { uid: true });
+                const m = await this.fetchOneFresh(client, uid, { flags: true });
                 if (!m)
                     return null;
                 return Boolean(m.flags?.has(flag));
@@ -600,6 +640,12 @@ export class ImapGateway {
         }
     }
     async createFolder(path) {
+        // Already there (ENG-23, tuning): one LIST on the kept connection. Asking
+        // Yahoo to create it anyway was refused, and the refusal cost a new login.
+        this.folders = undefined;
+        const existing = (await this.listFolders()).find(f => f.path === path);
+        if (existing)
+            return { path: existing.path, created: false };
         this.folders = undefined;
         try {
             return await this.run(async (client) => {

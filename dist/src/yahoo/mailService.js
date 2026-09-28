@@ -189,18 +189,24 @@ export class MailService {
                 raw: args.raw
             });
             const warnings = [];
-            try {
-                const sent = await this.specialFolder('sent');
-                const hits = await this.imap.findByMessageId(sent, args.messageId);
-                if (hits.length > 1)
-                    warnings.push('Multiple Sent copies found. Do not resend; revalidate Sent-copy configuration.');
-                if (!hits.length && this.config.SENT_COPY_MODE === 'append')
-                    await this.imap.append(sent, args.raw, ['\\Seen']);
-                if (!hits.length && this.config.SENT_COPY_MODE === 'yahoo')
-                    warnings.push('The mail provider accepted the message, but its automatic Sent copy is not yet visible. Do not resend.');
+            if (this.config.SENT_COPY_MODE === 'yahoo') {
+                // The provider files its own copy, a minute or so later (seen in every
+                // live run): looking for it now found nothing, cost a second or more,
+                // and left the AI searching Sent again and again (ENG-24, tuning).
+                warnings.push('The mail provider files its own Sent copy; it can take a minute or so to appear in Sent. Do not resend.');
             }
-            catch {
-                warnings.push('The mail provider accepted the message, but Universal Mail could not save its copy in Sent. Do not resend automatically.');
+            else {
+                try {
+                    const sent = await this.specialFolder('sent');
+                    const hits = await this.imap.findByMessageId(sent, args.messageId);
+                    if (hits.length > 1)
+                        warnings.push('Multiple Sent copies found. Do not resend; revalidate Sent-copy configuration.');
+                    if (!hits.length)
+                        await this.imap.append(sent, args.raw, ['\\Seen']);
+                }
+                catch {
+                    warnings.push('The mail provider accepted the message, but Universal Mail could not save its copy in Sent. Do not resend automatically.');
+                }
             }
             return success({ messageId: args.messageId, operationId: args.operationId, accepted: info.accepted, rejected: info.rejected }, 'The mail provider accepted the message.', 'SENT', warnings);
         }
@@ -226,10 +232,8 @@ export class MailService {
         return this.sendRaw({ ...built, to: input.to, cc: input.cc, bcc: input.bcc });
     }
     async replyEmail(input) {
-        const original = await this.getEmail(input.mailbox, input.uid);
-        if (!original.data)
-            throw new MailError('MESSAGE_NOT_FOUND', 'Original message not found.', 'NOT_FOUND');
-        const msg = original.data;
+        // Only the headers a reply needs (ENG-24, tuning): not the whole message.
+        const msg = await this.imap.fetchReplyHeaders(input.mailbox, input.uid);
         const primary = msg.replyTo[0]?.address ?? msg.from[0]?.address;
         if (!primary)
             throw new MailError('NO_REPLY_ADDRESS', 'Original message has no usable reply address.');
