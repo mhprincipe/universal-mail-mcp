@@ -83,11 +83,29 @@ function wrap(fn) {
         }
     };
 }
+// One log line per tool call (design §7, DIA-12): the tool, the account, how
+// long, whether it worked and its code. Never the arguments or the answer,
+// which can hold mail. Account names are plain labels, so they may be logged.
+const ACCOUNT_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
+function timed(name, handler) {
+    return async (args, extra) => {
+        const started = Date.now();
+        const answer = await handler(args, extra);
+        const envelope = answer?.structuredContent;
+        const account = typeof args?.account === 'string' && ACCOUNT_NAME.test(args.account) ? args.account : undefined;
+        console.log(JSON.stringify({
+            event: 'tool', name, ...(account ? { account } : {}), ms: Date.now() - started,
+            ok: envelope?.ok === true, ...(envelope?.ok === true ? {} : { code: typeof envelope?.code === 'string' ? envelope.code : 'unknown' })
+        }));
+        return answer;
+    };
+}
 export function buildMcpServer(mail, oauth = false) {
     const { account, mailboxUid, targets, format } = schemas(mail.names);
     const server = new McpServer({ name: 'universal-mail', version: VERSION }, { capabilities: { tools: {} } });
+    const registerTool = (name, config, handler) => server.registerTool(name, config, timed(name, handler));
     const secured = (name) => oauth ? { _meta: { securitySchemes: [{ type: 'oauth2', scopes: requiredScopes(name) }] } } : {};
-    server.registerTool('search_email', {
+    registerTool('search_email', {
         ...secured('search_email'),
         title: 'Search email',
         description: `Search one folder, newest first. Filter by messageId to re-find a message after a write, because UIDs change on every move. If more matched than limit, the answer has a cursor: pass it back as cursor for the next page. Without account, every connected account is searched (no cursor then). ${UNTRUSTED}`,
@@ -103,82 +121,82 @@ export function buildMcpServer(mail, oauth = false) {
         ...a, since: a.since ? new Date(a.since) : undefined, before: a.before ? new Date(a.before) : undefined,
         ...(cursor ? { beforeUid: Number(cursor) } : {})
     }, a.account)));
-    server.registerTool('get_email', {
+    registerTool('get_email', {
         ...secured('get_email'),
         title: 'Get email', description: `Retrieve one message's body and metadata without marking it read. format text (the default) leaves out the html; format full includes it. A body over 100,000 characters is clipped and marked truncated. ${UNTRUSTED}`,
         inputSchema: mailboxUid.extend({ format }), annotations: { readOnlyHint: true, idempotentHint: true }
     }, wrap(async (a) => shaped(await mail.service(a.account, 'read').getEmail(a.mailbox, a.uid), a.format)));
-    server.registerTool('get_thread', {
+    registerTool('get_thread', {
         ...secured('get_thread'),
         title: 'Get email thread', description: `Reconstruct a conversation from its Message-ID, References and In-Reply-To headers. Looks in Inbox, Sent, Archive and the message's own folder; set allFolders to search every folder, which is slower. format as for get_email. A very long thread is cut, with a count of what was left out. ${UNTRUSTED}`,
         inputSchema: mailboxUid.extend({ allFolders: z.boolean().default(false), format }),
         annotations: { readOnlyHint: true, idempotentHint: true }
     }, wrap(async (a) => shaped(await mail.service(a.account, 'read').getThread(a.mailbox, a.uid, { allFolders: a.allFolders }), a.format)));
-    server.registerTool('create_draft', {
+    registerTool('create_draft', {
         ...secured('create_draft'),
         title: 'Create draft', description: 'Create a draft in the account\'s Drafts folder. This does not send email.',
         inputSchema: z.object({ ...account, to: recipients, cc: optionalRecipients, bcc: optionalRecipients, subject: z.string().max(998), text: z.string().optional(), html: z.string().optional(), inReplyTo: z.string().optional(), references: z.array(z.string()).optional() }),
         annotations: { idempotentHint: false }
     }, wrap(({ account: name, ...a }) => mail.service(name, 'organize').createDraft(a)));
-    server.registerTool('update_draft', {
+    registerTool('update_draft', {
         ...secured('update_draft'),
         title: 'Update draft', description: 'Create the replacement draft first, then remove the prior draft. On cleanup failure both drafts may remain so content is not lost.',
         inputSchema: mailboxUid.extend({ to: recipients.optional(), cc: optionalRecipients, bcc: optionalRecipients, subject: z.string().max(998).optional(), text: z.string().optional(), html: z.string().optional() }),
         annotations: { idempotentHint: false }
     }, wrap(({ account: name, ...a }) => mail.service(name, 'organize').updateDraft(a)));
-    server.registerTool('send_email', {
+    registerTool('send_email', {
         ...secured('send_email'),
         title: 'Send email', description: `Send a new email. External side effect. ${ASK_ACCOUNT} Never automatically retry an UNKNOWN send result.`,
         inputSchema: z.object({ ...account, to: recipients, cc: optionalRecipients, bcc: optionalRecipients, subject: z.string().max(998), text: z.string().optional(), html: z.string().optional() }),
         annotations: { idempotentHint: false, openWorldHint: true }
     }, wrap(({ account: name, ...a }) => mail.service(name, 'send').sendEmail(a)));
-    server.registerTool('reply_email', {
+    registerTool('reply_email', {
         ...secured('reply_email'),
         title: 'Reply to email', description: `Reply to an existing message with correct thread headers. External side effect. ${ASK_ACCOUNT} Never automatically retry an UNKNOWN send result.`,
         inputSchema: mailboxUid.extend({ text: z.string().optional(), html: z.string().optional(), cc: optionalRecipients, bcc: optionalRecipients, replyAll: z.boolean().default(false) }),
         annotations: { idempotentHint: false, openWorldHint: true }
     }, wrap(({ account: name, ...a }) => mail.service(name, 'send').replyEmail(a)));
-    server.registerTool('move_email', {
+    registerTool('move_email', {
         ...secured('move_email'),
         title: 'Move email', description: `Move one message (uid) to an explicitly named folder. ${BATCH} Verifies ambiguous outcomes by Message-ID before retrying. ${REFIND}`,
         inputSchema: z.object({ ...targets, destination: z.string().min(1) }).refine(oneTarget, oneTargetMessage), annotations: { idempotentHint: false }
     }, wrap(a => mail.service(a.account, 'organize').moveEmail(a.mailbox, pick(a), a.destination)));
-    server.registerTool('archive_email', {
+    registerTool('archive_email', {
         ...secured('archive_email'),
         title: 'Archive email', description: `Move one message (uid) to the account's Archive folder, as its provider marks it. ${BATCH} ${REFIND}`,
         inputSchema: z.object(targets).refine(oneTarget, oneTargetMessage), annotations: { idempotentHint: false }
     }, wrap(a => mail.service(a.account, 'organize').archiveEmail(a.mailbox, pick(a))));
-    server.registerTool('mark_read', {
+    registerTool('mark_read', {
         ...secured('mark_read'),
         title: 'Mark email read', description: `Mark one message (uid) read. ${BATCH}`,
         inputSchema: z.object(targets).refine(oneTarget, oneTargetMessage), annotations: { idempotentHint: true }
     }, wrap(a => mail.service(a.account, 'organize').markRead(a.mailbox, pick(a))));
-    server.registerTool('mark_unread', {
+    registerTool('mark_unread', {
         ...secured('mark_unread'),
         title: 'Mark email unread', description: `Mark one message (uid) unread. ${BATCH}`,
         inputSchema: z.object(targets).refine(oneTarget, oneTargetMessage), annotations: { idempotentHint: true }
     }, wrap(a => mail.service(a.account, 'organize').markUnread(a.mailbox, pick(a))));
-    server.registerTool('flag_email', {
+    registerTool('flag_email', {
         ...secured('flag_email'),
         title: 'Flag email', description: `Set or clear the flag (star) on one message (uid). ${BATCH}`,
         inputSchema: z.object({ ...targets, flagged: z.boolean() }).refine(oneTarget, oneTargetMessage), annotations: { idempotentHint: true }
     }, wrap(a => mail.service(a.account, 'organize').flagEmail(a.mailbox, pick(a), a.flagged)));
-    server.registerTool('trash_email', {
+    registerTool('trash_email', {
         ...secured('trash_email'),
         title: 'Trash email', description: `Move one message (uid) to the account's Trash folder. ${BATCH} Reversible until the provider empties Trash. ${REFIND}`,
         inputSchema: z.object(targets).refine(oneTarget, oneTargetMessage), annotations: { destructiveHint: true, idempotentHint: false }
     }, wrap(a => mail.service(a.account, 'organize').trashEmail(a.mailbox, pick(a))));
-    server.registerTool('restore_email', {
+    registerTool('restore_email', {
         ...secured('restore_email'),
         title: 'Restore email', description: `Move one message (uid) out of its current folder, normally Trash, to INBOX or an explicit destination. ${BATCH} ${REFIND}`,
         inputSchema: z.object({ ...targets, destination: z.string().min(1).optional() }).refine(oneTarget, oneTargetMessage), annotations: { idempotentHint: false }
     }, wrap(a => mail.service(a.account, 'organize').restoreEmail(a.mailbox, pick(a), a.destination)));
-    server.registerTool('list_folders', {
+    registerTool('list_folders', {
         ...secured('list_folders'),
         title: 'List folders', description: 'List the account\'s folders and the special roles its provider marks (Inbox, Sent, Drafts, Trash, Archive, Junk).', inputSchema: z.object(account),
         annotations: { readOnlyHint: true, idempotentHint: true }
     }, wrap(async (a) => mail.service(a.account, 'read').listFolders()));
-    server.registerTool('create_folder', {
+    registerTool('create_folder', {
         ...secured('create_folder'),
         title: 'Create folder', description: 'Create a folder. If it already exists, returns success without duplicating it.',
         inputSchema: z.object({ ...account, path: z.string().min(1).max(255) }), annotations: { idempotentHint: true }
