@@ -506,6 +506,7 @@ what it says about the person's position is true.
 | DIA-09 | the `live:` stage: a test message in its own folder, found by ID, marked read and unread, flagged and unflagged, moved to Trash, each change confirmed; a change that doesn't happen fails it and the log names the step; no safe move leaves it in its folder *(added: owner's choice, 2026-09-26)* | U+P |
 | DIA-10 | on the installed server (with your page), setup's check token reaches the check and gets the report; without a token no report is given *(added: found live: the page's route answered 403)* | U |
 | DIA-11 | `node setup.js report` includes the server's own log once a project exists (oldest first, JSON whole); unreadable: one plain line, still exit 0 *(added: asked for live)* | M |
+| DIA-12 | every tool call leaves one log line: the tool, the account, its time, its outcome and code; never its arguments or answer *(added: for the live performance test)* | U |
 
 ---
 
@@ -579,10 +580,10 @@ also where a later reader finds out why a line of code exists.
 | Release | 10 |
 | Page and emails | 17 |
 | Everyday polish | 11 |
-| Diagnostics | 13 |
+| Diagnostics | 14 |
 | Subscription | 33 |
-| **New** | **285** |
-| **Total** | **440** |
+| **New** | **286** |
+| **Total** | **441** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.
