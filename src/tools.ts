@@ -148,7 +148,7 @@ export function buildMcpServer(mail: MailAccess, oauth = false): McpServer {
 
   registerTool('update_draft', {
     ...secured('update_draft'),
-    title: 'Update draft', description: 'Create the replacement draft first, then remove the prior draft. On cleanup failure both drafts may remain so content is not lost.',
+    title: 'Update draft', description: 'Create the replacement draft first, then remove the prior draft. On cleanup failure both drafts may remain so content is not lost. The updated draft is a new message: use the new uid and messageId from this answer, not the old ones.',
     inputSchema: mailboxUid.extend({ to: recipients.optional(), cc: optionalRecipients, bcc: optionalRecipients, subject: z.string().max(998).optional(), text: z.string().optional(), html: z.string().optional() }),
     annotations: { idempotentHint: false }
   }, wrap(({ account: name, ...a }) => mail.service(name, 'organize').updateDraft(a)));

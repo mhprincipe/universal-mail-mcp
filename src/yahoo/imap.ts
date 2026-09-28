@@ -181,13 +181,21 @@ export class ImapGateway {
         if (input.flagged !== undefined) query.flagged = input.flagged;
         if (input.text) query.or = [{ from: input.text }, { to: input.text }, { subject: input.text }, { body: input.text }];
         const result = await this.withinSearchLimit(client, client.search(query, { uid: true }));
-        const all = Array.isArray(result) ? [...result].sort((a, b) => a - b) : [];
-        const uids = all.slice(-input.limit);
-        if (!uids.length) return { messages: [] };
-        const rows = await client.fetchAll(uids, { envelope: true, flags: true, size: true }, { uid: true });
-        // System emails don't exist, as far as a search is concerned.
-        const messages = rows.sort((a,b) => b.uid - a.uid).map(m => this.summary(input.mailbox, m)).filter(m => !isSystemMessageId(m.messageId));
-        return { messages, ...(all.length > uids.length ? { next: uids[0] } : {}) };
+        let remaining = Array.isArray(result) ? [...result].sort((a, b) => a - b) : [];
+        // System emails don't exist, as far as a search is concerned, so they
+        // mustn't use up the page either (SIG-82, found live: "asked for 5, got
+        // 3"). Older messages fill in until the page is full; the cursor is the
+        // lowest UID looked at, so paging never skips or repeats.
+        const messages: MessageSummary[] = [];
+        let lowest: number | undefined;
+        while (messages.length < input.limit && remaining.length) {
+          const batch = remaining.slice(-(input.limit - messages.length));
+          remaining = remaining.slice(0, remaining.length - batch.length);
+          lowest = batch[0];
+          const rows = await client.fetchAll(batch, { envelope: true, flags: true, size: true }, { uid: true });
+          messages.push(...rows.sort((a, b) => b.uid - a.uid).map(m => this.summary(input.mailbox, m)).filter(m => !isSystemMessageId(m.messageId)));
+        }
+        return { messages, ...(remaining.length && lowest !== undefined ? { next: lowest } : {}) };
       } finally { lock.release(); }
     });
   }

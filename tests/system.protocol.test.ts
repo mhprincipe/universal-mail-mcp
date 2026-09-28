@@ -72,6 +72,26 @@ describe('system emails are invisible to the AI', () => {
     expect(p.smtp.messages).toEqual([]);
   });
 
+  // Found in the owner's live test, 2026-09-28: "asked for 5, got 3; asked
+  // for 3, got 1". The two newest Inbox messages were sign-in code emails:
+  // the search counted them toward the limit, then hid them.
+  it('SIG-82 hidden system emails don\'t use up a page: the limit counts only what the AI sees, and paging still covers everything once (added: found live)', async () => {
+    await p.ok('create_folder', { path: 'Paging' });
+    const ordinary = (await seed(p.server, { messages: Array.from({ length: 5 }, (_, i) => ({ mailbox: 'Paging', subject: `ordinary ${i}`, from: 'friend@example.invalid' })) })).messages;
+    await seed(p.server, { messages: [20, 21].map(n => ({ mailbox: 'Paging', subject: 'Your Universal Mail code', messageId: systemId(n), headers: { 'X-Universal-Mail': 'system' } })) });
+    const newestFirst = [...ordinary].reverse().map(m => m.messageId);
+    const firstPage = await p.call('search_email', { mailbox: 'Paging', limit: 3 });
+    expect(firstPage.result.data.map((r: { messageId: string }) => r.messageId)).toEqual(newestFirst.slice(0, 3));
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await p.call('search_email', { mailbox: 'Paging', limit: 2, ...(cursor ? { cursor } : {}) });
+      seen.push(...page.result.data.map((r: { messageId: string }) => r.messageId));
+      cursor = page.result.cursor;
+    } while (cursor);
+    expect(seen).toEqual(newestFirst);
+  });
+
   it('SIG-53 a used code email is moved to Trash', async () => {
     const service = mailServiceFor(p.server);
     const [delivered] = (await seed(p.server, {

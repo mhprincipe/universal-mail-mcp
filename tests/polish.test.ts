@@ -101,5 +101,8 @@ describe('everyday polish', () => {
     // Formats and paging are discoverable.
     expect(text('get_email')).toContain('format');
     expect(text('search_email')).toContain('cursor');
+    // Found live (2026-09-28): an updated draft is a new message, with a new
+    // uid and messageId; the AI was left re-finding the old ones.
+    expect(text('update_draft')).toMatch(/new uid and messageId/i);
   });
 });

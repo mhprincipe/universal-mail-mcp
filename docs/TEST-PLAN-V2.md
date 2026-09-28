@@ -321,6 +321,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 |---|---|---|
 | SIG-80 | every refusal logs a reason code, and never a token or claim value | S |
 | SIG-81 | refusals are counted per app | S |
+| SIG-82 | hidden system emails don't use up a search page: the limit counts only what the AI sees; older messages fill in; paging covers every visible message once *(added: found live, "asked for 5, got 3")* | U+P |
 
 **Exit:** a scripted Claude-like client connects to two accounts with Auth0 absent, and the whole Phase 2 suite is green.
 
@@ -576,7 +577,7 @@ also where a later reader finds out why a line of code exists.
 | v1 baseline | 155 |
 | Test kit | 13 |
 | Engine | 67 |
-| Sign-in | 57 |
+| Sign-in | 62 |
 | Setup | 70 |
 | Installed server | 6 |
 | Release | 10 |
@@ -584,8 +585,8 @@ also where a later reader finds out why a line of code exists.
 | Everyday polish | 11 |
 | Diagnostics | 14 |
 | Subscription | 33 |
-| **New** | **298** |
-| **Total** | **453** |
+| **New** | **303** |
+| **Total** | **458** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.
