@@ -148,6 +148,8 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | ENG-13 | a move within one account goes to that account and no other *(added during build: path found untested by coverage)* | U |
 | ENG-18 | one kept connection per account: many calls log in once; calls take turns; checked after a pause (a dead or silent one replaced); never reused after a failure, kept after a mail-level refusal; a failed login not kept; an account change logs the old ones out; on Dovecot, fifteen tools log in once and mark nothing read, and a cut connection is replaced *(added: the live baseline showed ~3.3 s of login per call)* | U+P |
 | ENG-19 | sent and saved mail names no one but its sender: the Message-ID uses the sender's domain; the operation header names Universal Mail *(added: found live)* | U |
+| ENG-20 | a batch move reports each message's own new UID: sent sorted, every pair checked by Message-ID in the destination; copies paired in order; one it can't confirm left unmapped, never guessed *(added: found live, Yahoo mispaired an unsorted batch)* | U+P |
+| ENG-21 | re-finding by Message-ID works where the provider's header search misses (Yahoo): the folder's newest 200 messages are checked directly; a reliable provider isn't second-guessed *(added: found live)* | U+P |
 | ENG-14 | an unencrypted mail connection is allowed only to this machine; each transport setting maps to the right connection options *(added during build: the protocol tier's local test server is unencrypted, and the product must never allow that anywhere else)* | U |
 | ENG-15 | sending always requires encryption, on any port; a server that won't encrypt gets nothing, with a plain answer *(added during build: v1 only required it on port 587, so a custom port would have sent in whatever mode the server chose)* | U |
 | ENG-16 | several accounts load from the stored account list and a separate password list; v1's single-account settings become one account called `main`; a bad account is named in the error and its password never appears *(added during build: the accounts had no way in)* | U |
@@ -178,6 +180,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | PAR-05 | the limits on MIME depth, part count and header size each trigger on their own | U |
 | PAR-06 | an ordinary email caught behind a stuck or crashing one still opens *(added during build: killing a worker also failed the innocent emails queued on it, and PAR-04 would then have remembered them as unsafe)* | U |
 | PAR-07 | a slow-starting worker doesn't count against an email's time limit, and a worker that never starts is reported as unavailable, not blamed on the email *(added during build: under load, a fresh worker's start-up ran out an ordinary email's time limit)* | U |
+| PAR-08 | an HTML-only email has readable text made from its HTML (words, no tags, no styles); an email with its own text part keeps it *(added: found live)* | U |
 
 **Thread strategies**
 
@@ -461,6 +464,7 @@ what it says about the person's position is true.
 | POL-09 | a slow full-text search ends with the "narrow your search" remedy | P (fault proxy) |
 | POL-10 | `get_thread`'s full-folder scan happens only when asked for | P |
 | POL-11 | sorting 100 messages across several folders takes 10 or fewer tool calls (counted) | P |
+| POL-12 | `since` and `before` honour the time of day: the server is asked a day either side (IMAP compares whole days) and the exact times are applied; the limit counts only what's shown *(added: found live)* | U |
 
 **Exit:** POL-11 green. That's v1's 90-call cleanup done in 10 or fewer.
 
@@ -576,17 +580,17 @@ also where a later reader finds out why a line of code exists.
 |---|---|
 | v1 baseline | 155 |
 | Test kit | 13 |
-| Engine | 67 |
+| Engine | 77 |
 | Sign-in | 62 |
 | Setup | 70 |
 | Installed server | 6 |
 | Release | 10 |
 | Page and emails | 17 |
-| Everyday polish | 11 |
+| Everyday polish | 12 |
 | Diagnostics | 14 |
 | Subscription | 33 |
-| **New** | **303** |
-| **Total** | **458** |
+| **New** | **314** |
+| **Total** | **469** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

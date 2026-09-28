@@ -147,8 +147,10 @@ describe('IMAP recovery invariants', () => {
     const client = {
       capabilities: new Map([['MOVE', true]]),
       getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
-      // Envelopes, for the check that none of these is a system email.
-      fetchAll: vi.fn(async (set: string) => set.split(',').map(uid => ({ uid: Number(uid), envelope: { messageId: `<${uid}@test>` } }))),
+      // Envelopes: in the source, for the check that none is a system email;
+      // in the destination (UIDs 11-13), the same messages, so the same
+      // Message-IDs, for the check of each pair (ENG-20).
+      fetchAll: vi.fn(async (set: string) => set.split(',').map(uid => ({ uid: Number(uid), envelope: { messageId: `<${Number(uid) > 10 ? Number(uid) - 10 : Number(uid)}@test>` } }))),
       messageMove: vi.fn(async () => ({ uidMap: new Map([[1, 11], [2, 12], [3, 13]]) }))
     };
     vi.spyOn(gateway, 'run').mockImplementation(async fn => { connections++; return fn(client as any); });
