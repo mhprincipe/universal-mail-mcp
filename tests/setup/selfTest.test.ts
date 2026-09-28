@@ -70,6 +70,27 @@ describe('the self-test client', () => {
     expect(w.entries()).toContainEqual(expect.objectContaining({ type: 'selfTest', attempt: 1, status: 401 }));
   });
 
+  // Found live, 2026-09-28: on Yahoo the whole check (with its live writes,
+  // each confirmed by a search) took 70-75 s; setup gave up at 60 s, retried,
+  // and the server's log showed three checks answered 200 after setup had left.
+  it('SET-75 setup waits long enough for a real mailbox check: up to 3 minutes (added: found live)', async () => {
+    const waits: number[] = [];
+    const real = AbortSignal.timeout.bind(AbortSignal);
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => { waits.push(ms); return real(ms); });
+    const w = await world();
+    await w.selfTest(w.target);
+    expect(waits.length).toBeGreaterThan(0);
+    expect(Math.min(...waits)).toBeGreaterThanOrEqual(180_000);
+  });
+
+  it('SET-75 a check that runs out of time is not started again (each one writes to the mailbox), and says it was slow', async () => {
+    const slow: typeof fetch = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); };
+    const w = await world({ fetchImpl: slow });
+    expect(await w.selfTest(w.target)).toEqual({ passed: 0, total: 0, failing: 'The server\'s check took longer than 3 minutes.' });
+    expect(w.entries().filter(e => e.type === 'selfTest').map(e => `${e.attempt}:${e.error}`)).toEqual(['1:TimeoutError']);
+    expect(w.slept).toEqual([]);
+  });
+
   // Found live, 2026-09-27: the server answered 403 three times and setup said
   // "didn't answer", pointing away from the cause. An answer is an answer.
   it('SET-75 a server that turns the check away (403) is reported as refusing, at once, not as silent (added: found live)', async () => {

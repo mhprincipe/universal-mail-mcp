@@ -11,7 +11,9 @@ import type { SetupLog } from './log.js';
 
 const ATTEMPTS = 3;
 const WAIT_MS = 5_000;
-const TIMEOUT_MS = 60_000;
+// Found live: on Yahoo the whole check took 70-75 s (its live writes are each
+// confirmed by a search), so 60 s gave up just before every answer.
+const TIMEOUT_MS = 180_000;
 
 // When the check can't run at all, the words shown after "The final check found a problem."
 const NO_KEYS = 'Setup couldn\'t read the server\'s saved keys.';
@@ -20,6 +22,7 @@ const NOT_FOUND = 'The server has no check at its address. It may not be this ve
 const NO_ANSWER = 'The server didn\'t answer its check.';
 // Found live: 403 was retried and then called "didn't answer".
 const TURNED_AWAY = 'The server turned setup\'s check away.';
+const TOO_SLOW = 'The server\'s check took longer than 3 minutes.';
 
 type Options = { google: GoogleCloud; log: SetupLog; version: string; clock: { now(): number; sleep(ms: number): Promise<void> }; fetchImpl?: typeof fetch };
 
@@ -70,6 +73,9 @@ export function createSelfTest(options: Options): SetupDeps['selfTest'] {
         retry = true;
       } catch (error) {
         log.event({ type: 'selfTest', attempt, error: reasonOf(error), ms: clock.now() - started });
+        // Out of time, the check is still running on the server, writing to the
+        // mailbox: starting another would only add a second one (found live).
+        if (reasonOf(error) === 'TimeoutError') return unable(TOO_SLOW);
         retry = true;
       }
       if (!retry || attempt >= ATTEMPTS) return unable(NO_ANSWER);

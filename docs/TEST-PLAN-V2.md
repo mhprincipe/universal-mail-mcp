@@ -554,14 +554,14 @@ also where a later reader finds out why a line of code exists.
 | Test kit | 13 |
 | Engine | 55 |
 | Sign-in | 57 |
-| Setup | 68 |
+| Setup | 70 |
 | Installed server | 6 |
 | Release | 10 |
 | Page and emails | 17 |
 | Everyday polish | 11 |
 | Diagnostics | 11 |
-| **New** | **248** |
-| **Total** | **403** |
+| **New** | **250** |
+| **Total** | **405** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.
