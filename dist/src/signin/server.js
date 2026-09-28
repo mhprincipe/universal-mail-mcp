@@ -72,7 +72,13 @@ export function createSigninApp(env, deps = {}) {
     // The subscription (design §13): made once your page exists, below.
     let subscription;
     const getMail = () => mail ??= createMailRouter(getAccounts(), { onAuthFailure, readOnly: () => subscription?.readOnlySentence() });
-    store?.onAccountsChange(() => { accounts = undefined; mail = undefined; });
+    // The old mail access logs out of its kept connections (ENG-18): they may carry an old password.
+    store?.onAccountsChange(() => {
+        const replaced = mail;
+        accounts = undefined;
+        mail = undefined;
+        void replaced?.close().catch(() => undefined);
+    });
     const checkPath = `/${key}/check`;
     const known = new Set([mcpPath, checkPath, resourceMetadataPath, '/.well-known/oauth-authorization-server', '/health',
         '/authorize', '/authorize/code', '/authorize/verify', '/authorize/approve', '/authorize/deny',

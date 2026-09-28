@@ -2,12 +2,26 @@ import { ImapFlow } from 'imapflow';
 import { imapTransport } from '../config.js';
 import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
 import { isSystemMessageId } from '../systemMail.js';
+// One connection per account, kept and reused (ENG-18: in the owner's live
+// baseline a new connection and login cost ~3.3 s on every call). One call
+// at a time uses it. After a pause it's checked before use; after a failure
+// that isn't the mail's own refusal, it's closed and never reused.
+const CHECK_AFTER_IDLE_MS = 30_000;
+const NOOP_TIMEOUT_MS = 5_000;
 export class ImapGateway {
     config;
-    constructor(config) {
+    options;
+    session;
+    turn = Promise.resolve();
+    clock;
+    constructor(config, options = {}) {
         this.config = config;
+        this.options = options;
+        this.clock = options.clock ?? Date;
     }
     client() {
+        if (this.options.createClient)
+            return this.options.createClient();
         const c = new ImapFlow({
             host: this.config.IMAP_HOST,
             port: this.config.IMAP_PORT,
@@ -18,15 +32,71 @@ export class ImapGateway {
         c.on('error', () => undefined);
         return c;
     }
-    async run(fn) {
-        const client = this.client();
+    // Calls take turns: one IMAP connection has one selected folder at a time.
+    run(fn) {
+        const mine = this.turn.then(() => this.runNow(fn));
+        this.turn = mine.catch(() => undefined);
+        return mine;
+    }
+    async runNow(fn) {
+        const client = await this.connection();
         try {
-            await client.connect();
-            return await fn(client);
+            const value = await fn(client);
+            this.session = { client, lastUsed: this.clock.now() };
+            return value;
+        }
+        catch (error) {
+            // The mail's own refusal says nothing about the connection; anything
+            // else leaves its state unknown, so it's never handed out again.
+            if (error instanceof MailError)
+                this.session = { client, lastUsed: this.clock.now() };
+            else
+                this.drop(client);
+            throw error;
+        }
+    }
+    async connection() {
+        const kept = this.session;
+        if (kept?.client.usable) {
+            if (this.clock.now() - kept.lastUsed < CHECK_AFTER_IDLE_MS)
+                return kept.client;
+            if (await this.answers(kept.client))
+                return kept.client;
+        }
+        if (kept)
+            this.drop(kept.client);
+        const client = this.client();
+        await client.connect();
+        this.session = { client, lastUsed: this.clock.now() };
+        return client;
+    }
+    // A kept connection after a pause: does the server still answer, promptly?
+    async answers(client) {
+        let timer;
+        const late = new Promise(resolve => { timer = setTimeout(() => resolve(false), this.options.noopTimeoutMs ?? NOOP_TIMEOUT_MS); });
+        try {
+            return await Promise.race([client.noop().then(() => true, () => false), late]);
         }
         finally {
+            clearTimeout(timer);
+        }
+    }
+    drop(client) {
+        if (this.session?.client === client)
+            this.session = undefined;
+        try {
+            client.close();
+        }
+        catch { /* already gone */ }
+    }
+    // Logs out of the kept connection (tests, and a server shutting down).
+    async close() {
+        await this.turn;
+        const kept = this.session;
+        this.session = undefined;
+        if (kept) {
             try {
-                await client.logout();
+                await kept.client.logout();
             }
             catch { /* best effort */ }
         }

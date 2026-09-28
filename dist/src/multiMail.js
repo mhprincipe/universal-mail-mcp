@@ -32,7 +32,8 @@ function watched(name, service, hooks) {
 }
 export function createMailRouter(accounts, hooks = {}) {
     const sendingOff = new Set(accounts.filter(a => a.sending === false).map(a => a.name));
-    const services = new Map([...createAccountServices(accounts)].map(([name, service]) => [name, watched(name, service, hooks)]));
+    const plain = createAccountServices(accounts);
+    const services = new Map([...plain].map(([name, service]) => [name, watched(name, service, hooks)]));
     const directory = createAccounts(accounts.map(a => ({ name: a.name, address: a.config.YAHOO_EMAIL })));
     const multi = createMultiMail(services);
     const access = (grant) => {
@@ -71,7 +72,10 @@ export function createMailRouter(accounts, hooks = {}) {
     };
     // Without sign-in grants (bearer and v1 modes), the caller may do everything.
     const everything = Object.fromEntries(accounts.map(a => [a.name, ['read', 'organize', 'send']]));
-    return { ...access(everything), forGrant: access };
+    return {
+        ...access(everything), forGrant: access,
+        close: async () => { await Promise.all([...plain.values()].map(service => service.imap.close())); }
+    };
 }
 export function createMultiMail(services) {
     return {
