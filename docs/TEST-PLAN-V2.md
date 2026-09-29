@@ -329,6 +329,8 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | SIG-80 | every refusal logs a reason code, and never a token or claim value | S |
 | SIG-81 | refusals are counted per app | S |
 | SIG-82 | hidden system emails don't use up a search page: the limit counts only what the AI sees; older messages fill in; paging covers every visible message once *(added: found live, "asked for 5, got 3")* | U+P |
+| SIG-83 | ChatGPT signs in with its real published document (extra fields, `private_key_jwt`, `jwks_uri`): as a public client like Claude, or with a signed assertion, with or without `client_id`, for the code and for refresh *(added: connecting ChatGPT)* | U |
+| SIG-84 | an assertion that doesn't prove the app is `invalid_client` (401), never ignored: another key, issuer, subject or audience; expired or hours-long; no or reused one-time id; unknown type; a different `client_id`; keys named off the app's own origin (another trusted app's included) or unreachable *(added: connecting ChatGPT)* | U |
 
 **Exit:** a scripted Claude-like client connects to two accounts with Auth0 absent, and the whole Phase 2 suite is green.
 
@@ -450,6 +452,7 @@ what it says about the person's position is true.
 | PG-15 | update-available emails mark security releases | S |
 | PG-16 | every page works at phone width without sideways scrolling | W |
 | PG-17 | "last used" per app comes from the request log | S |
+| PG-18 | your page says how to connect ChatGPT as it is today: Plus or higher, Developer mode, a new app, the address, OAuth *(added: connecting ChatGPT)* | U |
 
 **Exit:** adding an account, fixing a revoked password and disconnecting an app all work at phone size.
 
@@ -587,16 +590,16 @@ also where a later reader finds out why a line of code exists.
 | v1 baseline | 155 |
 | Test kit | 13 |
 | Engine | 81 |
-| Sign-in | 62 |
+| Sign-in | 64 |
 | Setup | 70 |
 | Installed server | 6 |
 | Release | 10 |
-| Page and emails | 17 |
+| Page and emails | 18 |
 | Everyday polish | 13 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| **New** | **320** |
-| **Total** | **475** |
+| **New** | **323** |
+| **Total** | **478** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

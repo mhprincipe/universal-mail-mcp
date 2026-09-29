@@ -72,4 +72,14 @@ describe('connected apps on your page', () => {
     p.clock.advance(5 * 60_000);
     expect((await p.get()).html).toContain('last used 5 minutes ago');
   });
+  it('PG-18 how to connect ChatGPT, as it is today: Developer mode, a new app, the address, OAuth (added: connecting ChatGPT)', async () => {
+    p = await startPage();
+    await p.signIn();
+    const html = (await p.get()).html;
+    const chatgptSteps = html.slice(html.indexOf('In ChatGPT'));
+    expect(chatgptSteps).toMatch(/Plus or higher/);
+    expect(chatgptSteps).toMatch(/Developer mode/);
+    expect(chatgptSteps).toMatch(/OAuth/);
+    expect(chatgptSteps).not.toMatch(/Settings → Connectors → Create/);
+  });
 });

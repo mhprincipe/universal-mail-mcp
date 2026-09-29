@@ -113,7 +113,7 @@ ${view.problem ? `<pre class="error" style="white-space:pre-wrap">${escape(view.
 ${form(base, '/accounts/add', csrf, `<label>Email address <input type="email" name="email" required></label><label>App password <input type="password" name="password" autocomplete="off" required></label><label>Name for your AI (optional) <input type="text" name="name" autocomplete="off"></label>`, 'Check and add')}
 </details></section>
 <section><h2>Connected apps</h2>${apps}
-<details><summary>Connect an AI app</summary><p>In Claude: Settings → Connectors → Add custom connector, and paste your AI-app address (the one setup showed, ending in /mcp). In ChatGPT: Settings → Connectors → Create, and paste the same address. Then approve it with a code.</p></details></section>
+<details><summary>Connect an AI app</summary><p>In Claude: Settings → Connectors → Add custom connector, and paste your AI-app address (the one setup showed, ending in /mcp). In ChatGPT (Plus or higher, on the web): Settings → Security and login → turn on Developer mode; then add a new app with the + button, name it Universal Mail, paste the same address and choose OAuth. Then approve it with a code. ChatGPT asks before each change to your mail; you can approve a tool once for the whole chat.</p></details></section>
 ${subscription}
 <section><h2>Health</h2>${form(base, '/check', csrf, '', 'Check that everything works')}
 ${view.report ? `<p>Copy this report and paste it into your AI for help. It contains no mail and no secrets.</p><textarea readonly>${escape(view.report)}</textarea>` : ''}</section>

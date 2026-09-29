@@ -590,7 +590,13 @@ allows.
 | `/jwks` | public signing keys |
 
 One grant type with PKCE, plus refresh. No self-registration, OpenID Connect
-ID tokens, userinfo or sessions.
+ID tokens, userinfo or sessions. An app is a public client: it names itself
+(`client_id`), and PKCE and the sealed code are the proof. An app whose
+document publishes keys (`jwks_uri`, on its own origin) may instead prove
+itself at the token step with a signed assertion (`private_key_jwt`, as
+ChatGPT's document offers): that is then checked in full (signature, issuer,
+subject, audience, minutes-long, once), and anything short of proof is
+`invalid_client`, never ignored.
 
 **Which apps may connect.** An app identifies itself by an HTTPS address for its
 published identity document (CIMD). It's accepted if that address is on a

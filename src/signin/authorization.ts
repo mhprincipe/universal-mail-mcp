@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { EncryptJWT, SignJWT, errors, exportJWK, generateKeyPair, importJWK, jwtDecrypt, jwtVerify, type CryptoKey, type JWK, type JWTPayload } from 'jose';
+import { EncryptJWT, SignJWT, createLocalJWKSet, decodeJwt, errors, exportJWK, generateKeyPair, importJWK, jwtDecrypt, jwtVerify, type CryptoKey, type JSONWebKeySet, type JWK, type JWTPayload } from 'jose';
 import { CHECK_TOKEN_SECONDS, CHECK_TOKEN_TYPE } from '../setup/checkToken.js';
-import { SigninRefusal, fetchClientDocument, redirectAllowed, type DocumentDeps } from './clientDocument.js';
+import { SigninRefusal, fetchClientDocument, fetchClientKeys, redirectAllowed, type DocumentDeps } from './clientDocument.js';
 import { createGrantStore, type AccountGrant, type GrantStore } from './grants.js';
 
 // The authorization server (design §6.5), built directly on jose. One grant
@@ -32,6 +32,9 @@ const CHECK_CLIENT = 'urn:universal-mail:check';
 const CODE_SECONDS = 60;
 const ACCESS_SECONDS = 15 * 60;
 const REFRESH_SECONDS = 30 * 24 * 60 * 60;
+const ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+// A signed assertion is for this one request: minutes, not hours.
+const ASSERTION_MAX_SECONDS = 10 * 60;
 
 export async function generateSigninKeys(): Promise<SigninKeys> {
   return { signing: await generateKeyPair('ES256', { extractable: true }), encryption: new Uint8Array(randomBytes(32)) };
@@ -67,6 +70,7 @@ export function createAuthorizationServer(options: {
   const seconds = () => Math.floor(clock.now() / 1000);
   const usedCodes = new Map<string, number>();
   const usedChecks = new Map<string, number>();
+  const usedAssertions = new Map<string, number>();
   const checkAudience = options.checkAudience ?? resource.replace(/\/mcp$/, '/check');
 
   const seal = async (claims: JWTPayload, lifetime: number) => new EncryptJWT(claims)
@@ -85,6 +89,34 @@ export function createAuthorizationServer(options: {
   };
 
   const tokenError = (error: string): TokenResponse => ({ status: 400, body: { error } });
+
+  // Which app is asking (added for ChatGPT, SIG-83/84). A public client just
+  // names itself (client_id), as Claude does; PKCE and the sealed code are
+  // the proof. An app may instead prove itself with an assertion signed by
+  // the keys its own document names (private_key_jwt): then that is checked
+  // in full, and anything short of proof is invalid_client, never ignored.
+  const whoIsAsking = async (form: Record<string, string | undefined>): Promise<{ clientId?: string } | undefined> => {
+    if (form.client_assertion === undefined && form.client_assertion_type === undefined) return { clientId: form.client_id };
+    if (form.client_assertion_type !== ASSERTION_TYPE || !form.client_assertion) return undefined;
+    let claimed: string | undefined;
+    try { claimed = decodeJwt(form.client_assertion).iss; } catch { return undefined; }
+    const clientId = form.client_id ?? claimed;
+    if (!clientId || claimed !== clientId) return undefined;
+    try {
+      const doc = await fetchClientDocument(clientId, options.trustedOrigins, options.documents);
+      const keySet = createLocalJWKSet(await fetchClientKeys(doc, options.trustedOrigins, options.documents) as JSONWebKeySet);
+      const { payload } = await jwtVerify(form.client_assertion, keySet, {
+        issuer: clientId, subject: clientId, audience: [issuer, `${issuer}/token`],
+        algorithms: ['RS256', 'PS256', 'ES256'], currentDate: new Date(clock.now()), requiredClaims: ['exp', 'jti']
+      });
+      if (payload.exp! > seconds() + ASSERTION_MAX_SECONDS) return undefined;
+      for (const [id, expires] of usedAssertions) if (expires < seconds()) usedAssertions.delete(id);
+      const once = `${clientId} ${payload.jti}`;
+      if (usedAssertions.has(once)) return undefined;
+      usedAssertions.set(once, payload.exp!);
+      return { clientId };
+    } catch { return undefined; }
+  };
 
   const issue = async (clientId: string, grantVersion: number): Promise<TokenResponse> => {
     const access = await new SignJWT({ client_id: clientId, grant_version: grantVersion })
@@ -149,23 +181,26 @@ export function createAuthorizationServer(options: {
     },
 
     async token(form) {
+      const asking = await whoIsAsking(form);
+      if (!asking) return { status: 401, body: { error: 'invalid_client' } };
+      const clientId = asking.clientId;
       if (form.grant_type === 'authorization_code') {
-        if (!form.code || !form.code_verifier || !form.redirect_uri || !form.client_id) return tokenError('invalid_request');
+        if (!form.code || !form.code_verifier || !form.redirect_uri || !clientId) return tokenError('invalid_request');
         const claims = await open(form.code, 'code');
-        if (!claims || claims.client_id !== form.client_id || claims.redirect_uri !== form.redirect_uri) return tokenError('invalid_grant');
+        if (!claims || claims.client_id !== clientId || claims.redirect_uri !== form.redirect_uri) return tokenError('invalid_grant');
         const expected = Buffer.from(String(claims.code_challenge), 'base64url');
         const presented = sha256(form.code_verifier);
         if (expected.length !== presented.length || !timingSafeEqual(expected, presented)) return tokenError('invalid_grant');
         for (const [id, expires] of usedCodes) if (expires < seconds()) usedCodes.delete(id);
         if (usedCodes.has(claims.jti!)) return tokenError('invalid_grant');
         usedCodes.set(claims.jti!, claims.exp!);
-        return issue(form.client_id, Number(claims.grant_version));
+        return issue(clientId, Number(claims.grant_version));
       }
       if (form.grant_type === 'refresh_token') {
-        if (!form.refresh_token || !form.client_id) return tokenError('invalid_request');
+        if (!form.refresh_token || !clientId) return tokenError('invalid_request');
         const claims = await open(form.refresh_token, 'refresh');
-        if (!claims || claims.client_id !== form.client_id) return tokenError('invalid_grant');
-        return issue(form.client_id, Number(claims.grant_version));
+        if (!claims || claims.client_id !== clientId) return tokenError('invalid_grant');
+        return issue(clientId, Number(claims.grant_version));
       }
       return tokenError('unsupported_grant_type');
     },
