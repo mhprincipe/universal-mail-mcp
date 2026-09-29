@@ -154,6 +154,19 @@ export function createInstallStore(installed, save) {
             saveCredentials();
             accountsChanged();
         },
+        renameAccount(from, to) {
+            // The password under its new name first, then the state, then the old
+            // name's password goes: at every step the state names no account
+            // without one.
+            credentials = { ...credentials, passwords: { ...credentials.passwords, [to]: credentials.passwords[from] } };
+            saveCredentials();
+            state = { ...state, accounts: state.accounts.map(a => a.name === from ? { ...a, name: to } : a) };
+            saveState();
+            const { [from]: _old, ...kept } = credentials.passwords;
+            credentials = { ...credentials, passwords: kept };
+            saveCredentials();
+            accountsChanged();
+        },
         onAccountsChange: listener => { listeners.push(listener); },
         note(part) { state = { ...state, ...part }; saveState(); },
         noted: () => state

@@ -1,3 +1,4 @@
+import { appPassword } from '../providers.js';
 import { problemText } from '../setup/messages.js';
 const NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
 // The mail engine needs at least this many (config.ts); app passwords are longer.
@@ -8,7 +9,7 @@ export function accountActions(tools, deps) {
     const refusal = (reason, values) => problemText(reason === 'rejected' ? 'MAIL-APP-PASSWORD' : reason === 'insecure' ? 'MAIL-INSECURE' : 'MAIL-UNREACHABLE', values);
     tools.post('/accounts/add', async (req, res, session) => {
         const email = String(req.body.email ?? '').trim().toLowerCase();
-        const password = String(req.body.password ?? '');
+        const password = appPassword(String(req.body.password ?? ''));
         if (password.length < MIN_PASSWORD)
             return tools.back(res, session, TOO_SHORT);
         const detected = email.includes('@') ? await mailCheck.detect(email) : undefined;
@@ -46,7 +47,7 @@ export function accountActions(tools, deps) {
         const account = store.accounts().find(a => a.name === String(req.body.name ?? ''));
         if (!account)
             return tools.back(res, session, { kind: 'error', text: 'That account isn\'t here any more.' });
-        const password = String(req.body.password ?? '');
+        const password = appPassword(String(req.body.password ?? ''));
         if (password.length < MIN_PASSWORD)
             return tools.back(res, session, TOO_SHORT);
         const provider = (await mailCheck.detect(account.email))?.provider;
@@ -82,6 +83,35 @@ export function accountActions(tools, deps) {
         status.delete(name);
         await deps.notify('An email account was removed from Universal Mail', `${account.email} ("${name}") was removed. No app can use it, and its password was deleted.`);
         tools.back(res, session, { kind: 'ok', text: `${name} was removed.` });
+    });
+    // A new name for an account (PG-19, the owner's request): everything it had
+    // carries over, the password, its settings and every app's permissions, and
+    // apps use the new name from their next request, without reconnecting.
+    tools.post('/accounts/rename', async (req, res, session) => {
+        const name = String(req.body.name ?? '');
+        const account = store.accounts().find(a => a.name === name);
+        if (!account)
+            return tools.back(res, session, { kind: 'error', text: 'That account isn\'t here any more.' });
+        const to = String(req.body.to ?? '').trim().toLowerCase();
+        if (to === name)
+            return tools.back(res, session, { kind: 'ok', text: `${name} keeps its name.` });
+        const taken = new Set(store.accounts().map(a => a.name));
+        if (!NAME.test(to) || taken.has(to)) {
+            return tools.back(res, session, { kind: 'error', text: taken.has(to) ? 'That name is taken. Choose another.' : 'Names use lowercase letters, digits and hyphens.' });
+        }
+        store.renameAccount(name, to);
+        for (const grant of deps.grants.snapshot().apps) {
+            if (grant.accounts[name]) {
+                const { [name]: permissions, ...others } = grant.accounts;
+                deps.grants.update(grant.appId, { ...others, [to]: permissions });
+            }
+        }
+        const was = status.get(name);
+        status.delete(name);
+        if (was)
+            status.set(to, was);
+        await deps.notify('An email account was renamed', `${account.email}: "${name}" is now "${to}". Apps that were allowed to use it still are, under the new name.`);
+        tools.back(res, session, { kind: 'ok', text: `${name} is now called ${to}.` });
     });
     tools.post('/accounts/sending', async (req, res, session) => {
         const account = store.accounts().find(a => a.name === String(req.body.name ?? ''));

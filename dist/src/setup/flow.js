@@ -1,4 +1,5 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { appPassword } from '../providers.js';
 import { GoogleRefusal, NotReadyYet } from './google.js';
 import { MESSAGES, renderLine } from './messages.js';
 import { runMenu } from './menu.js';
@@ -291,7 +292,7 @@ async function askPasswords(d, list, passwords, naming = false) {
         for (;;) {
             // After an unreachable or insecure server, the same password is tried again.
             if (password === undefined) {
-                password = await d.ask('ASK-APP-PASSWORD', {}, { hidden: true });
+                password = appPassword(await d.ask('ASK-APP-PASSWORD', {}, { hidden: true }));
                 d.log.secret(password);
             }
             const result = await d.mail.check(a.address, password);

@@ -70,6 +70,9 @@ ${a.status === 'password' ? '<span class="error">⚠ Password not accepted</span
 ${form(base, '/accounts/password', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>New app password <input type="password" name="password" autocomplete="off" required></label>`, 'Save password')}
 </details>
 ${form(base, '/accounts/sending', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><input type="hidden" name="on" value="${a.sending ? 'off' : 'on'}">`, a.sending ? 'Turn sending off' : 'Turn sending on')}
+<details><summary>Rename</summary>
+${form(base, '/accounts/rename', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>New name (what your AI calls it) <input type="text" name="to" autocomplete="off" required></label>`, 'Rename')}
+</details>
 ${form(base, '/accounts/remove', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>Type the account name to remove it <input type="text" name="confirm" autocomplete="off"></label>`, 'Remove account')}
 </div>`).join('\n');
     const apps = view.apps.length ? view.apps.map(app => {

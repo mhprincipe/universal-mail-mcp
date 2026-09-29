@@ -16,6 +16,13 @@ const DAY_MS = 24 * 60 * 60_000;
 // is known without asking (it isn't `usable`).
 const CHECK_AFTER_IDLE_MS = 120_000;
 const NOOP_TIMEOUT_MS = 5_000;
+// One address from an envelope. A "name" that is only the address again (as
+// Yahoo lists it) is no name (POL-15, found live), so a search and get_email
+// show the same.
+const person = (x) => {
+    const name = x.name?.trim();
+    return name && name.toLowerCase() !== x.address.toLowerCase() ? { name, address: x.address } : { address: x.address };
+};
 export class ImapGateway {
     config;
     options;
@@ -256,7 +263,7 @@ export class ImapGateway {
         }
     }
     summary(mailbox, m) {
-        const map = (items) => (items ?? []).filter(x => x?.address).map(x => ({ name: x.name || undefined, address: x.address }));
+        const map = (items) => (items ?? []).filter(x => x?.address).map(person);
         return {
             mailbox,
             uid: m.uid,
@@ -330,7 +337,7 @@ export class ImapGateway {
                 // A system email gets exactly the answer a missing one does.
                 if (!m || isSystemMessageId(m.envelope?.messageId))
                     throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
-                const map = (items) => (items ?? []).filter(x => x?.address).map(x => ({ name: x.name || undefined, address: x.address }));
+                const map = (items) => (items ?? []).filter(x => x?.address).map(person);
                 // Every <id> in the header, on however many folded lines.
                 const references = (m.headers?.toString('utf8') ?? '').match(/<[^>\r\n]+>/g) ?? [];
                 return {

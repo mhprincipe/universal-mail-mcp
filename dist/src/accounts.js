@@ -3,7 +3,9 @@ export function createAccounts(accounts) {
     const byName = new Map(accounts.map(account => [account.name, account]));
     const unknown = (name, names) => {
         const valid = [...names].sort();
-        return new MailError('MAIL-ACCOUNT-UNKNOWN', `There's no account called '${name}'. Your accounts are: ${valid.join(', ')}.`, 'FAILED', false, { valid });
+        // Found live: "There's no account called 'gmail'" read as "adding it failed",
+        // when this app just hadn't been given it. Only this app's accounts are named.
+        return new MailError('MAIL-ACCOUNT-UNKNOWN', `No account called '${name}' is available to this app. It can use: ${valid.join(', ')}. If you've just added an account, give this app permission for it on your Universal Mail page.`, 'FAILED', false, { valid });
     };
     const get = (name) => {
         const account = byName.get(name);
