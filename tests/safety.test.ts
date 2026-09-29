@@ -332,6 +332,16 @@ describe('SMTP no-duplicate delivery', () => {
     expect(find).not.toHaveBeenCalled();
     expect(result.warnings?.[0]).toMatch(/files its own Sent copy.*minute.*do not resend/i);
   });
+  it('POL-14 the answer says when the provider accepted it, by the server\'s clock (added: asked for in the live runs)', async () => {
+    // The AIs stamped test subjects with a guessed time, up to two hours out.
+    const { service } = setup('yahoo');
+    const before = Date.now();
+    const result = await service.sendEmail(input);
+    const sentAt = (result.data as { sentAt?: string }).sentAt!;
+    expect(sentAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/);
+    expect(Date.parse(sentAt)).toBeGreaterThanOrEqual(before);
+    expect(Date.parse(sentAt)).toBeLessThanOrEqual(Date.now());
+  });
   it('blocks sends until Sent behavior is verified', async () => {
     const { service, send } = setup('unverified');
     await expect(service.sendEmail(input)).rejects.toMatchObject({ code: 'SENT_POLICY_UNVERIFIED' });

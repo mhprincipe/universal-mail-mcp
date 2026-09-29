@@ -69,18 +69,32 @@ describe('the mail server connection', () => {
     await w.use(() => undefined);
     expect(w.made[0]!.noops).toBe(0);
     // After it: checked, and alive, so kept.
-    w.advance(60_000);
+    w.advance(180_000);
     expect(await w.use(f => f.id)).toBe(1);
     expect(w.made[0]!.noops).toBe(1);
     // The server dropped it meanwhile: replaced.
-    w.advance(60_000);
+    w.advance(180_000);
     w.made[0]!.noopFails = true;
     expect(await w.use(f => f.id)).toBe(2);
     expect(w.made[0]!.closes).toBe(1);
     // A check that never answers: given up on quickly, replaced.
-    w.advance(60_000);
+    w.advance(180_000);
     w.made[1]!.noopHangs = true;
     expect(await w.use(f => f.id)).toBe(3);
+  });
+
+  it('ENG-26 a pause of up to two minutes costs no check: the check itself took Yahoo about a second (added: measured live)', async () => {
+    const w = world();
+    await w.use(() => undefined);
+    w.advance(90_000);
+    await w.use(() => undefined);
+    w.advance(119_000);
+    await w.use(() => undefined);
+    expect(w.made[0]!.noops).toBe(0);
+    w.advance(121_000);
+    await w.use(() => undefined);
+    expect(w.made[0]!.noops).toBe(1);
+    expect(w.made).toHaveLength(1);
   });
 
   it('ENG-18 a connection the server closed is never handed out', async () => {

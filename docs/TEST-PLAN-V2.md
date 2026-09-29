@@ -154,6 +154,8 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | ENG-23 | `create_folder` on a folder that already exists answers `created: false` from a fresh listing, asking nothing to be created and keeping the connection; one created elsewhere in between is still success *(added: tuning, 4.5 s live)* | U+P |
 | ENG-24 | where the provider files its own Sent copy, a send doesn't look for it (it appears a minute later) and says so; a reply reads only the original's envelope and References, and threads exactly as before *(added: tuning, send ~4 s, reply ~5 s live)* | U+P |
 | ENG-25 | a message that arrives while its folder is open on the kept connection can be read and replied to at once: not found → NOOP → asked once more *(added: found while tuning)* | U+P |
+| ENG-26 | a pause of up to two minutes costs no check of the kept connection (the check took Yahoo about a second); longer, it's checked as before *(added: measured live, DIA-13)* | U |
+| ENG-27 | a folder already open for changes serves the reads that follow without opening it again (reads only peek, and nothing is marked read); another folder, or one open read-only, is read read-only *(added: measured live, DIA-13: 0.4-1 s per reopen)* | U+P |
 | ENG-14 | an unencrypted mail connection is allowed only to this machine; each transport setting maps to the right connection options *(added during build: the protocol tier's local test server is unencrypted, and the product must never allow that anywhere else)* | U |
 | ENG-15 | sending always requires encryption, on any port; a server that won't encrypt gets nothing, with a plain answer *(added during build: v1 only required it on port 587, so a custom port would have sent in whatever mode the server chose)* | U |
 | ENG-16 | several accounts load from the stored account list and a separate password list; v1's single-account settings become one account called `main`; a bad account is named in the error and its password never appears *(added during build: the accounts had no way in)* | U |
@@ -473,6 +475,7 @@ what it says about the person's position is true.
 | POL-11 | sorting 100 messages across several folders takes 10 or fewer tool calls (counted) | P |
 | POL-12 | `since` and `before` honour the time of day: the server is asked a day either side (IMAP compares whole days) and the exact times are applied; the limit counts only what's shown *(added: found live)* | U |
 | POL-13 | a subject search returns only messages whose subject really contains what was asked (case and spacing aside): Yahoo's "Re: X" also finds "X" *(added: found live)* | U |
+| POL-14 | a send's answer says when the provider accepted it (`sentAt`, the server's clock), so an AI needn't guess the time *(added: asked for in the live runs)* | U |
 
 **Exit:** POL-11 green. That's v1's 90-call cleanup done in 10 or fewer.
 
@@ -589,17 +592,17 @@ also where a later reader finds out why a line of code exists.
 |---|---|
 | v1 baseline | 155 |
 | Test kit | 13 |
-| Engine | 81 |
+| Engine | 83 |
 | Sign-in | 64 |
 | Setup | 70 |
 | Installed server | 6 |
 | Release | 10 |
 | Page and emails | 18 |
-| Everyday polish | 13 |
+| Everyday polish | 14 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| **New** | **323** |
-| **Total** | **478** |
+| **New** | **326** |
+| **Total** | **481** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

@@ -33,7 +33,7 @@ describe('the slow tools, tuned', () => {
     try {
       const { value, lines } = await during(() => p.ok('search_email', { mailbox: 'INBOX', messageId: m!.messageId }));
       expect(value.map((r: { uid: number }) => r.uid)).toEqual([m!.uid]);
-      expect(lines.filter(l => /SEARCH ALLs*$/i.test(l))).toEqual([]);
+      expect(lines.filter(l => /SEARCH ALL\s*$/i.test(l))).toEqual([]);
     } finally { p.proxy!.setRules({}); }
   });
 
@@ -91,5 +91,16 @@ describe('the slow tools, tuned', () => {
       expect(read.phases['imap.connect']).toBeUndefined();
       expect(lines.find(e => e.name === 'send_email').phases['smtp.send'].n).toBe(1);
     } finally { log.mockRestore(); }
+  });
+  it('ENG-27 on a real server: a read right after a change in the same folder opens nothing again, and still marks nothing read (added: measured live)', async () => {
+    const [m] = (await seed(p.server, { messages: [{ mailbox: 'INBOX', subject: 'Reused folder' }] })).messages;
+    // Read, then unread: both change it, so the folder is open for changes.
+    await p.ok('mark_read', { mailbox: 'INBOX', uid: m!.uid });
+    await p.ok('mark_unread', { mailbox: 'INBOX', uid: m!.uid });
+    const { value, lines } = await during(() => p.ok('get_email', { mailbox: 'INBOX', uid: m!.uid }));
+    expect(value.subject).toBe('Reused folder');
+    expect(lines.filter(l => /^(SELECT|EXAMINE)\b/i.test(l))).toEqual([]);
+    const [found] = await p.ok('search_email', { mailbox: 'INBOX', messageId: m!.messageId });
+    expect(found.read).toBe(false);
   });
 });

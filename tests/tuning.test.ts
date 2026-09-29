@@ -55,6 +55,40 @@ describe('a reply reads only the headers it needs', () => {
   });
 });
 
+describe('a folder already open for changes', () => {
+  // Measured live (DIA-13): every switch between reading a folder and changing
+  // it made Yahoo open it again, 0.4-1 s each, and "find, change, find again"
+  // is how every AI works.
+  function folders() {
+    const opens: Array<{ path: string; readOnly: boolean }> = [];
+    let open: { path: string; readOnly: boolean; exists: number } | false = false;
+    const c = {
+      ...client(() => ({ uid: 9, envelope: { messageId: '<m@x>' }, flags: new Set(), size: 10 })),
+      get mailbox() { return open; },
+      getMailboxLock: vi.fn(async (path: string, options: { readOnly?: boolean } = {}) => {
+        const readOnly = Boolean(options.readOnly);
+        if (!open || open.path !== path || open.readOnly !== readOnly) { open = { path, readOnly, exists: 1 }; opens.push({ path, readOnly }); }
+        return { release: vi.fn() };
+      })
+    };
+    return { c, opens };
+  }
+
+  it('ENG-27 serves the reads that follow, without opening it again; another folder is opened read-only (added: measured live)', async () => {
+    const { c, opens } = folders();
+    const gateway = gatewayOn(c as never);
+    await gateway.run(async imap => { (await imap.getMailboxLock('INBOX')).release(); });
+    await gateway.fetchSummary('INBOX', 9);
+    await gateway.fetchSummary('INBOX', 9);
+    expect(opens).toEqual([{ path: 'INBOX', readOnly: false }]);
+    await gateway.fetchSummary('Sent', 9);
+    // Open read-only already: read again as it is, never opened for changes.
+    await gateway.fetchSummary('Sent', 9);
+    await gateway.fetchSummary('INBOX', 9);
+    expect(opens).toEqual([{ path: 'INBOX', readOnly: false }, { path: 'Sent', readOnly: true }, { path: 'INBOX', readOnly: true }]);
+  });
+});
+
 describe('a message that arrived while its folder was open', () => {
   it('ENG-25 not found at first: the folder is refreshed (NOOP) and asked once more', async () => {
     let arrived = false;
