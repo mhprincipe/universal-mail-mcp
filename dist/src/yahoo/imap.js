@@ -11,7 +11,10 @@ const DAY_MS = 24 * 60 * 60_000;
 // baseline a new connection and login cost ~3.3 s on every call). One call
 // at a time uses it. After a pause it's checked before use; after a failure
 // that isn't the mail's own refusal, it's closed and never reused.
-const CHECK_AFTER_IDLE_MS = 30_000;
+// Two minutes (ENG-26, measured live): the check cost Yahoo about a second,
+// people often pause longer than 30 s, and a connection the server has closed
+// is known without asking (it isn't `usable`).
+const CHECK_AFTER_IDLE_MS = 120_000;
 const NOOP_TIMEOUT_MS = 5_000;
 export class ImapGateway {
     config;
@@ -75,6 +78,16 @@ export class ImapGateway {
         await client.connect();
         this.session = { client, lastUsed: this.clock.now() };
         return client;
+    }
+    // To read a folder. One already open for changes serves reads too (ENG-27,
+    // measured live): reads only ever peek (BODY.PEEK), and opening it again
+    // read-only cost Yahoo 0.4-1 s after every change. Otherwise it's opened
+    // read-only, as before.
+    openToRead(client, path) {
+        const open = client.mailbox;
+        if (open && open.path === path && !open.readOnly)
+            return client.getMailboxLock(path);
+        return client.getMailboxLock(path, { readOnly: true });
     }
     // A kept connection after a pause: does the server still answer, promptly?
     async answers(client) {
@@ -160,7 +173,7 @@ export class ImapGateway {
         if (input.beforeUid !== undefined && input.beforeUid <= 1)
             return { messages: [] };
         return this.read(async (client) => {
-            const lock = await client.getMailboxLock(input.mailbox, { readOnly: true });
+            const lock = await this.openToRead(client, input.mailbox);
             try {
                 const query = { all: true };
                 if (input.beforeUid !== undefined)
@@ -260,7 +273,7 @@ export class ImapGateway {
     // includeSystem: only for the server's own handling of system emails, never for a tool.
     async fetchSummary(mailbox, uid, options = {}) {
         return this.read(async (client) => {
-            const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+            const lock = await this.openToRead(client, mailbox);
             try {
                 const m = await this.fetchOneFresh(client, uid, { envelope: true, flags: true, size: true });
                 if (!m || (!options.includeSystem && isSystemMessageId(m.envelope?.messageId)))
@@ -274,7 +287,7 @@ export class ImapGateway {
     }
     async fetchRaw(mailbox, uid, options = {}) {
         const inspect = async (client) => {
-            const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+            const lock = await this.openToRead(client, mailbox);
             try {
                 const meta = await this.fetchOneFresh(client, uid, { size: true, envelope: true });
                 // A system email gets exactly the answer a missing one does.
@@ -311,7 +324,7 @@ export class ImapGateway {
     // its envelope and References header, read-only, never the whole message.
     async fetchReplyHeaders(mailbox, uid) {
         return this.read(async (client) => {
-            const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+            const lock = await this.openToRead(client, mailbox);
             try {
                 const m = await this.fetchOneFresh(client, uid, { envelope: true, headers: ['references'] });
                 // A system email gets exactly the answer a missing one does.
@@ -332,7 +345,7 @@ export class ImapGateway {
     }
     async findByMessageId(mailbox, messageId) {
         return this.read(async (client) => {
-            const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+            const lock = await this.openToRead(client, mailbox);
             try {
                 const r = await client.search({ header: { 'Message-ID': messageId } }, { uid: true });
                 const found = Array.isArray(r) ? r : [];
@@ -363,7 +376,7 @@ export class ImapGateway {
     }
     async findThreadUids(mailbox, rootMessageId, options = {}) {
         const inspect = async (client) => {
-            const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+            const lock = await this.openToRead(client, mailbox);
             try {
                 const anchors = [...new Set([rootMessageId, options.relatedMessageId].filter((id) => Boolean(id)))];
                 const r = await client.search({ or: anchors.flatMap(id => ['Message-ID', 'References', 'In-Reply-To'].map(name => ({ header: { [name]: id } }))) }, { uid: true });
@@ -391,7 +404,7 @@ export class ImapGateway {
     async findGmailThread(seedMailbox, seedUid, allMail, options) {
         const { client } = options;
         let threadId;
-        const seedLock = await client.getMailboxLock(seedMailbox, { readOnly: true });
+        const seedLock = await this.openToRead(client, seedMailbox);
         try {
             threadId = (await client.fetchOne(seedUid, { threadId: true }, { uid: true }) || undefined)?.threadId;
         }
@@ -400,7 +413,7 @@ export class ImapGateway {
         }
         if (!threadId)
             return [];
-        const lock = await client.getMailboxLock(allMail, { readOnly: true });
+        const lock = await this.openToRead(client, allMail);
         try {
             const r = await client.search({ threadId }, { uid: true });
             return Array.isArray(r) ? r : [];
@@ -517,7 +530,7 @@ export class ImapGateway {
         const newUids = [...new Set(reported.values())].filter(Boolean);
         if (!newUids.length)
             return new Map(sorted.map(uid => [uid, undefined]));
-        const lock = await client.getMailboxLock(destination, { readOnly: true });
+        const lock = await this.openToRead(client, destination);
         let seen;
         try {
             seen = await client.fetchAll(newUids.join(','), { envelope: true }, { uid: true });
@@ -548,7 +561,7 @@ export class ImapGateway {
     }
     async refuseSystem(mailbox, uids) {
         await this.read(async (client) => {
-            const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+            const lock = await this.openToRead(client, mailbox);
             try {
                 await this.refuseSystemOn(client, uids);
             }
@@ -559,7 +572,7 @@ export class ImapGateway {
     }
     async setFlag(mailbox, uid, flag, value) {
         const desired = async () => this.read(async (client) => {
-            const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+            const lock = await this.openToRead(client, mailbox);
             try {
                 const m = await this.fetchOneFresh(client, uid, { flags: true });
                 if (!m)
@@ -628,7 +641,7 @@ export class ImapGateway {
             if (error instanceof MailError && error.code === 'MESSAGE_NOT_FOUND')
                 throw error;
             const states = await this.read(async (client) => {
-                const lock = await client.getMailboxLock(mailbox, { readOnly: true });
+                const lock = await this.openToRead(client, mailbox);
                 try {
                     return await client.fetchAll(set, { flags: true }, { uid: true });
                 }

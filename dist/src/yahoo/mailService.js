@@ -209,7 +209,8 @@ export class MailService {
                     warnings.push('The mail provider accepted the message, but Universal Mail could not save its copy in Sent. Do not resend automatically.');
                 }
             }
-            return success({ messageId: args.messageId, operationId: args.operationId, accepted: info.accepted, rejected: info.rejected }, 'The mail provider accepted the message.', 'SENT', warnings);
+            // sentAt: by the server's clock (POL-14), so an AI needn't guess the time.
+            return success({ messageId: args.messageId, operationId: args.operationId, accepted: info.accepted, rejected: info.rejected, sentAt: new Date().toISOString() }, 'The mail provider accepted the message.', 'SENT', warnings);
         }
         catch (error) {
             const command = String(error?.command ?? '').toUpperCase();
