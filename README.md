@@ -6,7 +6,7 @@ server in your own Google Cloud account. Your AI can search, read, organize
 and, when you allow it, send your email. You choose, per app and per account,
 what each may do.
 
-**Status:** version 2.3.0 (1.0). Installed and in daily use: every tool tested
+**Status:** version 2.3.1 (1.0). Installed and in daily use: every tool tested
 live on Yahoo with Claude and with ChatGPT; Gmail connected live. What changed in each version:
 [CHANGELOG.md](CHANGELOG.md).
 
@@ -50,6 +50,7 @@ npm run test:protocol  # the slow tier: real mail servers in containers, the bui
                        # setup.js and the server image; needs Docker Desktop running
 npm run coverage       # unit tier plus the coverage floor, which may only rise
 npm run typecheck
+npm run test:all       # all of the above, in order
 ```
 
 The loop: pick the next test from the plan, see it fail for the right reason,

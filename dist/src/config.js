@@ -4,8 +4,9 @@ const schema = z.object({
     PORT: z.coerce.number().int().positive().default(8080),
     YAHOO_EMAIL: z.string().email(),
     YAHOO_APP_PASSWORD: z.string().min(8),
-    // builtin: v2's own sign-in server (design §6.5).
-    AUTH_MODE: z.enum(['bearer', 'oauth', 'oauth-setup', 'builtin']).default('bearer'),
+    // builtin: v2's own sign-in server (design §6.5), what setup installs.
+    // bearer: direct mode, one shared secret, for the test kit and local development.
+    AUTH_MODE: z.enum(['bearer', 'builtin']).default('bearer'),
     MCP_ACCESS_SECRET: z.string().min(24).optional(),
     SENT_COPY_MODE: z.enum(['unverified', 'yahoo', 'append']).default('unverified'),
     IMAP_HOST: z.string().default('imap.mail.yahoo.com'),
