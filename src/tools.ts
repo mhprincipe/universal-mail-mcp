@@ -1,3 +1,4 @@
+import { measuring, rounded, type Phases } from './timing.js';
 import { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import type { MailAccess } from './multiMail.js';
@@ -89,15 +90,18 @@ function wrap(fn: (args: any) => Promise<unknown>) {
 // long, whether it worked and its code. Never the arguments or the answer,
 // which can hold mail. Account names are plain labels, so they may be logged.
 const ACCOUNT_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
+// DIA-13: and where the time went, by step (src/timing.ts).
 function timed(name: string, handler: (args: any, extra: any) => Promise<any>) {
   return async (args: any, extra: any) => {
     const started = Date.now();
-    const answer = await handler(args, extra);
+    const phases: Phases = {};
+    const answer = await measuring(phases, () => handler(args, extra));
     const envelope = answer?.structuredContent as { ok?: unknown; code?: unknown } | undefined;
     const account = typeof args?.account === 'string' && ACCOUNT_NAME.test(args.account) ? args.account : undefined;
     console.log(JSON.stringify({
       event: 'tool', name, ...(account ? { account } : {}), ms: Date.now() - started,
-      ok: envelope?.ok === true, ...(envelope?.ok === true ? {} : { code: typeof envelope?.code === 'string' ? envelope.code : 'unknown' })
+      ok: envelope?.ok === true, ...(envelope?.ok === true ? {} : { code: typeof envelope?.code === 'string' ? envelope.code : 'unknown' }),
+      phases: rounded(phases)
     }));
     return answer;
   };

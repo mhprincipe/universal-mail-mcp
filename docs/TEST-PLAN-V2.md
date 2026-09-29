@@ -519,6 +519,7 @@ what it says about the person's position is true.
 | DIA-10 | on the installed server (with your page), setup's check token reaches the check and gets the report; without a token no report is given *(added: found live: the page's route answered 403)* | U |
 | DIA-11 | `node setup.js report` includes the server's own log once a project exists (oldest first, JSON whole); unreadable: one plain line, still exit 0 *(added: asked for live)* | M |
 | DIA-12 | every tool call leaves one log line: the tool, the account, its time, its outcome and code; never its arguments or answer *(added: for the live performance test)* | U |
+| DIA-13 | each tool's log line also says where its time went, by step name only: a login, each kind of mail server command, the SMTP send, parsing (total ms and count); a step that fails still counts; two calls at once keep their own *(added: the fourth live run: tuning by guesswork missed get_thread and send)* | U+P |
 
 ---
 
@@ -592,10 +593,10 @@ also where a later reader finds out why a line of code exists.
 | Release | 10 |
 | Page and emails | 17 |
 | Everyday polish | 13 |
-| Diagnostics | 14 |
+| Diagnostics | 15 |
 | Subscription | 33 |
-| **New** | **319** |
-| **Total** | **474** |
+| **New** | **320** |
+| **Total** | **475** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

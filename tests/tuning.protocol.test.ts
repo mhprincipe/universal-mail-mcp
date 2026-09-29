@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startProduct, type Product } from '../testkit/src/product.js';
 import { seed } from '../testkit/src/seed.js';
 
@@ -76,5 +76,20 @@ describe('the slow tools, tuned', () => {
     expect(raw).toMatch(/^Subject: Re: Question$/m);
     expect(raw).toMatch(/^In-Reply-To: <q@example\.invalid>$/m);
     expect(raw).toMatch(/^References: <earlier@example\.invalid> <q@example\.invalid>$/m);
+  });
+  it('DIA-13 on a real server: a read shows its mail commands and parsing (no new login on the kept connection); a send shows SMTP (added: the fourth live run)', async () => {
+    const log = vi.spyOn(console, 'log');
+    try {
+      const [m] = (await seed(p.server, { messages: [{ mailbox: 'INBOX', subject: 'Timed' }] })).messages;
+      await p.ok('get_email', { mailbox: 'INBOX', uid: m!.uid });
+      await p.ok('get_email', { mailbox: 'INBOX', uid: m!.uid });
+      await p.call('send_email', { to: ['friend@example.invalid'], subject: 'timed', text: 'hi' });
+      const lines = log.mock.calls.map(([l]) => { try { return JSON.parse(String(l)); } catch { return {}; } }).filter(e => e.event === 'tool');
+      const read = lines.filter(e => e.name === 'get_email').at(-1);
+      expect(read.phases['imap.fetchOne'].n).toBeGreaterThanOrEqual(1);
+      expect(read.phases.parse.n).toBe(1);
+      expect(read.phases['imap.connect']).toBeUndefined();
+      expect(lines.find(e => e.name === 'send_email').phases['smtp.send'].n).toBe(1);
+    } finally { log.mockRestore(); }
   });
 });

@@ -1,3 +1,4 @@
+import { phase } from '../timing.js';
 import { randomUUID } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import type { ImapFlow } from 'imapflow';
@@ -55,7 +56,7 @@ export class MailService {
 
   async getEmail(mailbox: string, uid: number, options: { client?: ImapFlow } = {}): Promise<ToolEnvelope<MessageDetail>> {
     const { summary, raw } = await this.imap.fetchRaw(mailbox, uid, options);
-    const parsed = await this.parser.parse(raw);
+    const parsed = await phase('parse', () => this.parser.parse(raw));
     const cap = this.config.MAX_BODY_CHARS;
     const { text, html } = parsed;
     const truncated = (text?.length ?? 0) > cap || (html?.length ?? 0) > cap;
@@ -180,10 +181,10 @@ export class MailService {
     const recipients = [...args.to, ...(args.cc ?? []), ...(args.bcc ?? [])]
       .filter(address => { const key = address.toLowerCase(); return seen.has(key) ? false : (seen.add(key), true); });
     try {
-      const info = await this.smtp.sendMail({
+      const info = await phase('smtp.send', () => this.smtp.sendMail({
         envelope: { from: this.config.YAHOO_EMAIL, to: recipients },
         raw: args.raw
-      });
+      }));
       const warnings: string[] = [];
       if (this.config.SENT_COPY_MODE === 'yahoo') {
         // The provider files its own copy, a minute or so later (seen in every
@@ -276,7 +277,7 @@ export class MailService {
       from: this.config.YAHOO_EMAIL, to: [to], subject, text,
       messageId: systemMessageId(), headers: { 'X-Universal-Mail': 'system' }
     });
-    await this.smtp.sendMail({ envelope: { from: this.config.YAHOO_EMAIL, to: [to] }, raw: built.raw });
+    await phase('smtp.send', () => this.smtp.sendMail({ envelope: { from: this.config.YAHOO_EMAIL, to: [to] }, raw: built.raw }));
     return built.messageId;
   }
 

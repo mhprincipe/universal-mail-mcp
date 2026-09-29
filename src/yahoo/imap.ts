@@ -1,3 +1,4 @@
+import { phase, timedClient } from '../timing.js';
 import { ImapFlow } from 'imapflow';
 import { imapTransport, type AppConfig } from '../config.js';
 import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
@@ -66,7 +67,7 @@ export class ImapGateway {
 
   // Calls take turns: one IMAP connection has one selected folder at a time.
   run<T>(fn: (client: ImapFlow) => Promise<T>): Promise<T> {
-    const mine = this.turn.then(() => this.runNow(fn));
+    const mine = phase('imap.wait', () => this.turn).then(() => this.runNow(fn));
     this.turn = mine.catch(() => undefined);
     return mine;
   }
@@ -93,7 +94,8 @@ export class ImapGateway {
       if (await this.answers(kept.client)) return kept.client;
     }
     if (kept) this.drop(kept.client);
-    const client = this.client();
+    // Each command it sends is timed, for the tool's log line (DIA-13).
+    const client = timedClient(this.client(), 'imap');
     await client.connect();
     this.session = { client, lastUsed: this.clock.now() };
     return client;

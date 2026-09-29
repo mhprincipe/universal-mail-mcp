@@ -38,4 +38,19 @@ describe('the tool log', () => {
     expect(refused).toMatchObject({ name: 'move_email', ok: false });
     expect(typeof refused.code).toBe('string');
   });
+
+  it('DIA-13 the line also says where the time went, by step name only (added: the fourth live run)', async () => {
+    p = await startPage();
+    const grant = p.app.signin!.grants.connect(claude, 'Claude', { me: ['read', 'organize', 'send'] });
+    const folder = createCanary('folder-name');
+    await call(p, grant.connection, 'search_email', { account: 'me', mailbox: folder, limit: 1 });
+    const line = p.logged().filter(e => e.event === 'tool').at(-1)!;
+    // Nothing listens for the test account: the time went on trying to connect.
+    expect(line.phases['imap.connect']).toMatchObject({ n: expect.any(Number), ms: expect.any(Number) });
+    expect(line.phases['imap.connect'].n).toBeGreaterThanOrEqual(1);
+    expect(JSON.stringify(line.phases)).not.toContain(folder);
+    // Every line has a breakdown, a refused call's too.
+    await call(p, grant.connection, 'move_email', { mailbox: 'INBOX', uid: 1, destination: 'x', destinationAccount: 'work' });
+    expect(p.logged().filter(e => e.event === 'tool').at(-1)!.phases).toBeTypeOf('object');
+  });
 });
