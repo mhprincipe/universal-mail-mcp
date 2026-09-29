@@ -34,7 +34,7 @@ export const TOOL_CODES = {
 
   // ── Accounts and permissions ──
   'MAIL-ACCOUNT-REQUIRED': { remedy: 'More than one account is connected. Ask the owner which account to use, then pass it as account.' },
-  'MAIL-ACCOUNT-UNKNOWN': { remedy: 'Use one of the account names listed in the tool\'s account description.' },
+  'MAIL-ACCOUNT-UNKNOWN': { remedy: 'Use one of the account names this app can use. If the owner just added an account, ask them to give this app permission for it on their Universal Mail page.' },
   'MAIL-NOT-PERMITTED': { remedy: 'Tell the owner this app needs that permission; they can grant it on their Universal Mail page.' },
   'MAIL-SENDING-OFF': { remedy: 'The owner turned sending off for this account. Tell them; they can turn it on on their Universal Mail page. Do not send from another account instead unless they ask.' },
   'MAIL-CROSS-ACCOUNT': { remedy: 'Mail can only move within one account. Move it within its own account instead.' },

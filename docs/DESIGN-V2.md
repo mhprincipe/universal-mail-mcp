@@ -1,6 +1,9 @@
 # Universal Mail MCP — design
 
-**Status:** final proposal, 2026-09-24. Nothing here is built yet.
+**Status:** built and in use (version 2.3.0, 2026-09-29). Written as the
+proposal of 2026-09-24; where the build learned something, the section says
+so, and the journal (docs/TDD-JOURNAL.md) has the detail. The user-facing
+summary is docs/USER-GUIDE.md.
 **Product:** Universal Mail MCP. In anything a person reads, "Universal Mail".
 **Carries forward:** the v1 mail engine, its 16 tools and its safety rules.
 **Replaces:** everything around the engine — sign-in, app approval,
@@ -47,8 +50,8 @@ Universal Mail fixes the second without touching the first.
 - **Any number of email accounts** for one person. Designed and tested for up
   to 20.
 - **AI apps that support the open MCP sign-in standard with published app
-  identities:** Claude (tested) and ChatGPT (supported, not yet verified) at
-  launch. Others are added in updates as they adopt the standard.
+  identities:** Claude and ChatGPT, both tested live (ChatGPT verified
+  2026-09-29). Others are added in updates as they adopt the standard.
 - **The 16 v1 tools**, extended for multiple accounts.
 - **Your Universal Mail page** for everyday management, and email
   notifications for anything that matters.
@@ -224,8 +227,9 @@ The app sends you to an approval page on **your own server**:
 - **After a code approval, the page offers the upgrade:** *"Use your fingerprint
   next time instead of a code? [Set it up] [Not now]"*.
 
-App status is honest on the page and in the docs: **Claude — tested.
-ChatGPT — supported, not yet verified.**
+App status is honest on the page and in the docs: **Claude and ChatGPT are
+both tested** (ChatGPT since 2026-09-29, as a developer-mode app on
+chatgpt.com, Plus or higher).
 
 ### 3.5 Everyday use
 
@@ -265,7 +269,7 @@ Sign in with a code emailed to your sign-in address, or with your fingerprint.
 
 | Section | What you can do |
 |---|---|
-| Accounts | see status; **Fix it**; add an account (the same guided checks as setup); change a password; remove an account |
+| Accounts | see status; **Fix it**; add an account (the same guided checks as setup); change a password; **rename** an account (added 2026-09-29: its password and permissions carry over); remove an account |
 | Connected apps | see what each app can reach and when it last did; change its permissions; disconnect |
 | Connect an AI app | current step-by-step instructions for each supported app |
 | Sending | turn sending on or off per account; see the last Sent-copy test |
@@ -844,7 +848,7 @@ the fresh-install test passes.
 ### 8.6 "Tested with"
 
 Your page and the docs list apps as **tested** only after a real connection
-passes the live tier. At launch: Claude tested, ChatGPT supported.
+passes the live tier. Now: Claude and ChatGPT tested.
 
 ---
 
@@ -884,6 +888,11 @@ delete.
 ---
 
 ## 10. Migrating from v1
+
+*(In practice, 2026-09: the owner installed v2 fresh in its own project,
+connected Claude and ChatGPT to it, then switched v1 off (its service set to
+internal ingress) before deleting it. The in-place conversion below remains
+in setup for anyone who prefers it.)*
 
 Running setup in the Cloud Shell that holds the v1 deployment offers **Update
 from version 1**:
@@ -935,8 +944,8 @@ Each phase ends usable, and only when its exit test passes.
   machine tasks.
 - Setup is the test run; "done" requires a passing self-test.
 - One message standard and one code registry.
-- Claude labelled **tested**; ChatGPT **supported, not yet verified**, until
-  proven.
+- Apps labelled **tested** only once proven live: Claude, and ChatGPT since
+  2026-09-29.
 
 ### Deferred — and what would bring each back
 

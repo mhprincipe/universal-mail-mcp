@@ -55,6 +55,22 @@ describe('a reply reads only the headers it needs', () => {
   });
 });
 
+describe('names on addresses', () => {
+  it('POL-15 a "name" that is only the address again (as Yahoo lists it) is left out; a real name is kept (added: found live)', async () => {
+    const c = client(() => ({
+      uid: 9, flags: new Set(), size: 10,
+      envelope: {
+        messageId: '<m@x>',
+        from: [{ name: 'SomeOne@example.invalid', address: 'someone@example.invalid' }],
+        to: [{ name: 'Friend', address: 'friend@example.invalid' }, { name: '', address: 'other@example.invalid' }]
+      }
+    }));
+    const summary = await gatewayOn(c).fetchSummary('INBOX', 9);
+    expect(summary.from).toEqual([{ address: 'someone@example.invalid' }]);
+    expect(summary.to).toEqual([{ name: 'Friend', address: 'friend@example.invalid' }, { address: 'other@example.invalid' }]);
+  });
+});
+
 describe('a folder already open for changes', () => {
   // Measured live (DIA-13): every switch between reading a folder and changing
   // it made Yahoo open it again, 0.4-1 s each, and "find, change, find again"

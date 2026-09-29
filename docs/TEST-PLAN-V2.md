@@ -390,6 +390,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | SET-81 | Check and fix checks Google's side first: billing unlinked, services off and a missing $1 alarm are put back; closed billing is reported and nothing else is touched *(added)* | M |
 | SET-82 | the built launcher in a real terminal (Linux, Node 24, a stand-in gcloud): every question's last line stays on screen; Ctrl+C gives a plain, logged stop, never "unsettled top-level await" *(added: found live)* | K (package) |
 | SET-83 | rerunning an unfinished install with a newer release starts the newer server before the check; the same release leaves it alone *(added: found live)* | M |
+| SET-84 | an app password typed with the spaces its provider shows (Gmail) works as it is *(added: adding Gmail live)* | U |
 
 ### Release *(added during build)*
 
@@ -455,6 +456,7 @@ what it says about the person's position is true.
 | PG-16 | every page works at phone width without sideways scrolling | W |
 | PG-17 | "last used" per app comes from the request log | S |
 | PG-18 | your page says how to connect ChatGPT as it is today: Plus or higher, Developer mode, a new app, the address, OAuth *(added: connecting ChatGPT)* | U |
+| PG-19 | an account can be renamed on your page: its password, settings and every app's permissions carry over; apps use the new name at once, on the same connection (no new sign-in); a taken or malformed name is refused; you're emailed *(added: the owner, after Gmail was named for its address)* | U |
 
 **Exit:** adding an account, fixing a revoked password and disconnecting an app all work at phone size.
 
@@ -476,6 +478,7 @@ what it says about the person's position is true.
 | POL-12 | `since` and `before` honour the time of day: the server is asked a day either side (IMAP compares whole days) and the exact times are applied; the limit counts only what's shown *(added: found live)* | U |
 | POL-13 | a subject search returns only messages whose subject really contains what was asked (case and spacing aside): Yahoo's "Re: X" also finds "X" *(added: found live)* | U |
 | POL-14 | a send's answer says when the provider accepted it (`sentAt`, the server's clock), so an AI needn't guess the time *(added: asked for in the live runs)* | U |
+| POL-15 | a display "name" that is only the address again (as Yahoo lists it) is left out, so search and get_email agree; a real name is kept *(added: found live)* | U |
 
 **Exit:** POL-11 green. That's v1's 90-call cleanup done in 10 or fewer.
 
@@ -594,15 +597,15 @@ also where a later reader finds out why a line of code exists.
 | Test kit | 13 |
 | Engine | 83 |
 | Sign-in | 64 |
-| Setup | 70 |
+| Setup | 71 |
 | Installed server | 6 |
 | Release | 10 |
-| Page and emails | 18 |
-| Everyday polish | 14 |
+| Page and emails | 19 |
+| Everyday polish | 15 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| **New** | **326** |
-| **Total** | **481** |
+| **New** | **329** |
+| **Total** | **484** |
 
 Tests added during the build are marked in their tables, with the reason.
 This copy, in `universal-mail-mcp`, is the canonical plan.

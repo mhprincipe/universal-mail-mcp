@@ -1,6 +1,6 @@
 {
   "name": "universal-mail-mcp",
-  "version": "2.2.6",
+  "version": "2.3.0",
   "private": true,
   "description": "Universal Mail MCP: one person's email accounts, on any common provider, connected to their AI apps. Built test-first from docs/TEST-PLAN-V2.md.",
   "type": "module",

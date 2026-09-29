@@ -1,235 +1,138 @@
 # Operations runbook
 
-Day-to-day running, deploying, and diagnosing. Written from what actually went
-wrong, not from what should theoretically go wrong.
+Releasing Universal Mail, keeping an installation current, and finding out
+what happened. Written from what was actually done and seen during the live
+install and tuning (September 2026). For using it, see
+[USER-GUIDE.md](USER-GUIDE.md).
 
-## Deploying
+---
 
-The release flow is a ZIP into Cloud Shell, because Cloud Shell keeps its own
-checkout and will not otherwise see your changes.
+## Where things live
 
-### One command
-
-```bash
-mkdir -p ~/ymm-<version> && unzip -o ~/<release>.zip -d ~/ymm-<version> && cd ~/ymm-<version>
-```
-
-```bash
-bash scripts/release.sh --apply
-```
-
-That runs the whole process: preflight, `npm ci`, the local gate, the
-deployment, and the post-deploy remote checks. It carries the owner, client
-allowlist and Sent mode for you, so there are no exports to forget.
-
-Three modes:
-
-| Command | Does |
+| What | Where |
 |---|---|
-| `bash scripts/release.sh` | preview — local gate and deployment plan, changes nothing |
-| `bash scripts/release.sh --apply` | the full release |
-| `bash scripts/release.sh --check` | remote checks only; no build, no deploy |
+| Source | `main` branch of this repository |
+| What installs run | the append-only `release` branch: setup's files, pinned to one image |
+| The update feed | `latest.json` on the `release` branch (`{"version": …, "security": …}`) |
+| The server image | the repository named in `scripts/release-files.mjs` (`REPOSITORY`), signed with cosign |
+| An installation's settings | two Secret Manager secrets in the owner's project: `universal-mail-state` (accounts, grants, no passwords) and `universal-mail-credentials` (app passwords and keys) |
+| One-time release setup | `scripts/release-setup.sh` (done), `scripts/license-setup.sh` (only when selling) |
 
-Every identifier has a default and can be overridden from the environment:
-`OAUTH_OWNER_SUB`, `OAUTH_CLIENT_IDS`, `SENT_COPY_MODE`, `ALLOWED_ORIGINS`,
-`PROJECT`, `REGION`, `SERVICE`, `OAUTH_RESOURCE`. It never touches secrets —
-Yahoo credentials stay in Secret Manager.
+Nothing secret is ever logged: passwords, keys and tokens are masked, and the
+tool log never contains arguments or answers.
 
-If `SENT_COPY_MODE` is anything other than `unverified` it confirms before
-deploying, because that setting makes sending live. Pass `--yes` to skip.
+---
 
-`--check` is the one to run when something looks wrong: it verifies health,
-discovery (including the four advertised scopes and browser-origin
-reachability), the 401 challenges, and prints the last hour of token-rejection
-reasons.
+## Releasing a version
 
-### The same thing by hand
+1. **Both test tiers green** on your machine: `npm run coverage` (the unit tier
+   and the coverage floor) and `npm run test:protocol` (real mail servers in
+   Docker, the built setup and the server image).
+2. **Version** in three places: `package.json`, the top two `version` lines of
+   `package-lock.json` (only those), and `src/version.ts`.
+3. **Record it**: the journal row(s) in `docs/TDD-JOURNAL.md`, the plan rows
+   and totals in `docs/TEST-PLAN-V2.md`, and `CHANGELOG.md`.
+4. **Commit and push `main`.** CI (`.github/workflows/ci.yml`) runs the
+   typecheck, the unit tier with its coverage floor, and the slow tier. Wait for
+   it to pass. Without the `gh` CLI:
+   `curl -s "https://api.github.com/repos/mhprincipe/universal-mail-mcp/actions/runs?head_sha=$(git rev-parse HEAD)"`.
+5. **Tag the commit** `vX.Y.Z` (an annotated tag; put "security" in its first
+   line to mark a security release) and push the tag. Pin the tag to the commit
+   you mean (`git tag -a vX.Y.Z <sha> -m "…"`) and check that commit's subject
+   first: a script once tagged the previous commit when a check stopped the
+   commit.
+6. **The release workflow** (`.github/workflows/release.yml`) checks the tag
+   matches `package.json`, runs CI again, builds the image (with
+   `UPDATE_FEED_URL` and `LICENSE_SERVICE_URL`), pushes and signs it, pins
+   setup's files to its digest, and appends a commit to the `release` branch.
+7. **Verify**, from anywhere:
+   - `latest.json` on the release branch shows the new version;
+   - the image manifest for the version answers 200 (anonymous token from the
+     registry), and a `.sig` tag exists for it;
+   - a fresh `git clone -b release` shows the new "Release X.Y.Z" commit on top
+     of the previous one (append-only: `git merge-base --is-ancestor HEAD~1 HEAD`).
 
-```bash
-npm ci && npm run verify
-```
+---
 
-`npm ci` alone is not enough — `verify` is what produces `dist/`, and the deploy
-script lives there. Stop if `verify` fails.
+## Keeping an installation current
 
-```bash
-export OAUTH_OWNER_SUB='auth0|…' \
-       OAUTH_CLIENT_IDS='tpc_…,https://claude.ai/oauth/mcp-oauth-client-metadata' \
-       SENT_COPY_MODE='yahoo' \
-       ALLOWED_ORIGINS=''
-```
-
-```bash
-node dist/scripts/deploy-oauth.js activate --apply
-```
-
-Drop `--apply` to preview without changing anything.
-
-### `activate --apply` replaces the entire environment
-
-This is deliberate — no stale credential or auth switch survives a deploy — but
-it means **anything you set with `gcloud run services update` is erased by the
-next deploy.** Everything must come from those exports.
-
-`SENT_COPY_MODE` and `ALLOWED_ORIGINS` used to be hardcoded, which silently
-re-disabled sending on every deploy. They are now carried from the environment,
-validated, and still forced off in `setup` mode.
-
-### What the script does for you
-
-Checks Auth0's live discovery matches the pinned issuer and aborts before
-touching Cloud Run if not. Confirms the Cloud Run canonical URL still equals
-`OAUTH_RESOURCE`. Writes `verification/oauth-rollback-<timestamp>.json` with the
-current revision and traffic — **keep that file.** Re-runs `npm run verify` and
-refuses to deploy on failure. Then re-checks public discovery and the 401
-challenges.
-
-Success reads: `PASS: public OAuth discovery and unauthenticated rejection.`
-
-### Rollback
+In Cloud Shell:
 
 ```bash
-gcloud run services update-traffic yahoo-mail-mcp --project=yahoo-mail-mcp --region=us-central1 --to-revisions=RECORDED_REVISION=100
+cd ~/universal-mail && git pull
+node setup.js
 ```
 
-Use the revision from the saved rollback record, not a guess. Rolling back to a
-bearer-era revision also restores bearer authentication.
+The menu: **1 Check and fix** (tests everything, repairs what it can),
+**2 Update** (installs the latest release, tests it, puts the old one back if
+the test fails), **3 Show my address**, **4 Remove**.
 
-### Note on `deploy.sh`
+Cloud Shell remembers a default project; installs and log commands name the
+project explicitly, so it doesn't matter, but pointing it at the installation
+avoids confusion: `gcloud config set project <project-id>`.
 
-The legacy `scripts/deploy.sh` refuses to run against an OAuth service, on
-purpose, so it cannot silently downgrade you to a shared secret. It also cannot
-perform a first deploy, because it requires an existing service.
+---
 
-## Diagnosing a failure
+## Finding out what happened
 
-### Is the service healthy?
+### Every tool call (timing and outcome)
+
+One JSON line per call: the tool, the account, total milliseconds, ok/code, and
+`phases`, where the time went, by step (DIA-12, DIA-13):
 
 ```bash
-curl -s https://<host>/health
-curl -s https://<host>/.well-known/oauth-protected-resource/mcp
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="universal-mail" AND jsonPayload.event="tool"' --project=<project-id> --freshness=1h --limit=300 --format='value(timestamp,jsonPayload.name,jsonPayload.account,jsonPayload.ms,jsonPayload.ok,jsonPayload.code,jsonPayload.phases)'
 ```
 
-Both should be 200 without credentials. The discovery document should list your
-resource, issuer, and four scopes including `offline_access`.
-
-### Did the client reach us at all?
-
-```bash
-gcloud logging read 'logName="projects/<project>/logs/run.googleapis.com%2Frequests" AND resource.labels.service_name="yahoo-mail-mcp"' --project=<project> --limit=30 --format='table(timestamp,httpRequest.requestMethod,httpRequest.status,httpRequest.requestUrl)'
-```
-
-**Use the requests log, not container stdout.** The app emits almost no
-application logs, so a stdout query shows startup lines and nothing else no
-matter how much traffic arrives. That distinction cost hours once.
-
-| Result | Meaning |
+| Phase | Is |
 |---|---|
-| no entries | the client never called. Not a server problem |
-| 403 | Host or Origin rejected |
-| 401 | token rejected — read the reason below |
-| 200 | it is working |
+| `imap.connect` | a new login to the mail server (the kept connection was gone) |
+| `imap.getMailboxLock` | opening a folder (SELECT/EXAMINE); 0 when it was already open |
+| `imap.search`, `imap.fetchAll`, `imap.fetchOne`, `imap.messageMove`, `imap.messageFlagsAdd`, … | mail server commands by kind |
+| `imap.noop` | the check of a connection idle for over two minutes |
+| `imap.wait` | queued behind another call on the same account (two apps at once) |
+| `smtp.send` | handing a message to the provider |
+| `parse` | reading a message safely |
 
-### Why was the token rejected?
+Reference numbers from the live Yahoo runs on 2.2.6: every Yahoo command
+~0.3-0.4 s; a re-find after a change ~0.6 s; get_email ~0.7 s; send 2.4 s and
+reply 3.2 s (all `smtp.send`); get_thread ~6 s (mostly Yahoo's header search).
+
+### Requests the server turned away
 
 ```bash
-gcloud logging read 'resource.labels.service_name="yahoo-mail-mcp" AND jsonPayload.event="token_rejected"' --project=<project> --limit=10 --format='table(timestamp,jsonPayload.reason)'
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="universal-mail" AND httpRequest.status>=400' --project=<project-id> --freshness=1d --limit=50 --format='value(timestamp,httpRequest.requestMethod,httpRequest.status,httpRequest.latency,httpRequest.requestUrl)'
 ```
 
-| Reason | Fix |
-|---|---|
-| `azp_not_allowed` | the client's `azp` is not in `OAUTH_CLIENT_IDS`. See the CIMD note below |
-| `azp_missing` | the provider omitted `azp` |
-| `sub_mismatch` | wrong Auth0 user, or `OAUTH_OWNER_SUB` is wrong |
-| `scope_missing` | RBAC is on but permissions are not in the access token |
-| `lifetime_too_long` | the Auth0 API token lifetime exceeds 900s. Default is 86400 |
-| `jwt:…:aud` | audience mismatch — the `resource` parameter did not map |
-| `jwt:ERR_JWS_INVALID` | not a JWT. Usually an unauthenticated probe; harmless in isolation |
-| `unknown` | an error without a reason — report it |
+Normal entries: `401` on `/…/mcp` (an app asked before signing in) and `404` on
+`/.well-known/openid-configuration` (ChatGPT probing before it finds the OAuth
+metadata).
 
-All of these return an identical opaque 401 to the client. The log is the only
-way to tell them apart.
+### Everything, for help
 
-## Adding a new AI client
+- On the page: **Health → Check that everything works** gives a report.
+- In Cloud Shell: `node setup.js report` gives setup's log and the server's own
+  log. Both contain no mail and no secrets, so they can be pasted into an AI.
 
-Two steps, neither automatic.
+### The live test
 
-**1. Register it in Auth0.** Applications → Create Application → **Import from
-URL**, and paste the client's CIMD document URL. Auth0 will not accept an
-unknown CIMD URL at `/authorize`; it fails with `Unknown client` *before* the
-login page, which looks like "nothing happened".
+`docs/LIVE-TEST-PROMPT.md` has prompts that exercise every tool on one account
+(Yahoo-style and Gmail), only on messages the test creates. Run one app at a
+time: two at once queue behind each other on the same account and blur the
+timings.
 
-Claude's is `https://claude.ai/oauth/mcp-oauth-client-metadata`.
+---
 
-Then authorize it on the API's **Application Access** tab.
+## Known provider behaviour
 
-**2. Add it to `OAUTH_CLIENT_IDS`** and redeploy.
-
-### The `azp` trap
-
-Auth0 shows a CIMD client **two** identifiers: the external CIMD URL, and an
-internal `tpc_…` id. They are not interchangeable, and which one lands in `azp`
-is not documented.
-
-For Claude, `azp` is the **CIMD URL**, not the `tpc_…` value — despite the
-dashboard and the token-exchange log both displaying `tpc_…`. Listing both is
-safe: each names one specific client and neither is a wildcard.
-
-## Auth0 settings that matter
-
-On the API whose identifier is exactly your `OAUTH_RESOURCE`:
-
-| Setting | Value | If wrong |
+| Provider | Behaviour | Handled by |
 |---|---|---|
-| Maximum Access Token Lifetime | **900** | default 86400 rejects every token |
-| Implicit/Hybrid Lifetime | 900 | must not exceed the maximum |
-| Signing Algorithm | RS256 | only RS256 is accepted |
-| Allow Offline Access | **On** | no refresh token; dies after 15 minutes |
-| Permissions | `mail.read`, `mail.write`, `mail.send` | undefined scopes are dropped, producing `scope: null` |
-| Enable RBAC | **On** | otherwise user assignments are ignored |
-| Add Permissions in the Access Token | **On** | otherwise `scope` stays empty |
-| Client Access (M2M) | **No apps** | an M2M token's `sub` is the app, never the owner |
-
-Scope is the intersection of three things: what the client requests, what the
-app may request (Application Access), and **what the user is assigned** (User
-Management → Users → Permissions). The user assignment is usually the binding
-constraint and the one people forget.
-
-## Enabling sending
-
-Sending is gated by `SENT_COPY_MODE` independently of token scope.
-
-- `unverified` — both send tools fail before SMTP. The default
-- `yahoo` — Yahoo saves the Sent copy; the server never appends
-- `append` — the server saves the copy after confirming none exists
-
-Verify before switching: send exactly one uniquely-identified message, then
-search Sent by its `Message-ID`. Exactly one copy is required. Two means both
-Yahoo and the server saved one — go back to `unverified`. Zero means Yahoo's
-copy is delayed; the server warns rather than resending, and you re-check later.
-
-A bounded observation cannot prove Yahoo will never create a delayed copy.
-Re-check the Message-ID hours later before trusting the result.
-
-`yahoo` is the safer verified mode: it never appends, so the server cannot be
-the source of a duplicate.
-
-## Things that look broken but are not
-
-**`UNKNOWN` results.** Deliberate. The server refuses to guess whether a side
-effect happened.
-
-**A write tool returning 403.** Your token lacks the scope. Check the user's
-assigned permissions in Auth0, not just the application's.
-
-**`get_thread` warning about 200 messages per folder.** Always emitted. It
-means the result may be incomplete, not that something failed.
-
-**`truncated: true`.** A body exceeded `MAX_BODY_CHARS` and was clipped. The
-message says so.
-
-**A `FOLDER_NOT_FOUND` on a folder you can see.** Matching is exact except for
-`INBOX`. Check case and spelling.
-
-**A stale UID after any write.** Expected. Re-resolve with
-`search_email { messageId }`.
+| Yahoo | header search misses new mail | a check of the newest 200 messages (ENG-21, ENG-22) |
+| Yahoo | batch moves report old/new UIDs mispaired | pairs checked by Message-ID (ENG-20) |
+| Yahoo | subject search ignores "Re:" | results checked against the subject (POL-13) |
+| Yahoo | files its own Sent copy a minute or two later | no lookup; the answer says so (ENG-24) |
+| Yahoo | IMAP dates compare whole days | a day either side, exact times applied (POL-12) |
+| Yahoo | lists the address as its own display name | dropped (POL-15) |
+| Yahoo | adds a `References … .ref` header to mail it stores | its own; Universal Mail adds none (ENG-19) |
+| Any | an open folder isn't told about new mail until asked | not found → NOOP → asked once more (ENG-25) |
+| Gmail | folders are labels; archive = All Mail; threads by conversation id | provider profile |

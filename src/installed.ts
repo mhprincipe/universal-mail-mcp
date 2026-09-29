@@ -127,6 +127,8 @@ export type InstallStore = SavedSignin & {
   // Accounts: each takes effect at once (the server rebuilds its mail access).
   putAccount(account: InstalledAccount, password?: string): void;
   removeAccount(name: string): void;
+  // Everything carries over, the password included.
+  renameAccount(from: string, to: string): void;
   onAccountsChange(listener: () => void): void;
   // Anything else kept in the state (reminders sent, and so on).
   note(part: Record<string, unknown>): void;
@@ -174,6 +176,19 @@ export function createInstallStore(installed: Extract<Installed, { status: 'read
       state = { ...state, accounts: state.accounts.filter(a => a.name !== name) };
       saveState();
       const { [name]: _removed, ...kept } = credentials.passwords;
+      credentials = { ...credentials, passwords: kept };
+      saveCredentials();
+      accountsChanged();
+    },
+    renameAccount(from, to) {
+      // The password under its new name first, then the state, then the old
+      // name's password goes: at every step the state names no account
+      // without one.
+      credentials = { ...credentials, passwords: { ...credentials.passwords, [to]: credentials.passwords[from]! } };
+      saveCredentials();
+      state = { ...state, accounts: state.accounts.map(a => a.name === from ? { ...a, name: to } : a) };
+      saveState();
+      const { [from]: _old, ...kept } = credentials.passwords;
       credentials = { ...credentials, passwords: kept };
       saveCredentials();
       accountsChanged();

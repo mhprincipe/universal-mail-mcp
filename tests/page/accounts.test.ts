@@ -90,6 +90,47 @@ describe('accounts on your page', () => {
     expect(p.sent.at(-1)!.subject).toBe('An email account was removed from Universal Mail');
   });
 
+  it('PG-19 an account can be renamed: its password, settings and every app\'s permissions carry over, and apps use the new name at once without reconnecting (added: the owner, after Gmail was named for its address)', async () => {
+    p = await startPage();
+    const grant = p.app.signin!.grants.connect(claude, 'Claude', { me: ['read'], work: ['read', 'organize', 'send'] });
+    await p.signIn();
+    await p.act('/accounts/sending', { name: 'work', on: 'off' });
+    const form = (await p.get()).html;
+    expect(form).toMatch(/id="account-work">[\s\S]*?\/accounts\/rename/);
+
+    expect((await p.act('/accounts/rename', { name: 'work', to: 'me' })).html).toContain('That name is taken');
+    expect((await p.act('/accounts/rename', { name: 'work', to: 'Two words' })).html).toContain('Names use lowercase letters, digits and hyphens');
+    expect((await p.act('/accounts/rename', { name: 'gone', to: 'office' })).html).toContain('That account isn&#39;t here any more.');
+    expect(p.app.signin!.accountNames()).toEqual(['me', 'work']);
+
+    const page = await p.act('/accounts/rename', { name: 'work', to: ' Office ' });
+    expect(page.html).toContain('work is now called office');
+    expect(page.html).toContain('id="account-office"');
+    expect(page.html).not.toContain('id="account-work"');
+    expect(p.app.signin!.accountNames()).toEqual(['me', 'office']);
+    expect(last(p.saves.credentials).passwords).toEqual({ me: 'me-app-password', office: 'work-app-password' });
+    const saved = last(p.saves.state).accounts;
+    expect(saved.map((a: { name: string }) => a.name)).toEqual(['me', 'office']);
+    expect(saved[1]).toMatchObject({ email: 'work@example.invalid', sending: false });
+    // The same connection (no new sign-in), with the permissions under the new name.
+    expect(p.app.signin!.grants.get(claude)).toMatchObject({ connection: grant.connection, accounts: { me: ['read'], office: ['read', 'organize', 'send'] } });
+    expect(p.app.signin!.grants.get(claude)!.accounts).not.toHaveProperty('work');
+    expect(p.sent.at(-1)).toMatchObject({ subject: 'An email account was renamed' });
+    expect(p.sent.at(-1)!.text).toContain('"work" is now "office"');
+  });
+
+  it('PG-03 an app password pasted with the spaces its provider shows (Gmail\'s "abcd efgh ijkl mnop") works as it is (added: adding Gmail)', async () => {
+    p = await startPage();
+    p.accepted['side@example.invalid'] = 'abcdefghijklmnop';
+    p.accepted['me@example.invalid'] = 'qrstuvwxyzabcdef';
+    await p.signIn();
+    const page = await p.act('/accounts/add', { email: 'side@example.invalid', password: ' abcd efgh ijkl mnop ', name: 'side' });
+    expect(page.html).toContain('side was added');
+    expect(last(p.saves.credentials).passwords.side).toBe('abcdefghijklmnop');
+    await p.act('/accounts/password', { name: 'me', password: 'qrst uvwx yzab cdef' });
+    expect(last(p.saves.credentials).passwords.me).toBe('qrstuvwxyzabcdef');
+  });
+
   it('PG-05 the last account can\'t be removed', async () => {
     p = await startPage();
     await p.signIn();

@@ -1,5 +1,25 @@
 # Open questions, decisions made for you, and the live-install checklist
 
+## Where things stand (2026-09-29, version 2.3.0)
+
+The live install passed (2026-09-28). Every tool works live on Yahoo with Claude
+and with ChatGPT; Gmail is connected; timings are measured and tuned; v1 is
+switched off. What's still open:
+
+| Open | Whose | Notes |
+|---|---|---|
+| A full live run on Gmail | owner | the Gmail prompt in LIVE-TEST-PROMPT.md |
+| Deleting v1 for good | owner | about a week after it was switched off: its project, its Auth0 tenant, and only v1's Yahoo app password |
+| Selling | owner | the steps under "Selling it" below |
+| Free-trial detection | owner's decision | decision 10 |
+| The phone test | owner | checklist step 6 |
+| Other providers live (iCloud, Fastmail, AOL, Zoho) | whoever uses them first | tested against simulated servers only |
+| Outlook.com and Microsoft 365 | future | needs Microsoft sign-in (OAuth): no app passwords there |
+| Gemini, Meta's Muse | parked | no way yet to add a custom connector with a proper sign-in |
+
+The sections below are the record as written at the end of development
+(2026-09-25), with what has happened since marked in place.
+
 Written 2026-09-25 at the end of the autonomous development run. Development
 is complete except where a decision is yours, or only the live Google install
 can settle something. Each decision below was made with a safe default and can
@@ -56,17 +76,17 @@ to diagnose each one.
 1. **Done 2026-09-27:** image `sha256:9fffa6d4…`, signed, publicly readable; release branch and feed live. Push the tag `v2.0.0` (the version is already 2.0.0): the pipeline tests,
    builds, signs, pins the image in `release.json`, and publishes the
    `release` branch with the feed. Watch it under the repository's Actions tab.
-2. Open Cloud Shell from the release branch and run `node setup.js` with one
+2. **Done 2026-09-28** (passed 6/6 on 2.1.0). Open Cloud Shell from the release branch and run `node setup.js` with one
    Yahoo account. Watch for: every step's wording, the free-trial question,
    the sending test, and "All done".
 3. If anything stops: `node setup.js report`, paste it into your AI.
-4. Connect Claude with the AI-app address; approve with a code. Ask it to list
+4. **Done 2026-09-28; ChatGPT too, 2026-09-29.** Connect Claude with the AI-app address; approve with a code. Ask it to list
    folders, search, and read a message (nothing is marked read).
-5. On your page: sign in, add a fingerprint, run Check, copy the report.
+5. **Done.** On your page: sign in, add a fingerprint, run Check, copy the report.
 6. From a phone: add an account, fix a password, disconnect an app (the
    Phase 4 exit test).
 7. Run `node setup.js` again: the menu; Check and fix; Show my address.
-8. Only then convert v1 (menu appears on its own in v1's project), and keep v1
+8. **Superseded:** v2 was installed fresh beside v1, then v1 was switched off (2026-09-29). Only then convert v1 (menu appears on its own in v1's project), and keep v1
    until you're happy.
 
 ## Selling it: what only you can do (design §13)

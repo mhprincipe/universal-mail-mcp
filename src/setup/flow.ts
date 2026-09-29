@@ -1,5 +1,5 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
-import type { ProviderProfile } from '../providers.js';
+import { appPassword, type ProviderProfile } from '../providers.js';
 import { GoogleRefusal, NotReadyYet, type GoogleCloud } from './google.js';
 import { MESSAGES, renderLine, type MessageCode } from './messages.js';
 import { runMenu } from './menu.js';
@@ -290,7 +290,7 @@ async function askPasswords(d: SetupDeps, list: Array<Omit<Account, 'provider'> 
     for (;;) {
       // After an unreachable or insecure server, the same password is tried again.
       if (password === undefined) {
-        password = await d.ask('ASK-APP-PASSWORD', {}, { hidden: true });
+        password = appPassword(await d.ask('ASK-APP-PASSWORD', {}, { hidden: true }));
         d.log.secret(password);
       }
       const result = await d.mail.check(a.address, password);

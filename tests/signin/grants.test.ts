@@ -89,7 +89,11 @@ describe('grants', () => {
     const app = await mcp(await connect(claude, { personal: ['read'], work: ['read', 'organize'] }));
     expect(await app.call('list_folders', { account: 'personal' })).toMatchObject({ ok: true });
     expect(await app.call('list_folders', { account: 'family' })).toMatchObject({
-      code: 'MAIL-ACCOUNT-UNKNOWN', message: "There's no account called 'family'. Your accounts are: personal, work."
+      // Found live: "There's no account called 'gmail'" read as "the add failed"
+      // when this app just hadn't been given it. Still names only its own.
+      code: 'MAIL-ACCOUNT-UNKNOWN',
+      message: "No account called 'family' is available to this app. It can use: personal, work. If you've just added an account, give this app permission for it on your Universal Mail page.",
+      remedy: 'Use one of the account names this app can use. If the owner just added an account, ask them to give this app permission for it on their Universal Mail page.'
     });
     expect(await app.call('move_email', { account: 'personal', mailbox: 'INBOX', uid: 1, destination: 'Archive' })).toMatchObject({
       code: 'MAIL-NOT-PERMITTED', message: "This app isn't allowed to organize mail in personal. You can change that on your Universal Mail page."

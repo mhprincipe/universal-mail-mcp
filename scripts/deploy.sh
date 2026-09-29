@@ -26,7 +26,7 @@ process.stdin.on("end", () => {
   const env = service.spec?.template?.spec?.containers?.[0]?.env ?? [];
   const mode = env.find(item => item.name === "AUTH_MODE")?.value;
   if (mode && mode !== "bearer") {
-    console.error("STOP: OAuth service cannot use the legacy deploy script. See docs/OAUTH_ROLLOUT.md.");
+    console.error("STOP: OAuth service cannot use the legacy deploy script. See docs/v1/OAUTH_ROLLOUT.md.");
     process.exitCode = 1;
   }
 });'

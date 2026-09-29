@@ -228,4 +228,13 @@ describe('setup flow', () => {
     expect(stateOf(w).accounts.map((a: { email: string }) => a.email)).toEqual(['fleet@gmail.com']);
     expect(Object.keys(credentialsOf(w).passwords)).toEqual(['gmail']);
   });
+
+  it('SET-84 an app password typed with the spaces its provider shows works as it is (added: adding Gmail live)', async () => {
+    w = createWorld();
+    const password = w.accounts['fleet@gmail.com']!.password;
+    const spaced = ` ${password.replace(/(.{4})/g, '$1 ')} `;
+    w.answers('fleet@gmail.com', '', spaced, '', '', 'n');
+    expect(await w.run()).toEqual({ outcome: 'done' });
+    expect(credentialsOf(w).passwords.gmail).toBe(password);
+  });
 });

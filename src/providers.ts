@@ -26,6 +26,10 @@ export type Detection =
 // Capabilities: Yahoo's MOVE and UIDPLUS were confirmed live by v1's batch
 // move; Gmail's and Fastmail's are published. AOL, iCloud and Zoho are not yet
 // confirmed, so they carry no expectations.
+// An app password as the person pasted it: providers show them in groups
+// (Gmail: "abcd efgh ijkl mnop"), and none contains a space, so spaces go.
+export const appPassword = (typed: string) => typed.replace(/\s+/g, '');
+
 export const profiles: ProviderProfile[] = [
   {
     id: 'yahoo', name: 'Yahoo Mail',

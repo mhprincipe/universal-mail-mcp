@@ -37,6 +37,6 @@ describe('accounts', () => {
     let failure: unknown;
     try { accounts.resolve('fleet', ['personal']); } catch (error) { failure = error; }
     expect(failure).toMatchObject({ code: 'MAIL-ACCOUNT-UNKNOWN', details: { valid: ['personal'] } });
-    expect((failure as Error).message).toContain('Your accounts are: personal.');
+    expect((failure as Error).message).toContain('It can use: personal.');
   });
 });

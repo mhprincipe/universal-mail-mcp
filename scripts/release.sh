@@ -76,7 +76,7 @@ remote_checks() {
     --project="$PROJECT" --limit=5 --freshness=1h \
     --format='table(timestamp,jsonPayload.reason)' 2>/dev/null \
     || echo "   (could not read logs — not fatal)"
-  echo "   Reasons are explained in docs/OPERATIONS.md"
+  echo "   Reasons are explained in docs/v1/OPERATIONS.md"
 }
 
 if [ "$MODE" = "check" ]; then
