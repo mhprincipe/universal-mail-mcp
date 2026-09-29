@@ -8,6 +8,9 @@ every live run, every mutation check).
 
 ## Tiers
 
+**Everything automated, in one command:** `npm run test:all` (typecheck, the
+unit tier with its coverage floor, then the slow tier).
+
 | Tier | Command | What it proves | Needs |
 |---|---|---|---|
 | **Unit** | `npm test`, or `npm run coverage` (with the floor) | logic, recovery rules, the tools over real HTTP and MCP with the mail server faked, setup against a fake Google, the page, sign-in | nothing; it can't reach the internet (`testkit/src/networkGuard.ts`) |
@@ -17,6 +20,28 @@ every live run, every mutation check).
 `npm run typecheck` runs in CI too. CI runs both automated tiers on every push;
 a release runs them again before building.
 
+## What's proven where
+
+| What | Automated tiers | Live |
+|---|---|---|
+| The 16 tools, their rules and answers | unit (faked mail) and slow (real IMAP/SMTP servers in Yahoo, Gmail and minimal layouts, with broken connections) | the live-test prompt on Yahoo (every tool, with Claude and with ChatGPT); Gmail connected, its full prompt not yet run |
+| Provider quirks | slow tier, with the fault proxy imitating each (for example Yahoo's missing header search) | found on Yahoo, then turned into tests |
+| Sign-in (identity documents, PKCE, tokens, approval, passkeys, grants) | unit, with Claude's and ChatGPT's real published documents and a software passkey | Claude and ChatGPT connected and approved |
+| Your page | unit, over real HTTP with a session, forms and a software passkey | used on a desktop browser; the phone test is open |
+| Setup | unit against a simulated Google; the built `setup.js` in a real terminal (slow tier) | the owner's install (2026-09-28) |
+| The server image and the release pipeline | slow tier (image, publishing scripts); CI and the release workflow | every release, verified afterwards (OPERATIONS.md) |
+| Subscription and the license service | unit | not yet: Paddle's sandbox |
+| Timings | none (they depend on the provider) | the tool log's `phases` from live runs |
+| The owner's own mailbox, now | **Check that everything works** on the page (per account: saves a test message, marks, flags and moves it, and leaves it in Trash, with a "Universal Mail check" folder) | on demand |
+
+## How the tests reach the product
+
+- **Direct mode** (`AUTH_MODE=bearer`, one shared secret) is how the test kit
+  drives the whole product over real HTTP and MCP without a sign-in dance.
+  Setup never installs it: installations are always `builtin`.
+- **Built-in sign-in** is tested on its own (`tests/signin/`) and through the
+  page, with grants made directly where a test is about something else.
+
 ## Rules
 
 - **Test IDs are unique.** Check the plan's highest ID in a group before naming
@@ -24,7 +49,8 @@ a release runs them again before building.
 - **A test that passes the first time it runs is mutation-checked**: break the
   code it protects and see it fail. Mutants that survive mean a missing case,
   and the case is added. The journal records each check (for example 12 of 12).
-- **The coverage floor only rises** (`vitest.config.ts` thresholds).
+- **The coverage floor only rises** (`vitest.config.ts` thresholds; raised to
+  93/83/94/96 on 2.3.1, the levels the suite reaches).
 - **Nothing reaches a real mailbox from the automated tiers.** Live checks on
   the owner's mailbox are read-only unless the owner asks for more.
 - **Write test code with an editor, not through shell-quoted scripts**: twice a

@@ -17,7 +17,7 @@ import { createMailCheck } from './setup/realMail.js';
 // line per event (secrets are never passed to it).
 const serverLog = { secret: () => undefined, event: (event: Record<string, unknown>) => console.log(JSON.stringify({ event: 'mail_check', ...event })) };
 import { buildMcpServer } from './tools.js';
-import { loadOAuthConfig, createTokenVerifier, requiredScopes } from './oauth.js';
+import { VERSION } from './version.js';
 
 export type AppDeps = {
   // Save a new version of each saved record (Secret Manager, in production).
@@ -65,14 +65,21 @@ function createInstalledApp(env: NodeJS.ProcessEnv, deps: AppDeps) {
 export function createApp(env: NodeJS.ProcessEnv = process.env, deps: AppDeps = {}) {
   if (env.UNIVERSAL_MAIL_STATE !== undefined || env.UNIVERSAL_MAIL_CREDENTIALS !== undefined) return createInstalledApp(env, deps);
   if (env.AUTH_MODE === 'builtin') return createSigninApp(env);
-  const oauth = loadOAuthConfig(env);
-  const verifyToken = oauth?.AUTH_MODE === 'oauth' ? createTokenVerifier(oauth) : undefined;
-  const metadataUrl = oauth ? new URL('/.well-known/oauth-protected-resource/mcp', oauth.OAUTH_RESOURCE).href : '';
+  // v1's Auth0 modes are retired (SIG-85): a setting naming one stops the
+  // start, rather than quietly running with another way in.
+  if (env.AUTH_MODE !== undefined && env.AUTH_MODE !== 'bearer') throw new Error(`AUTH_MODE ${env.AUTH_MODE} isn't supported: use builtin.`);
+  return createDirectApp(env);
+}
+
+// Direct mode: one shared secret, no sign-in server. It drives the product in
+// the test kit and in local development; setup never installs it (installs are
+// always builtin, above).
+function createDirectApp(env: NodeJS.ProcessEnv) {
   let mail: MailRouter | undefined;
   const getMail = () => mail ??= createMailRouter(loadAccounts(env));
   const allowedHosts = csv(env.ALLOWED_HOSTS);
   const app = express();
-  app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'yahoo-mail-mcp', version: '0.1.0' }));
+  app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'universal-mail', version: VERSION }));
   const protectedApp = createMcpExpressApp({
     host: '0.0.0.0',
     allowedHosts: allowedHosts.length ? allowedHosts : ['localhost', '127.0.0.1'],
@@ -86,45 +93,9 @@ export function createApp(env: NodeJS.ProcessEnv = process.env, deps: AppDeps = 
     return a.length === b.length && timingSafeEqual(a, b);
   }
 
-  // Discovery carries no credentials and must stay reachable from a browser
-  // origin, so it sits beside /health rather than behind Host/Origin validation.
-  // offline_access is advertised because access tokens are capped at 900 seconds.
-  if (oauth) {
-    app.get(['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'], (_req, res) => res.json({
-      resource: oauth.OAUTH_RESOURCE, authorization_servers: [oauth.OAUTH_ISSUER],
-      scopes_supported: ['mail.read', 'mail.write', 'mail.send', 'offline_access'], bearer_methods_supported: ['header']
-    }));
-  }
-
-  async function bearer(req: Request, res: Response, next: NextFunction) {
-    // Discovery is public during setup; no credential can unlock mailbox access.
-    if (oauth?.AUTH_MODE === 'oauth-setup') {
-      res.setHeader('WWW-Authenticate', `Bearer resource_metadata="${metadataUrl}", scope="mail.read"`);
-      res.status(401).json({ error: 'unauthorized' }); return;
-    }
+  function bearer(req: Request, res: Response, next: NextFunction) {
     const header = req.header('authorization');
     const token = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
-    if (verifyToken) {
-      let scopes: string[];
-      try { scopes = (await verifyToken(token ?? '')).scopes; }
-      catch (error) {
-        // Reason only: which check failed, never a token or claim value.
-        console.log(JSON.stringify({ event: 'token_rejected', reason: (error as { reason?: string })?.reason ?? 'unknown' }));
-        res.setHeader('WWW-Authenticate', `Bearer resource_metadata="${metadataUrl}", scope="mail.read"`);
-        res.status(401).json({ error: 'unauthorized' }); return;
-      }
-      if (Array.isArray(req.body)) { res.status(400).json({ error: 'Batch requests are not supported' }); return; }
-      let needed = ['mail.read'];
-      if (req.body?.method === 'tools/call') {
-        try { needed = requiredScopes(req.body?.params?.name); }
-        catch { res.status(400).json({ error: 'Unknown tool' }); return; }
-      }
-      if (needed.some(scope => !scopes.includes(scope))) {
-        res.setHeader('WWW-Authenticate', `Bearer error="insufficient_scope", resource_metadata="${metadataUrl}", scope="${needed.join(' ')}"`);
-        res.status(403).json({ error: 'insufficient_scope' }); return;
-      }
-      next(); return;
-    }
     if (!sameSecret(token, env.MCP_ACCESS_SECRET)) {
       res.status(401).json({ error: 'unauthorized' });
       return;
@@ -140,7 +111,7 @@ export function createApp(env: NodeJS.ProcessEnv = process.env, deps: AppDeps = 
     }
     catch { res.status(503).json({ status: 'not_ready', error: 'Mail connectivity check failed.' }); }
   });
-  const handler = createMcpHandler(() => buildMcpServer(getMail(), !!oauth));
+  const handler = createMcpHandler(() => buildMcpServer(getMail()));
   const node = toNodeHandler(handler);
   protectedApp.all('/mcp', bearer, async (req, res) => { await node(req, res, req.body); });
   app.use(protectedApp);

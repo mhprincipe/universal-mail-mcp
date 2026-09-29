@@ -3,6 +3,7 @@ import { request, type Server } from 'node:http';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createApp } from '../src/app.js';
 import { MailService } from '../src/yahoo/mailService.js';
+import { VERSION } from '../src/version.js';
 
 const env = { YAHOO_EMAIL: 'dummy@example.invalid', YAHOO_APP_PASSWORD: 'dummy-password', MCP_ACCESS_SECRET: 'dummy-token-at-least-24-chars', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' };
 const expected = ['search_email','get_email','get_thread','create_draft','update_draft','send_email','reply_email','move_email','archive_email','mark_read','mark_unread','flag_email','trash_email','restore_email','list_folders','create_folder'].sort();
@@ -20,7 +21,12 @@ describe('HTTP and live MCP contract with dummy credentials', () => {
   it('health works without secrets and returns no mailbox details', async () => {
     const response = await fetch(`${await start({})}/health`);
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ status: 'ok', service: 'yahoo-mail-mcp', version: '0.1.0' });
+    expect(await response.json()).toEqual({ status: 'ok', service: 'universal-mail', version: VERSION });
+  });
+  it('SIG-85 the retired v1 sign-in modes (Auth0) are refused at start, never quietly replaced by another (added: the clean-up)', () => {
+    for (const mode of ['oauth', 'oauth-setup']) {
+      expect(() => createApp({ ...env, AUTH_MODE: mode, OAUTH_ISSUER: 'https://id.example/', OAUTH_JWKS_URI: 'https://id.example/keys', OAUTH_RESOURCE: 'https://mail.example/mcp', OAUTH_OWNER_SUB: 'o', OAUTH_CLIENT_IDS: 'c' }), mode).toThrow();
+    }
   });
   it.each(['/mcp', '/ready'])('%s rejects missing and wrong bearer credentials', async path => {
     const base = await start();

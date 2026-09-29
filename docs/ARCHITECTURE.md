@@ -29,7 +29,7 @@ versions when your page changes something. The server keeps no mail.
 
 | Path | What |
 |---|---|
-| `src/index.ts`, `src/app.ts` | start-up; the Express app and its routes |
+| `src/index.ts`, `src/app.ts` | start-up: an installation (setup's saved settings), the built-in sign-in, or direct mode (one shared secret, for the test kit and local development only) |
 | `src/tools.ts` | the 16 MCP tools: schemas, descriptions, answer shaping, the per-call log line |
 | `src/timing.ts` | where a call's time goes (`phases`): per-call context, timed IMAP commands |
 | `src/multiMail.ts` | the router: which accounts and permissions a caller has; read-only when a subscription lapses |

@@ -1,8 +1,9 @@
 # Tool reference
 
 The 16 tools an AI app sees, what they take, what they return and how they
-fail. The source of truth is `src/tools.ts` (descriptions, schemas) and
-`src/oauth.ts` (permissions); this page summarizes them.
+fail. The source of truth is `src/tools.ts`: descriptions, schemas, and each tool's
+permission (its `mail.service(account, 'read' | 'organize' | 'send')` call).
+This page summarizes them.
 
 ## Accounts and permissions
 

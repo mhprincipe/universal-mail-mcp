@@ -4,6 +4,18 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.3.1 (2026-09-29): a clean test suite
+
+- v1's Auth0 sign-in modes are gone from the code; a setting naming one now
+  stops the start instead of running some other way (SIG-85). Installations
+  are unaffected: they always use the built-in sign-in.
+- v1's deployment scripts, smoke tests and verify runner are gone (about 25
+  files), with the 74 tests that only checked them.
+- `npm run test:all` runs everything automated in one command.
+- The coverage floors rose to what the suite reaches (93/83/94/96).
+- The direct mode's health answer names the product and its real version.
+- TESTING.md says what is proven where: automated, live, or not yet.
+
 ## 2.3.0 (2026-09-29): 1.0
 
 The first release to call finished for everyday use: every tool tested live on

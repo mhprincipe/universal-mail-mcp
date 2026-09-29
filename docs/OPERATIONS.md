@@ -25,9 +25,9 @@ tool log never contains arguments or answers.
 
 ## Releasing a version
 
-1. **Both test tiers green** on your machine: `npm run coverage` (the unit tier
-   and the coverage floor) and `npm run test:protocol` (real mail servers in
-   Docker, the built setup and the server image).
+1. **Everything green** on your machine: `npm run test:all` (typecheck, the unit
+   tier and its coverage floor, then the slow tier: real mail servers in Docker,
+   the built setup and the server image).
 2. **Version** in three places: `package.json`, the top two `version` lines of
    `package-lock.json` (only those), and `src/version.ts`.
 3. **Record it**: the journal row(s) in `docs/TDD-JOURNAL.md`, the plan rows

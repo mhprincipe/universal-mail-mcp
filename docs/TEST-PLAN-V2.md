@@ -333,6 +333,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | SIG-82 | hidden system emails don't use up a search page: the limit counts only what the AI sees; older messages fill in; paging covers every visible message once *(added: found live, "asked for 5, got 3")* | U+P |
 | SIG-83 | ChatGPT signs in with its real published document (extra fields, `private_key_jwt`, `jwks_uri`): as a public client like Claude, or with a signed assertion, with or without `client_id`, for the code and for refresh *(added: connecting ChatGPT)* | U |
 | SIG-84 | an assertion that doesn't prove the app is `invalid_client` (401), never ignored: another key, issuer, subject or audience; expired or hours-long; no or reused one-time id; unknown type; a different `client_id`; keys named off the app's own origin (another trusted app's included) or unreachable *(added: connecting ChatGPT)* | U |
+| SIG-85 | v1's retired Auth0 sign-in modes are refused at start, never quietly replaced by another way in *(added: the clean-up, 2.3.1)* | U |
 
 **Exit:** a scripted Claude-like client connects to two accounts with Auth0 absent, and the whole Phase 2 suite is green.
 
@@ -596,7 +597,7 @@ also where a later reader finds out why a line of code exists.
 | v1 baseline | 155 |
 | Test kit | 13 |
 | Engine | 83 |
-| Sign-in | 64 |
+| Sign-in | 65 |
 | Setup | 71 |
 | Installed server | 6 |
 | Release | 10 |
@@ -604,8 +605,10 @@ also where a later reader finds out why a line of code exists.
 | Everyday polish | 15 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| **New** | **329** |
-| **Total** | **484** |
+| **New** | **330** |
+| **Total** | **485** |
 
 Tests added during the build are marked in their tables, with the reason.
+Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they
+checked (the Auth0 sign-in modes, v1's deployment scripts and verify runner).
 This copy, in `universal-mail-mcp`, is the canonical plan.
