@@ -47,8 +47,7 @@ function trustedUrl(clientId, trusted) {
         throw new SigninRefusal('untrusted_origin');
     return url;
 }
-export async function fetchClientDocument(clientId, trusted, deps) {
-    const url = trustedUrl(clientId, trusted);
+async function fetchJson(url, deps) {
     // Resolve first, vet every answer, then connect to a vetted address: a
     // second lookup can't swap in a private one (DNS rebinding).
     const addresses = await deps.resolve(url.hostname).catch(() => []);
@@ -58,20 +57,39 @@ export async function fetchClientDocument(clientId, trusted, deps) {
     // Anything but a plain 200 is refused; a redirect is never followed.
     if (response.status !== 200)
         throw new SigninRefusal('fetch_status');
-    let doc;
     try {
-        doc = JSON.parse(response.body);
+        return JSON.parse(response.body);
     }
     catch {
         throw new SigninRefusal('document_invalid');
     }
-    const d = doc;
+}
+export async function fetchClientDocument(clientId, trusted, deps) {
+    const d = await fetchJson(trustedUrl(clientId, trusted), deps);
     const valid = d && d.client_id === clientId && Array.isArray(d.redirect_uris) && d.redirect_uris.length > 0
         && d.redirect_uris.every(uri => typeof uri === 'string')
-        && (d.client_name === undefined || typeof d.client_name === 'string');
+        && (d.client_name === undefined || typeof d.client_name === 'string')
+        && (d.jwks_uri === undefined || typeof d.jwks_uri === 'string');
     if (!valid)
         throw new SigninRefusal('document_invalid');
-    return { client_id: d.client_id, ...(d.client_name !== undefined ? { client_name: d.client_name } : {}), redirect_uris: d.redirect_uris };
+    return {
+        client_id: d.client_id, ...(d.client_name !== undefined ? { client_name: d.client_name } : {}), redirect_uris: d.redirect_uris,
+        ...(d.jwks_uri !== undefined ? { jwks_uri: d.jwks_uri } : {})
+    };
+}
+// The public keys an app signs with (private_key_jwt), from the address its
+// own document names, which must be on the app's own origin: a document can't
+// point the check at keys someone else holds.
+export async function fetchClientKeys(doc, trusted, deps) {
+    if (!doc.jwks_uri)
+        throw new SigninRefusal('no_client_keys');
+    const url = trustedUrl(doc.jwks_uri, trusted);
+    if (url.origin !== new URL(doc.client_id).origin)
+        throw new SigninRefusal('untrusted_origin');
+    const set = await fetchJson(url, deps);
+    if (!set || !Array.isArray(set.keys) || !set.keys.every(k => k && typeof k === 'object'))
+        throw new SigninRefusal('document_invalid');
+    return { keys: set.keys };
 }
 // Exact string match: no normalising, no prefixes, no case folding.
 export function redirectAllowed(doc, redirectUri) {
