@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MailError } from '../src/errors.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
+import { ImapGateway } from '../src/mail/imap.js';
 
 // ENG-18 (added: the owner's live baseline, 2026-09-28). Every tool call paid
 // about 3.3 s to open a new encrypted connection and log in, and multi-step

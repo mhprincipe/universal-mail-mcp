@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import type { FolderInfo, MessageDetail } from '../src/types.js';
-import { MailService } from '../src/yahoo/mailService.js';
+import { MailService } from '../src/mail/mailService.js';
 
 const config = loadConfig({ YAHOO_EMAIL: 'dummy@example.invalid', YAHOO_APP_PASSWORD: 'dummy-password', MCP_ACCESS_SECRET: 'dummy-token-at-least-24-chars', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' });
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadAccounts } from '../src/accountsConfig.js';
 import { loadConfig } from '../src/config.js';
 import { createSendLog } from '../src/sendLimits.js';
-import { MailService } from '../src/yahoo/mailService.js';
+import { MailService } from '../src/mail/mailService.js';
 import { startPage } from './page/pageHarness.js';
 
 // Send limits (added 2026-09-29, principle 4: it can't be turned into a spam

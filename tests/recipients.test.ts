@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { createSendLog } from '../src/sendLimits.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
-import { MailService } from '../src/yahoo/mailService.js';
+import { ImapGateway } from '../src/mail/imap.js';
+import { MailService } from '../src/mail/mailService.js';
 
 // First-time recipients (added 2026-09-29, principles 1 and 3): a send or reply
 // to an address this account has never written to is held, nothing sent, and

@@ -75,7 +75,7 @@ export class ImapGateway {
       host: this.config.IMAP_HOST,
       port: this.config.IMAP_PORT,
       ...imapTransport(this.config),
-      auth: { user: this.config.YAHOO_EMAIL, pass: this.config.YAHOO_APP_PASSWORD },
+      auth: { user: this.config.MAIL_ADDRESS, pass: this.config.MAIL_APP_PASSWORD },
       logger: false
     });
     c.on('error', () => undefined);
@@ -349,7 +349,7 @@ export class ImapGateway {
   // Has this account ever written to this address (RCP-01)? Its Sent folder,
   // To or Cc, read-only.
   async hasSentTo(sent: string, address: string): Promise<boolean> {
-    const own = this.config.YAHOO_EMAIL.toLowerCase();
+    const own = this.config.MAIL_ADDRESS.toLowerCase();
     const wanted = address.toLowerCase();
     return this.read(async client => {
       const lock = await this.openToRead(client, sent);

@@ -4,8 +4,8 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
 import { createApp } from '../src/app.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
-import { composeRaw } from '../src/yahoo/mime.js';
+import { ImapGateway } from '../src/mail/imap.js';
+import { composeRaw } from '../src/mail/mime.js';
 import { expectedTools } from '../scripts/verification-client.js';
 import { replyHeaders } from '../testkit/src/toolFixture.js';
 

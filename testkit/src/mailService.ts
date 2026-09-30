@@ -1,5 +1,5 @@
 import { loadConfig } from '../../src/config.js';
-import { MailService, type MailServiceOptions } from '../../src/yahoo/mailService.js';
+import { MailService, type MailServiceOptions } from '../../src/mail/mailService.js';
 import type { ImapServer } from './imapServer.js';
 
 // The product's own mail service, pointed at a test mail server — or at a fault

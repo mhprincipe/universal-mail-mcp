@@ -1,6 +1,6 @@
 import { createServer, type Socket } from 'node:net';
 import { afterEach, expect, it, vi } from 'vitest';
-import { MailService } from '../src/yahoo/mailService.js';
+import { MailService } from '../src/mail/mailService.js';
 import { loadConfig } from '../src/config.js';
 
 afterEach(() => vi.restoreAllMocks());

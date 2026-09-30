@@ -52,7 +52,7 @@ export function loadAccounts(env: NodeJS.ProcessEnv): NamedAccount[] {
       // Each account passes exactly the checks a single account does.
       const config = loadConfig({
         ...env,
-        YAHOO_EMAIL: account.email, YAHOO_APP_PASSWORD: password,
+        MAIL_ADDRESS: account.email, MAIL_APP_PASSWORD: password,
         IMAP_HOST: account.imap.host, IMAP_PORT: String(account.imap.port), IMAP_TLS: account.imap.tls,
         SMTP_HOST: account.smtp.host, SMTP_PORT: String(account.smtp.port), SMTP_TLS: account.smtp.tls,
         SENT_COPY_MODE: account.sentCopyMode,

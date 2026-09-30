@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { composeRaw } from '../src/yahoo/mime.js';
+import { composeRaw } from '../src/mail/mime.js';
 
 // ENG-19 (added: seen in the owner's live test, 2026-09-28). Drafts carried
 // a Message-ID ending @yahoo-mail-mcp.local, and every sent email a header

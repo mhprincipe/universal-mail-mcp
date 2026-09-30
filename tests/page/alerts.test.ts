@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VERSION } from '../../src/version.js';
-import { ImapGateway } from '../../src/yahoo/imap.js';
+import { ImapGateway } from '../../src/mail/imap.js';
 import { KEY, PUBLIC_URL, startPage } from './pageHarness.js';
 
 // The emails the server sends on its own (design §3.7).

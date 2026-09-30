@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../src/config.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
+import { ImapGateway } from '../src/mail/imap.js';
 
 // The tuned engine paths (ENG-22..25) at unit speed. What they send to a real
 // server is tests/tuning.protocol.test.ts.

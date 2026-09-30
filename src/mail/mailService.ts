@@ -41,7 +41,7 @@ export class MailService {
       host: config.SMTP_HOST,
       port: config.SMTP_PORT,
       ...smtpTransport(config),
-      auth: { user: config.YAHOO_EMAIL, pass: config.YAHOO_APP_PASSWORD },
+      auth: { user: config.MAIL_ADDRESS, pass: config.MAIL_APP_PASSWORD },
       logger: false,
       debug: false,
       connectionTimeout: 15_000,
@@ -169,7 +169,7 @@ export class MailService {
 
   async createDraft(input: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; text?: string; html?: string; inReplyTo?: string; references?: string[] }) {
     const drafts = await this.specialFolder('drafts');
-    const built = await composeRaw({ from: this.config.YAHOO_EMAIL, ...input }, true);
+    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, ...input }, true);
     try {
       const uid = await this.imap.append(drafts, built.raw, ['\\Draft']);
       return success({ mailbox: drafts, uid, messageId: built.messageId, operationId: built.operationId });
@@ -196,7 +196,7 @@ export class MailService {
     // leaves clients rendering stale content, so the update looks like a no-op.
     const bodyGiven = input.text !== undefined || input.html !== undefined;
     const built = await composeRaw({
-      from: this.config.YAHOO_EMAIL, to, cc, bcc,
+      from: this.config.MAIL_ADDRESS, to, cc, bcc,
       subject: input.subject ?? old.subject ?? '',
       text: bodyGiven ? input.text : old.text, html: bodyGiven ? input.html : old.html,
       inReplyTo: old.inReplyTo, references: old.references
@@ -218,18 +218,18 @@ export class MailService {
     // Send limits (LIM-01): checked before anything leaves.
     const now = this.clock.now();
     const { SEND_LIMIT_PER_HOUR: perHour, SEND_LIMIT_PER_DAY: perDay } = this.config;
-    if (this.sendLog.since(this.config.YAHOO_EMAIL, now - 60 * 60_000) >= perHour) {
+    if (this.sendLog.since(this.config.MAIL_ADDRESS, now - 60 * 60_000) >= perHour) {
       throw new MailError('MAIL-SEND-LIMIT', `This account has sent its limit of ${perHour} an hour. Nothing was sent.`, 'FAILED');
     }
-    if (this.sendLog.since(this.config.YAHOO_EMAIL, now - 24 * 60 * 60_000) >= perDay) {
+    if (this.sendLog.since(this.config.MAIL_ADDRESS, now - 24 * 60 * 60_000) >= perDay) {
       throw new MailError('MAIL-SEND-LIMIT', `This account has sent its limit of ${perDay} a day. Nothing was sent.`, 'FAILED');
     }
     // Its place is taken before it goes, so sends fired together can't all
     // pass the check (LIM-04); given back only when the provider refuses it.
-    this.sendLog.record(this.config.YAHOO_EMAIL, now);
+    this.sendLog.record(this.config.MAIL_ADDRESS, now);
     try {
       const info = await phase('smtp.send', () => this.smtp.sendMail({
-        envelope: { from: this.config.YAHOO_EMAIL, to: recipients },
+        envelope: { from: this.config.MAIL_ADDRESS, to: recipients },
         raw: args.raw
       }));
       const warnings: string[] = [];
@@ -253,16 +253,16 @@ export class MailService {
       const responseCode = Number(error?.responseCode ?? 0);
       // Refused before anything was sent: the server won't encrypt, and we won't send in the clear.
       if (command === 'STARTTLS' || error?.code === 'ETLS') {
-        this.sendLog.release(this.config.YAHOO_EMAIL, now);
+        this.sendLog.release(this.config.MAIL_ADDRESS, now);
         throw new MailError('SMTP_ENCRYPTION_UNAVAILABLE', "The mail server wouldn't encrypt the connection, so nothing was sent.", 'FAILED', false, { command, responseCode });
       }
       if (responseCode >= 400 && responseCode < 600) {
-        this.sendLog.release(this.config.YAHOO_EMAIL, now);
+        this.sendLog.release(this.config.MAIL_ADDRESS, now);
         throw new MailError('SMTP_REJECTED', `The mail provider rejected the message (${responseCode}).`, 'FAILED', false, { command, responseCode });
       }
       // Nodemailer also reports CONN when the socket closes after DATA. The
       // command label alone therefore cannot prove that delivery never began.
-      if (error?.code === 'EAUTH') { this.sendLog.release(this.config.YAHOO_EMAIL, now); throw classify(error); }
+      if (error?.code === 'EAUTH') { this.sendLog.release(this.config.MAIL_ADDRESS, now); throw classify(error); }
       // It may have gone: it keeps its place.
       throw new MailError('SEND_STATUS_UNKNOWN', 'The SMTP connection failed after delivery may have begun. The message was not retried.', 'UNKNOWN', false, { messageId: args.messageId, operationId: args.operationId, command });
     }
@@ -273,7 +273,7 @@ export class MailService {
   // made asks too, rather than guessing.
   private async holdForNewRecipients(recipients: string[], confirmed: boolean | undefined): Promise<void> {
     if (confirmed) return;
-    const own = this.config.YAHOO_EMAIL.toLowerCase();
+    const own = this.config.MAIL_ADDRESS.toLowerCase();
     const seen = new Set<string>();
     const others = recipients.filter(address => {
       const key = address.toLowerCase();
@@ -298,7 +298,7 @@ export class MailService {
   async sendEmail(input: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; text?: string; html?: string; newRecipientsConfirmed?: boolean }) {
     await this.holdForNewRecipients([...input.to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed);
     const { newRecipientsConfirmed: _confirmed, ...message } = input;
-    const built = await composeRaw({ from: this.config.YAHOO_EMAIL, ...message });
+    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, ...message });
     return this.sendRaw({ ...built, to: input.to, cc: input.cc, bcc: input.bcc });
   }
 
@@ -309,13 +309,13 @@ export class MailService {
     if (!primary) throw new MailError('NO_REPLY_ADDRESS', 'Original message has no usable reply address.');
     const to = new Set<string>([primary]);
     if (input.replyAll) {
-      for (const a of [...msg.to, ...msg.cc]) if (a.address.toLowerCase() !== this.config.YAHOO_EMAIL.toLowerCase()) to.add(a.address);
+      for (const a of [...msg.to, ...msg.cc]) if (a.address.toLowerCase() !== this.config.MAIL_ADDRESS.toLowerCase()) to.add(a.address);
     }
     const refs = [...msg.references];
     if (msg.messageId && !refs.includes(msg.messageId)) refs.push(msg.messageId);
     const subject = /^re:/i.test(msg.subject ?? '') ? (msg.subject ?? '') : `Re: ${msg.subject ?? ''}`;
     await this.holdForNewRecipients([...to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed);
-    const built = await composeRaw({ from: this.config.YAHOO_EMAIL, to: [...to], cc: input.cc, bcc: input.bcc, subject, text: input.text, html: input.html, inReplyTo: msg.messageId, references: refs });
+    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, to: [...to], cc: input.cc, bcc: input.bcc, subject, text: input.text, html: input.html, inReplyTo: msg.messageId, references: refs });
     return this.sendRaw({ ...built, to: [...to], cc: input.cc, bcc: input.bcc });
   }
 
@@ -349,16 +349,16 @@ export class MailService {
     return success({ sourceMailbox: mailbox, destination: canonical, moved }, `Moved ${uids.length} message(s) to ${canonical}.`, 'OK', warnings);
   }
 
-  get address(): string { return this.config.YAHOO_EMAIL; }
+  get address(): string { return this.config.MAIL_ADDRESS; }
 
   // The server's own emails (codes, notices): the system marker, a system
   // Message-ID, and no Sent copy. Never reachable from a tool.
   async sendSystemEmail(to: string, subject: string, text: string): Promise<string> {
     const built = await composeRaw({
-      from: this.config.YAHOO_EMAIL, to: [to], subject, text,
+      from: this.config.MAIL_ADDRESS, to: [to], subject, text,
       messageId: systemMessageId(), headers: { 'X-Universal-Mail': 'system' }
     });
-    await phase('smtp.send', () => this.smtp.sendMail({ envelope: { from: this.config.YAHOO_EMAIL, to: [to] }, raw: built.raw }));
+    await phase('smtp.send', () => this.smtp.sendMail({ envelope: { from: this.config.MAIL_ADDRESS, to: [to] }, raw: built.raw }));
     return built.messageId;
   }
 
@@ -394,7 +394,7 @@ export class MailService {
   // itself, in the given folder. Its ID is how the check finds it again.
   async saveCheckMessage(folder: string): Promise<ToolEnvelope<{ messageId: string }>> {
     const built = await composeRaw({
-      from: this.config.YAHOO_EMAIL, to: [this.config.YAHOO_EMAIL], messageId: `<${randomUUID()}@check.universal-mail.invalid>`,
+      from: this.config.MAIL_ADDRESS, to: [this.config.MAIL_ADDRESS], messageId: `<${randomUUID()}@check.universal-mail.invalid>`,
       subject: 'Universal Mail check: you can delete this',
       text: 'Universal Mail\'s check made this message to test moving, flagging and marking mail read, then moved it to Trash. You can delete it, and the "Universal Mail check" folder.'
     });

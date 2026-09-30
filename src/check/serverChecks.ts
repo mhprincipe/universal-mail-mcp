@@ -1,6 +1,6 @@
 import { classify } from '../errors.js';
 import { profiles } from '../providers.js';
-import type { MailService } from '../yahoo/mailService.js';
+import type { MailService } from '../mail/mailService.js';
 import { CheckFailure, type Stage } from './runner.js';
 
 // The stages the server runs on itself (design §7.1): its version, its sign-in,

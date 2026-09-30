@@ -1,8 +1,8 @@
 import { createAccounts } from './accounts.js';
 import type { AppConfig } from './config.js';
 import { MailError, classify, success, type ToolEnvelope } from './errors.js';
-import type { SearchInput } from './yahoo/imap.js';
-import { MailService } from './yahoo/mailService.js';
+import type { SearchInput } from './mail/imap.js';
+import { MailService } from './mail/mailService.js';
 import type { MessageSummary } from './types.js';
 import type { AccountGrant, Action } from './signin/grants.js';
 
@@ -58,7 +58,7 @@ export function createMailRouter(accounts: Array<{ name: string; config: AppConf
   const sendingOff = new Set(accounts.filter(a => a.sending === false).map(a => a.name));
   const plain = createAccountServices(accounts);
   const services = new Map([...plain].map(([name, service]) => [name, watched(name, service, hooks)]));
-  const directory = createAccounts(accounts.map(a => ({ name: a.name, address: a.config.YAHOO_EMAIL })));
+  const directory = createAccounts(accounts.map(a => ({ name: a.name, address: a.config.MAIL_ADDRESS })));
   const multi = createMultiMail(services);
 
   const access = (grant: AccountGrant): MailAccess => {

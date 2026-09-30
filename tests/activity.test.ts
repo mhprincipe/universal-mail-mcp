@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { activityFor, createActivityLog } from '../src/activity.js';
 import { success, MailError } from '../src/errors.js';
-import { MailService } from '../src/yahoo/mailService.js';
+import { MailService } from '../src/mail/mailService.js';
 import { createCanary } from '../testkit/src/canary.js';
 import { startPage } from './page/pageHarness.js';
 

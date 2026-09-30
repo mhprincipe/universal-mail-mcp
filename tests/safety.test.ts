@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../src/config.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
-import { MailService } from '../src/yahoo/mailService.js';
-import { composeRaw } from '../src/yahoo/mime.js';
+import { ImapGateway } from '../src/mail/imap.js';
+import { MailService } from '../src/mail/mailService.js';
+import { composeRaw } from '../src/mail/mime.js';
 import { simpleParser } from 'mailparser';
 
 const config = loadConfig({ YAHOO_EMAIL: 'test@example.invalid', YAHOO_APP_PASSWORD: 'dummy-password', MCP_ACCESS_SECRET: 'dummy-token-at-least-24-chars', SENT_COPY_MODE: 'append', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' });
@@ -245,7 +245,7 @@ describe('draft and mailbox safety', () => {
     expect(remove).not.toHaveBeenCalled();
   });
   it('preserves Bcc in drafts but excludes it from transmitted MIME', async () => {
-    const input = { from: config.YAHOO_EMAIL, to: ['to@example.invalid'], bcc: ['hidden@example.invalid'], subject: 'test', text: 'body' };
+    const input = { from: config.MAIL_ADDRESS, to: ['to@example.invalid'], bcc: ['hidden@example.invalid'], subject: 'test', text: 'body' };
     expect((await simpleParser((await composeRaw(input, true)).raw)).bcc).toBeDefined();
     expect((await simpleParser((await composeRaw(input)).raw)).bcc).toBeUndefined();
   });

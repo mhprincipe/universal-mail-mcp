@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { success } from '../../src/errors.js';
-import { MailService } from '../../src/yahoo/mailService.js';
+import { MailService } from '../../src/mail/mailService.js';
 import { callback, claude, issuer, key, startApproval } from './approvalHarness.js';
 
 let a: Awaited<ReturnType<typeof startApproval>> | undefined;

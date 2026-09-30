@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cautionsFor } from '../src/cautions.js';
 import { startToolFixture } from '../testkit/src/toolFixture.js';
 import { loadConfig } from '../src/config.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
+import { ImapGateway } from '../src/mail/imap.js';
 
 // Scam warnings (added 2026-09-29, principle 3: it protects people from the
 // mail itself). A message whose sender looks like someone it isn't carries

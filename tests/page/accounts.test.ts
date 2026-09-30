@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ImapGateway } from '../../src/yahoo/imap.js';
+import { ImapGateway } from '../../src/mail/imap.js';
 import { startPage } from './pageHarness.js';
 
 // Your page: the accounts (design §3.6). Every change takes effect at once,

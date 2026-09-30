@@ -4,7 +4,7 @@ import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
 import { vi } from 'vitest';
 import { createApp } from '../../src/app.js';
-import { ImapGateway } from '../../src/yahoo/imap.js';
+import { ImapGateway } from '../../src/mail/imap.js';
 
 // The whole tool layer over real HTTP and MCP, with the mail server replaced
 // by an in-memory mailbox (ImapGateway's methods): fast enough for the unit

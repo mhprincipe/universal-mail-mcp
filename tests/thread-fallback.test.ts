@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../src/config.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
-import { MailService } from '../src/yahoo/mailService.js';
+import { ImapGateway } from '../src/mail/imap.js';
+import { MailService } from '../src/mail/mailService.js';
 const config = loadConfig({ YAHOO_EMAIL: 'dummy@example.invalid', YAHOO_APP_PASSWORD: 'dummy-password', MCP_ACCESS_SECRET: 'dummy-token-at-least-24-chars', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' });
 const root = '<root@test.invalid>';
 describe('Yahoo thread header-search fallback', () => {

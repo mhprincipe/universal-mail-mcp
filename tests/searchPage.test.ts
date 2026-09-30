@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ImapGateway } from '../src/yahoo/imap.js';
+import { ImapGateway } from '../src/mail/imap.js';
 
 // SIG-82 (added: found live, 2026-09-28): a search counted hidden system
 // emails (sign-in codes) toward its limit, then dropped them, so "the 5

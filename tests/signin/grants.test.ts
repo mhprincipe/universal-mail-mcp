@@ -7,7 +7,7 @@ import { success } from '../../src/errors.js';
 import { generateSigninKeys } from '../../src/signin/authorization.js';
 import type { Action } from '../../src/signin/grants.js';
 import { createSigninApp } from '../../src/signin/server.js';
-import { MailService } from '../../src/yahoo/mailService.js';
+import { MailService } from '../../src/mail/mailService.js';
 import { createFakeClock } from '../../testkit/src/fakeClock.js';
 
 const issuer = 'https://mail.example';

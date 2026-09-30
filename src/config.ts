@@ -3,8 +3,10 @@ import { z } from 'zod/v4';
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8080),
-  YAHOO_EMAIL: z.string().email(),
-  YAHOO_APP_PASSWORD: z.string().min(8),
+  // The account's address and app password (ENG-28: no provider's name; the
+  // first version's YAHOO_EMAIL and YAHOO_APP_PASSWORD are still read).
+  MAIL_ADDRESS: z.string().email(),
+  MAIL_APP_PASSWORD: z.string().min(8),
   // builtin: v2's own sign-in server (design §6.5), what setup installs.
   // bearer: direct mode, one shared secret, for the test kit and local development.
   AUTH_MODE: z.enum(['bearer', 'builtin']).default('bearer'),
@@ -44,7 +46,8 @@ const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1']);
 export type AppConfig = z.infer<typeof schema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  return schema.parse(env);
+  const { YAHOO_EMAIL, YAHOO_APP_PASSWORD, ...rest } = env;
+  return schema.parse({ ...rest, MAIL_ADDRESS: env.MAIL_ADDRESS ?? YAHOO_EMAIL, MAIL_APP_PASSWORD: env.MAIL_APP_PASSWORD ?? YAHOO_APP_PASSWORD });
 }
 
 export function imapTransport(config: AppConfig): { secure: boolean; doSTARTTLS?: boolean } {

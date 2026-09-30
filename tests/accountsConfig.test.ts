@@ -18,7 +18,7 @@ describe('account settings', () => {
       MAIL_PASSWORDS: JSON.stringify({ personal: 'personal-app-password', work: 'work-app-password' })
     });
     expect(accounts.map(a => ({
-      name: a.name, email: a.config.YAHOO_EMAIL, password: a.config.YAHOO_APP_PASSWORD,
+      name: a.name, email: a.config.MAIL_ADDRESS, password: a.config.MAIL_APP_PASSWORD,
       imap: a.config.IMAP_HOST, smtp: `${a.config.SMTP_HOST}:${a.config.SMTP_PORT}`, sent: a.config.SENT_COPY_MODE,
       reliableHeaderSearch: a.reliableHeaderSearch
     }))).toEqual([
@@ -29,7 +29,7 @@ describe('account settings', () => {
 
   it('ENG-16 without an account list, v1\'s single-account settings become one account called main', () => {
     const accounts = loadAccounts({ ...server, YAHOO_EMAIL: 'me@yahoo.com', YAHOO_APP_PASSWORD: 'v1-app-password', SENT_COPY_MODE: 'yahoo' });
-    expect(accounts.map(a => [a.name, a.config.YAHOO_EMAIL, a.config.SENT_COPY_MODE, a.reliableHeaderSearch])).toEqual([['main', 'me@yahoo.com', 'yahoo', false]]);
+    expect(accounts.map(a => [a.name, a.config.MAIL_ADDRESS, a.config.SENT_COPY_MODE, a.reliableHeaderSearch])).toEqual([['main', 'me@yahoo.com', 'yahoo', false]]);
   });
 
   it('ENG-16 a bad account is named in the error, and its password never appears', () => {

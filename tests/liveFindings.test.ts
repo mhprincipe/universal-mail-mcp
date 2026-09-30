@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseMessage } from '../src/parseCore.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
+import { ImapGateway } from '../src/mail/imap.js';
 
 // Found in the owner's full live run (2026-09-28, 2.2.1, Yahoo), against a
 // stand-in server that behaves the way Yahoo did.

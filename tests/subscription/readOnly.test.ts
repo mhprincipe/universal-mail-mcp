@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { success } from '../../src/errors.js';
 import { createMailRouter } from '../../src/multiMail.js';
 import { TOOL_CODES } from '../../src/toolCodes.js';
-import { MailService } from '../../src/yahoo/mailService.js';
+import { MailService } from '../../src/mail/mailService.js';
 
 // SUB-03 (design §13.2): read-only is enforced in one place, the mail router.
 afterEach(() => vi.restoreAllMocks());

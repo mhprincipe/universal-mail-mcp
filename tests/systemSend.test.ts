@@ -2,7 +2,7 @@ import { simpleParser } from 'mailparser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { isSystemMessageId } from '../src/systemMail.js';
-import { MailService } from '../src/yahoo/mailService.js';
+import { MailService } from '../src/mail/mailService.js';
 import { startSmtpCapture, type SmtpCapture } from '../testkit/src/smtpCapture.js';
 
 let capture: SmtpCapture | undefined;

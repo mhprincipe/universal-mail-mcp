@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { MailError } from '../src/errors.js';
-import { ImapGateway } from '../src/yahoo/imap.js';
+import { ImapGateway } from '../src/mail/imap.js';
 
 // Phase 5's engine paths, against a fake IMAP client: what the gateway asks
 // the server, and how it decides when the answer is missing or wrong. The
