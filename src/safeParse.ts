@@ -1,19 +1,23 @@
 import { createHash } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { MailError } from './errors.js';
+import type { AttachmentRead } from './attachmentCore.js';
 import type { ParsedMessage } from './parseCore.js';
 
 export type { ParsedMessage } from './parseCore.js';
-export type SafeParser = { parse(raw: Buffer): Promise<ParsedMessage>; close(): Promise<void> };
+export type { AttachmentRead } from './attachmentCore.js';
+// attachment: one attachment by its position (undefined: there's none there),
+// read in the same sandbox as the email.
+export type SafeParser = { parse(raw: Buffer): Promise<ParsedMessage>; attachment(raw: Buffer, index: number): Promise<AttachmentRead | undefined>; close(): Promise<void> };
 export type SafeParserOptions = { timeoutMs?: number; startupTimeoutMs?: number; memoryMb?: number; workerFile?: URL };
 
 // Under tests Node runs the TypeScript source directly; built, it runs the .js.
 const defaultWorkerFile = new URL(import.meta.url.endsWith('.ts') ? './parseWorker.ts' : './parseWorker.js', import.meta.url);
 
-type Reply = { ready: true } | { id: number; ok: true; message: ParsedMessage } | { id: number; ok: false; reason: string };
-type Job = { raw: Buffer; fingerprint: string; resolve(message: ParsedMessage): void; reject(error: MailError): void };
+type Reply = { ready: true } | { id: number; ok: true; message?: ParsedMessage; attachment?: AttachmentRead | null } | { id: number; ok: false; reason: string };
+type Job = { raw: Buffer; attachment?: number; fingerprint: string; resolve(result: unknown): void; reject(error: MailError): void };
 type Running = { id: number; job: Job; worker: Worker; timer?: NodeJS.Timeout };
-type Outcome = { message: ParsedMessage } | { reason: string } | { unavailable: string };
+type Outcome = { result: unknown } | { reason: string } | { unavailable: string };
 
 // The reason goes to the diagnostics log only; the person sees one plain sentence.
 const unsafe = (reason: string) =>
@@ -45,8 +49,8 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
     const done = running!;
     running = undefined;
     clearTimeout(done.timer);
-    if ('message' in outcome) {
-      done.job.resolve(outcome.message);
+    if ('result' in outcome) {
+      done.job.resolve(outcome.result);
     } else if ('unavailable' in outcome) {
       done.job.reject(unavailable(outcome.unavailable));
     } else {
@@ -85,7 +89,7 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
         return;
       }
       if (running?.id !== reply.id) return;
-      finish(reply.ok ? { message: reply.message } : { reason: reply.reason });
+      finish(reply.ok ? { result: 'attachment' in reply ? reply.attachment ?? undefined : reply.message } : { reason: reply.reason });
     });
     created.on('error', (error: Error & { code?: string }) =>
       retire(created, error.code === 'ERR_WORKER_OUT_OF_MEMORY' ? 'memory limit' : `worker error: ${error.message}`));
@@ -106,18 +110,23 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
     current.ref();
     running = { id: nextId++, job, worker: current };
     if (ready.has(current)) startClock(running);
-    current.postMessage({ id: running.id, raw: job.raw });
+    current.postMessage({ id: running.id, raw: job.raw, ...(job.attachment !== undefined ? { attachment: job.attachment } : {}) });
   }
 
+  // An attachment that failed is remembered by the email and its position, so
+  // it never stops the email itself from opening.
+  const submit = <T>(raw: Buffer, attachment?: number) => {
+    const fingerprint = createHash('sha256').update(raw).digest('hex') + (attachment === undefined ? '' : `#${attachment}`);
+    if (failed.has(fingerprint)) return Promise.reject(unsafe('failed before'));
+    return new Promise<T>((resolve, reject) => {
+      queue.push({ raw, ...(attachment === undefined ? {} : { attachment }), fingerprint, resolve: resolve as (result: unknown) => void, reject });
+      pump();
+    });
+  };
+
   return {
-    parse(raw) {
-      const fingerprint = createHash('sha256').update(raw).digest('hex');
-      if (failed.has(fingerprint)) return Promise.reject(unsafe('failed before'));
-      return new Promise<ParsedMessage>((resolve, reject) => {
-        queue.push({ raw, fingerprint, resolve, reject });
-        pump();
-      });
-    },
+    parse: raw => submit<ParsedMessage>(raw),
+    attachment: (raw, index) => submit<AttachmentRead | undefined>(raw, index),
     async close() {
       await worker?.terminate();
       worker = undefined;

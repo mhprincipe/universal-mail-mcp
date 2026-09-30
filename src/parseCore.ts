@@ -11,7 +11,7 @@ export type ParsedMessage = {
   from: Address[]; to: Address[]; cc: Address[]; bcc: Address[]; replyTo: Address[];
   text?: string; html?: string;
   inReplyTo?: string; references: string[];
-  attachments: Array<{ filename?: string; contentType: string; size: number; contentId?: string }>;
+  attachments: Array<{ index: number; filename?: string; contentType: string; size: number; contentId?: string }>;
 };
 
 function addresses(value: any): Address[] {
@@ -81,8 +81,8 @@ export async function parseMessage(raw: Buffer, limits: ParseLimits = defaultLim
     html: typeof parsed.html === 'string' ? parsed.html : undefined,
     inReplyTo: parsed.inReplyTo || undefined,
     references: normalizeRefs(parsed.references),
-    attachments: (parsed.attachments ?? []).map(a => ({
-      filename: a.filename || undefined, contentType: a.contentType, size: a.size, contentId: a.contentId || undefined
+    attachments: (parsed.attachments ?? []).map((a, index) => ({
+      index, filename: a.filename || undefined, contentType: a.contentType, size: a.size, contentId: a.contentId || undefined
     }))
   };
 }

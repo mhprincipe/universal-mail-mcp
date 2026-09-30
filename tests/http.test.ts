@@ -5,8 +5,8 @@ import { createApp } from '../src/app.js';
 import { MailService } from '../src/yahoo/mailService.js';
 import { VERSION } from '../src/version.js';
 
-const env = { YAHOO_EMAIL: 'dummy@example.invalid', YAHOO_APP_PASSWORD: 'dummy-password', MCP_ACCESS_SECRET: 'dummy-token-at-least-24-chars', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' };
-const expected = ['search_email','get_email','get_thread','create_draft','update_draft','send_email','reply_email','move_email','archive_email','mark_read','mark_unread','flag_email','trash_email','restore_email','list_folders','create_folder'].sort();
+const env: NodeJS.ProcessEnv = { AUTH_MODE: 'bearer', YAHOO_EMAIL: 'dummy@example.invalid', YAHOO_APP_PASSWORD: 'dummy-password', MCP_ACCESS_SECRET: 'dummy-token-at-least-24-chars', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' };
+const expected = ['search_email','get_email','get_attachment','get_thread','create_draft','update_draft','send_email','reply_email','move_email','archive_email','mark_read','mark_unread','flag_email','trash_email','restore_email','list_folders','create_folder'].sort();
 const servers: Server[] = [];
 async function start(settings: NodeJS.ProcessEnv = env) {
   const server = createApp(settings).listen(0, '127.0.0.1');
@@ -19,7 +19,7 @@ async function start(settings: NodeJS.ProcessEnv = env) {
 afterEach(async () => { vi.restoreAllMocks(); await Promise.all(servers.splice(0).map(server => new Promise<void>((resolve, reject) => { server.close(error => error ? reject(error) : resolve()); server.closeAllConnections(); }))); });
 describe('HTTP and live MCP contract with dummy credentials', () => {
   it('health works without secrets and returns no mailbox details', async () => {
-    const response = await fetch(`${await start({})}/health`);
+    const response = await fetch(`${await start({ AUTH_MODE: 'bearer' })}/health`);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: 'ok', service: 'universal-mail', version: VERSION });
   });
@@ -27,6 +27,13 @@ describe('HTTP and live MCP contract with dummy credentials', () => {
     for (const mode of ['oauth', 'oauth-setup']) {
       expect(() => createApp({ ...env, AUTH_MODE: mode, OAUTH_ISSUER: 'https://id.example/', OAUTH_JWKS_URI: 'https://id.example/keys', OAUTH_RESOURCE: 'https://mail.example/mcp', OAUTH_OWNER_SUB: 'o', OAUTH_CLIENT_IDS: 'c' }), mode).toThrow();
     }
+  });
+  it('SIG-86 a server whose sign-in mode wasn\'t chosen refuses to start: the shared-secret test mode is never a default (added: 2.4 review)', () => {
+    const { AUTH_MODE: _chosen, ...unchosen } = env;
+    expect(() => createApp(unchosen)).toThrow(/AUTH_MODE/);
+    expect(() => createApp({ ...unchosen, AUTH_MODE: '' })).toThrow(/AUTH_MODE/);
+    // Chosen explicitly, it starts.
+    expect(() => createApp({ ...unchosen, AUTH_MODE: 'bearer' })).not.toThrow();
   });
   it.each(['/mcp', '/ready'])('%s rejects missing and wrong bearer credentials', async path => {
     const base = await start();
@@ -61,7 +68,7 @@ describe('HTTP and live MCP contract with dummy credentials', () => {
     expect(await response.text()).not.toContain('private-mail-body');
     expect(logger).not.toHaveBeenCalled();
   });
-  it('discovers exactly 16 tools over HTTP without opening mail connections', async () => {
+  it('discovers exactly 17 tools over HTTP without opening mail connections', async () => {
     const connection = vi.spyOn(MailService.prototype, 'verifyConnectivity').mockRejectedValue(new Error('must not connect'));
     const client = new Client({ name: 'local-contract-test', version: '1.0.0' });
     try {

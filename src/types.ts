@@ -1,5 +1,6 @@
 export type Address = { name?: string; address: string };
-export type AttachmentMeta = { filename?: string; contentType: string; size: number; contentId?: string };
+// index: its position in the email, which get_attachment takes.
+export type AttachmentMeta = { index: number; filename?: string; contentType: string; size: number; contentId?: string };
 // Every message the tools return is marked untrusted: a subject or a sender's
 // name is written by whoever sent the email, just as the body is.
 export type MessageSummary = {

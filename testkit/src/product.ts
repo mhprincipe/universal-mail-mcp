@@ -41,7 +41,7 @@ export async function startMultiProduct(accounts: AccountSpec[]): Promise<MultiP
   const smtp = await startSmtpCapture();
   const token = randomBytes(24).toString('hex');
   const http: Server = createApp({
-    MCP_ACCESS_SECRET: token,
+    AUTH_MODE: 'bearer', MCP_ACCESS_SECRET: token,
     MAIL_ACCOUNTS: JSON.stringify(accounts.map(a => ({
       name: a.name, email: a.user, sentCopyMode: 'append',
       imap: { host: a.server.host, port: a.server.port, tls: 'none' },
@@ -88,7 +88,7 @@ export async function startProduct(profile: ProfileName, options: ProductOptions
   const proxy = options.imapFault ? await startFaultProxy(server, options.imapFault) : undefined;
   const imap = proxy ?? server;
   const http: Server = createApp({
-    YAHOO_EMAIL: server.user, YAHOO_APP_PASSWORD: server.password, MCP_ACCESS_SECRET: token,
+    AUTH_MODE: 'bearer', YAHOO_EMAIL: server.user, YAHOO_APP_PASSWORD: server.password, MCP_ACCESS_SECRET: token,
     IMAP_HOST: imap.host, IMAP_PORT: String(imap.port), IMAP_TLS: 'none',
     SMTP_HOST: smtp.host, SMTP_PORT: String(smtp.port), SMTP_TLS: 'none',
     SENT_COPY_MODE: options.sentCopyMode ?? 'append', ...options.env

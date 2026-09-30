@@ -73,7 +73,7 @@ describe('safe parsing', () => {
       inReplyTo: '<m0@example.invalid>',
       references: ['<r1@example.invalid>', '<m0@example.invalid>'],
       // Details only: attachment bytes never cross back from the worker.
-      attachments: [{ filename: 'plan.pdf', contentType: 'application/pdf', size: 5 }]
+      attachments: [{ index: 0, filename: 'plan.pdf', contentType: 'application/pdf', size: 5, contentId: undefined }]
     };
     parser = createSafeParser();
     expect(await parser.parse(Buffer.from(ordinary))).toEqual(expected);
@@ -180,5 +180,22 @@ describe('safe parsing', () => {
       const outcome = await parser.parse(Buffer.from(raw, 'latin1')).then(() => 'parsed', (error: { code?: string }) => error.code);
       expect(['parsed', 'MAIL-PARSE-UNSAFE'], raw.slice(0, 40)).toContain(outcome);
     }
+  });
+});
+
+describe('reading an attachment safely', () => {
+  it('ATT-07 an attachment that never finishes is stopped at the time limit and remembered, and the email itself still opens (added: reading attachments)', { timeout: 20_000 }, async () => {
+    parser = createSafeParser({ timeoutMs: 1_000, workerFile: fixture('selectiveWorker.mjs') });
+    const raw = Buffer.from([
+      'Message-ID: <stuck@example.invalid>', 'Subject: STUCKATTACHMENT', 'MIME-Version: 1.0',
+      'Content-Type: multipart/mixed; boundary="b"', '', '--b', 'Content-Type: text/plain', '', 'hi',
+      '--b', 'Content-Type: text/plain; name="a.txt"', 'Content-Disposition: attachment; filename="a.txt"', '', 'attached', '--b--'
+    ].join('\r\n'));
+    await expect(parser.attachment(raw, 0)).rejects.toMatchObject({ code: 'MAIL-PARSE-UNSAFE', details: { reason: 'time limit' } });
+    const started = Date.now();
+    await expect(parser.attachment(raw, 0)).rejects.toMatchObject({ code: 'MAIL-PARSE-UNSAFE', details: { reason: 'failed before' } });
+    expect(Date.now() - started).toBeLessThan(500);
+    // The email is not the attachment: it still opens.
+    expect(await parser.parse(raw)).toMatchObject({ subject: 'STUCKATTACHMENT', attachments: [{ index: 0, filename: 'a.txt' }] });
   });
 });

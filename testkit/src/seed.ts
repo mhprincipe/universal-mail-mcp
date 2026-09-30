@@ -6,6 +6,9 @@ export type SeedMessage = {
   mailbox: string; subject: string; from?: string; to?: string; date?: Date; messageId?: string; body?: string;
   // Extra header lines, such as In-Reply-To and References for threads.
   headers?: Record<string, string>;
+  // A whole message as it would arrive (attachments and all), used as it is;
+  // its Message-ID must be given as messageId too.
+  raw?: Buffer;
 };
 export type SeedPlan = { folders?: string[]; messages?: SeedMessage[] };
 export type Seeded = { messages: Array<{ mailbox: string; uid: number; messageId: string; subject: string }> };
@@ -74,7 +77,7 @@ export async function seed(server: ImapServer, plan: SeedPlan): Promise<Seeded> 
     const messages: Seeded['messages'] = [];
     for (const message of plan.messages ?? []) {
       const messageId = message.messageId ?? `<${randomUUID()}@seed.invalid>`;
-      const appended = await client.append(message.mailbox, raw(message, messageId));
+      const appended = await client.append(message.mailbox, message.raw ?? raw(message, messageId));
       let uid = appended && appended.uid;
       if (!uid) {
         const lock = await client.getMailboxLock(message.mailbox);

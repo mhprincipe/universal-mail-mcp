@@ -51,7 +51,7 @@ export async function startToolFixture(options: { env?: NodeJS.ProcessEnv } = {}
 
   const token = 'fixture-token-at-least-24-characters';
   const server: Server = createApp({
-    YAHOO_EMAIL: 'self@example.invalid', YAHOO_APP_PASSWORD: 'fixture-password', MCP_ACCESS_SECRET: token,
+    AUTH_MODE: 'bearer', YAHOO_EMAIL: 'self@example.invalid', YAHOO_APP_PASSWORD: 'fixture-password', MCP_ACCESS_SECRET: token,
     SENT_COPY_MODE: 'append', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1', ...options.env
   }).listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
@@ -68,13 +68,16 @@ export async function startToolFixture(options: { env?: NodeJS.ProcessEnv } = {}
       : ['Content-Type: text/plain; charset=utf-8', '', fields.text ?? 'plain'];
     return { uid: await append(mailbox, Buffer.from([...headers, ...body].join('\r\n'))), messageId: id };
   };
+  // A whole message as it would arrive (attachments and all), in this folder.
+  const seedRaw = async (mailbox: string, raw: Buffer) => ({ uid: await append(mailbox, raw) });
   const call = async (name: string, args: Record<string, unknown> = {}) => {
     const response = await client.callTool({ name, arguments: args });
-    const text = (response.content as Array<{ text?: string }>)?.[0]?.text ?? '';
-    return { result: response.structuredContent as any, isError: response.isError as boolean | undefined, size: text.length };
+    const content = (response.content ?? []) as Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+    const text = content[0]?.text ?? '';
+    return { result: response.structuredContent as any, isError: response.isError as boolean | undefined, size: text.length, content };
   };
   return {
-    rows, seed, call, client,
+    rows, seed, seedRaw, call, client,
     tools: async () => (await client.listTools()).tools,
     stop: async () => {
       await client.close().catch(() => undefined);

@@ -65,10 +65,11 @@ function createInstalledApp(env: NodeJS.ProcessEnv, deps: AppDeps) {
 export function createApp(env: NodeJS.ProcessEnv = process.env, deps: AppDeps = {}) {
   if (env.UNIVERSAL_MAIL_STATE !== undefined || env.UNIVERSAL_MAIL_CREDENTIALS !== undefined) return createInstalledApp(env, deps);
   if (env.AUTH_MODE === 'builtin') return createSigninApp(env);
-  // v1's Auth0 modes are retired (SIG-85): a setting naming one stops the
-  // start, rather than quietly running with another way in.
-  if (env.AUTH_MODE !== undefined && env.AUTH_MODE !== 'bearer') throw new Error(`AUTH_MODE ${env.AUTH_MODE} isn't supported: use builtin.`);
-  return createDirectApp(env);
+  // The shared-secret test mode is never a default (SIG-86): it runs only when
+  // chosen by name. v1's Auth0 modes are retired (SIG-85). Anything else stops
+  // the start, rather than quietly running with another way in.
+  if (env.AUTH_MODE === 'bearer') return createDirectApp(env);
+  throw new Error(env.AUTH_MODE ? `AUTH_MODE ${env.AUTH_MODE} isn't supported: use builtin.` : 'AUTH_MODE must be chosen: builtin (what setup installs) or bearer (tests and local development).');
 }
 
 // Direct mode: one shared secret, no sign-in server. It drives the product in

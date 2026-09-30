@@ -16,6 +16,7 @@ export const TOOL_CODES = {
 
   // ── Finding things ──
   MESSAGE_NOT_FOUND: { remedy: 'The UID may have changed after a move. Search the folder by messageId to find the message again.' },
+  ATTACHMENT_NOT_FOUND: { remedy: 'Use an index from the attachments list that get_email returns for this message.' },
   DRAFT_NOT_FOUND: { remedy: 'Search the Drafts folder again to find the draft\'s current UID.' },
   FOLDER_NOT_FOUND: { remedy: 'Call list_folders and use a folder name exactly as it is listed, or create_folder first.' },
   SPECIAL_FOLDER_NOT_FOUND: { remedy: 'This account has no such folder marked by its provider. Call list_folders and move to a named folder instead.' },

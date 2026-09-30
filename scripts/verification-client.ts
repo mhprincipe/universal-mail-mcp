@@ -2,8 +2,8 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import type { Client } from '@modelcontextprotocol/client';
 
-export const expectedTools = ['search_email','get_email','get_thread','create_draft','update_draft','send_email','reply_email','move_email','archive_email','mark_read','mark_unread','flag_email','trash_email','restore_email','list_folders','create_folder'].sort();
-const readTools = new Set(['search_email', 'get_email', 'get_thread', 'list_folders']);
+export const expectedTools = ['search_email','get_email','get_attachment','get_thread','create_draft','update_draft','send_email','reply_email','move_email','archive_email','mark_read','mark_unread','flag_email','trash_email','restore_email','list_folders','create_folder'].sort();
+const readTools = new Set(['search_email', 'get_email', 'get_attachment', 'get_thread', 'list_folders']);
 
 // Unlike fetch, native HTTP preserves an adversarial Host header. TLS still
 // validates the actual service's certificate and uses its hostname for SNI.
