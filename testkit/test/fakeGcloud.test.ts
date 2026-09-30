@@ -3,8 +3,13 @@ import { spawnSync } from 'node:child_process';
 import { createFakeGcloud, type FakeGcloud } from '../src/fakeGcloud.js';
 
 // Invoked by name from PATH, exactly as the setup program will invoke it.
+// Windows finds gcloud.cmd only through its shell, which takes one command
+// line (Node deprecates a shell with separate arguments: DEP0190); these
+// arguments have no spaces or quotes to escape.
 const run = (fake: FakeGcloud, args: string[]) => {
-  const result = spawnSync('gcloud', args, { env: fake.env, encoding: 'utf8', shell: process.platform === 'win32' });
+  const result = process.platform === 'win32'
+    ? spawnSync(['gcloud', ...args].join(' '), { env: fake.env, encoding: 'utf8', shell: true })
+    : spawnSync('gcloud', args, { env: fake.env, encoding: 'utf8' });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 };
 

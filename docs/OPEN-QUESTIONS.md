@@ -1,6 +1,6 @@
 # Open questions, decisions made for you, and the live-install checklist
 
-## Where things stand (2026-09-30, version 2.4.1)
+## Where things stand (2026-09-30, version 2.4.2)
 
 The live install passed (2026-09-28). Every tool works live on Yahoo with Claude
 and with ChatGPT; Gmail is connected; timings are measured and tuned; v1 is
@@ -11,8 +11,9 @@ open:
 
 | Open | Whose | Notes |
 |---|---|---|
-| Updating the installation to 2.4.1, then the 2.4 and 2.4.1 live prompts | owner | USER-GUIDE §6, then "What's new in 2.4" and "What's new in 2.4.1" in LIVE-TEST-PROMPT.md |
+| Updating the installation to 2.4.2, then the two rewritten live prompts | owner | USER-GUIDE §6, then "What's new in 2.4" and "What's new in 2.4.1 and 2.4.2" in LIVE-TEST-PROMPT.md |
 | Attaching files from your computer or the chat | owner's decision | not built: would need an upload box on your page (the AI apps don't pass uploaded files to connectors reliably) |
+| **Confirming new recipients on your page** | owner's decision | [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md) ends with four questions |
 | **The 2.5 design: signing in with Microsoft and Google** | owner's decision | [DESIGN-PROVIDER-SIGNIN.md](DESIGN-PROVIDER-SIGNIN.md) ends with the questions only you can answer |
 | The security review's accepted items | owner's decision | [SECURITY-REVIEW.md](SECURITY-REVIEW.md), "Known and accepted": chiefly whether confirming a new recipient should move from the chat to your page |
 | A screen-reader and phone check of the page | owner | the automated rules pass (A11Y-01); a person hasn't tried it |

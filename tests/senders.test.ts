@@ -32,9 +32,9 @@ describe('who fills a folder', () => {
     const answer = await f.call('summarize_senders', { mailbox: 'INBOX' });
     expect(answer.result).toMatchObject({ ok: true, data: { mailbox: 'INBOX', looked: 6, untrustedContent: true } });
     expect(answer.result.data.senders).toEqual([
-      { address: 'news@news.example.com', name: 'Daily News', messages: 3, unread: 2, newest: '2026-09-30T08:00:00.000Z', oneClickUnsubscribe: false },
-      { address: 'deals@shop.example.com', name: 'Shop', messages: 2, unread: 2, newest: '2026-09-30T09:00:00.000Z', oneClickUnsubscribe: true },
-      { address: 'sam@example.org', name: 'Sam', messages: 1, unread: 1, newest: '2026-09-30T10:00:00.000Z', oneClickUnsubscribe: false }
+      { address: 'news@news.example.com', name: 'Daily News', messages: 3, unread: 2, newest: '2026-09-30T08:00:00.000Z', unsubscribe: 'none' },
+      { address: 'deals@shop.example.com', name: 'Shop', messages: 2, unread: 2, newest: '2026-09-30T09:00:00.000Z', unsubscribe: 'one-click' },
+      { address: 'sam@example.org', name: 'Sam', messages: 1, unread: 1, newest: '2026-09-30T10:00:00.000Z', unsubscribe: 'none' }
     ]);
     const top = await f.call('summarize_senders', { mailbox: 'INBOX', top: 2 });
     expect(top.result.data.senders.map((s: { address: string }) => s.address)).toEqual(['news@news.example.com', 'deals@shop.example.com']);
@@ -52,6 +52,27 @@ describe('who fills a folder', () => {
   });
 });
 
+describe('what each sender offers, and where replies go', () => {
+  it('WHO-06 the best way each sender offers to unsubscribe: one click, a link, an email address, or none (added: 2.4.2, found live: "No" for LinkedIn, which offers a link)', async () => {
+    f = await startToolFixture();
+    await f.seedRaw('INBOX', from('Jobs <jobalerts@jobs.example.com>', 'Wed, 30 Sep 2026 08:00:00 +0000', ['List-Unsubscribe: <https://jobs.example.com/unsub?id=1>']));
+    await f.seedRaw('INBOX', from('Club <news@club.example.org>', 'Wed, 30 Sep 2026 08:00:00 +0000', ['List-Unsubscribe: <mailto:leave@club.example.org>']));
+    await f.seedRaw('INBOX', from('Club <news@club.example.org>', 'Wed, 30 Sep 2026 09:00:00 +0000', ['List-Unsubscribe: <mailto:leave@club.example.org>, <https://club.example.org/u>']));
+    await f.seedRaw('INBOX', from('Sam <sam@example.org>', 'Wed, 30 Sep 2026 10:00:00 +0000'));
+    const senders = (await f.call('summarize_senders', {})).result.data.senders as Array<{ address: string; unsubscribe: string }>;
+    expect(Object.fromEntries(senders.map(s => [s.address, s.unsubscribe]))).toEqual({
+      'news@club.example.org': 'link', 'jobalerts@jobs.example.com': 'link', 'sam@example.org': 'none'
+    });
+  });
+
+  it('WHO-07 a sender whose replies go to another domain carries that caution too, once (added: 2.4.2, found live)', async () => {
+    f = await startToolFixture();
+    for (let i = 0; i < 2; i++) await f.seedRaw('INBOX', from('Wine Guy <mick@shared1.ccsend.com>', 'Wed, 30 Sep 2026 10:00:00 +0000', ['Reply-To: mickthewineguy1@gmail.com']));
+    const [sender] = (await f.call('summarize_senders', {})).result.data.senders;
+    expect(sender.cautions).toEqual(['Replies would go to mickthewineguy1@gmail.com, not to the sender\'s own domain (ccsend.com).']);
+  });
+});
+
 describe('reading the newest messages', () => {
   const config = loadConfig({ AUTH_MODE: 'builtin', MAIL_ADDRESS: 'me@example.invalid', MAIL_APP_PASSWORD: 'dummy-password', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' });
 
@@ -62,7 +83,9 @@ describe('reading the newest messages', () => {
       { uid: 501, flags: new Set(['\\Seen']), envelope: { messageId: '<a@x>', date: new Date('2026-09-30T08:00:00Z'), from: [{ name: 'Shop', address: 'deals@shop.example.com' }] },
         headers: Buffer.from('List-Unsubscribe: <https://shop.example.com/u>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n\r\n') },
       { uid: 502, flags: new Set(), envelope: { messageId: '<code@system.universal-mail.invalid>', from: [{ address: 'me@example.invalid' }] }, headers: Buffer.from('') },
-      { uid: 503, flags: new Set(), envelope: { messageId: '<b@x>', from: [] }, headers: Buffer.from('') }
+      // Replies going to another domain: a caution from the envelope's Reply-To (WHO-07).
+      { uid: 503, flags: new Set(), envelope: { messageId: '<w@x>', from: [{ address: 'mick@shared1.ccsend.com' }], replyTo: [{ address: 'mickthewineguy1@gmail.com' }] }, headers: Buffer.from('') },
+      { uid: 504, flags: new Set(), envelope: { messageId: '<b@x>', from: [] }, headers: Buffer.from('') }
     ]);
     const client = {
       mailbox: { exists: 503 },
@@ -71,8 +94,9 @@ describe('reading the newest messages', () => {
     };
     vi.spyOn(gateway, 'run').mockImplementation(fn => fn(client as never));
     expect(await gateway.senderStats('INBOX', 500)).toEqual([
-      { from: { name: 'Shop', address: 'deals@shop.example.com' }, date: '2026-09-30T08:00:00.000Z', read: true, oneClick: true },
-      { read: false, oneClick: false }
+      { from: { name: 'Shop', address: 'deals@shop.example.com' }, date: '2026-09-30T08:00:00.000Z', read: true, unsubscribe: 'one-click' },
+      { from: { address: 'mick@shared1.ccsend.com' }, read: false, unsubscribe: 'none', cautions: ["Replies would go to mickthewineguy1@gmail.com, not to the sender's own domain (ccsend.com)."] },
+      { read: false, unsubscribe: 'none' }
     ]);
     expect(locks).toEqual([{ readOnly: true }]);
     expect(fetchAll).toHaveBeenCalledWith('4:*', { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });

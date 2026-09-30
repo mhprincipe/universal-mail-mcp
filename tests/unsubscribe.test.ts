@@ -40,20 +40,31 @@ describe('unsubscribing', () => {
     expect(f.rows.get(uid)).toMatchObject({ mailbox: 'INBOX', read: false });
   });
 
-  it('UNS-02 a sender without one click (only an email address, or no promise of one click, or nothing) is left to the owner: nothing is sent', async () => {
+  it('UNS-02 a sender without one click (only an email address, or no promise of one click, or nothing) is left to the owner, and told what it does offer: nothing is sent', async () => {
     f = await startToolFixture();
     const posted = spyOneClick();
-    for (const headers of [
-      ['List-Unsubscribe: <mailto:leave@news.example.com>'],
-      ['List-Unsubscribe: <https://news.example.com/u?id=7>'],
-      ['List-Unsubscribe: <mailto:leave@news.example.com>', 'List-Unsubscribe-Post: List-Unsubscribe=One-Click'],
-      []
-    ]) {
-      const { uid } = await f.seedRaw('INBOX', newsletter(headers));
+    for (const [headers, offers, words] of [
+      [['List-Unsubscribe: <mailto:leave@news.example.com>'], 'email', /only an email address.*mail app/],
+      [['List-Unsubscribe: <https://news.example.com/u?id=7>'], 'link', /only an unsubscribe link.*mail app/],
+      [['List-Unsubscribe: <mailto:leave@news.example.com>', 'List-Unsubscribe-Post: List-Unsubscribe=One-Click'], 'email', /only an email address/],
+      [[], 'none', /no way to unsubscribe.*junk/]
+    ] as const) {
+      const { uid } = await f.seedRaw('INBOX', newsletter([...headers]));
       const answer = await f.call('unsubscribe', { mailbox: 'INBOX', uid });
-      expect(answer.result, headers.join(' ')).toMatchObject({ ok: false, code: 'MAIL-UNSUBSCRIBE-MANUAL' });
-      expect(answer.result.message).toMatch(/mail app/);
+      expect(answer.result, headers.join(' ')).toMatchObject({ ok: false, code: 'MAIL-UNSUBSCRIBE-MANUAL', data: { offers } });
+      expect(answer.result.message).toMatch(words);
     }
+    expect(posted).toEqual([]);
+  });
+
+  it('UNS-11 an email from this account itself: nothing to unsubscribe from, and no talk of junk (added: 2.4.2, found live)', async () => {
+    f = await startToolFixture();
+    const posted = spyOneClick();
+    const { uid } = await f.seedRaw('INBOX', newsletter([], 'Me <self@example.invalid>'));
+    const answer = await f.call('unsubscribe', { mailbox: 'INBOX', uid });
+    expect(answer.result).toMatchObject({ ok: false, code: 'MAIL-UNSUBSCRIBE-MANUAL', data: { offers: 'own' } });
+    expect(answer.result.message).toMatch(/from this account itself/);
+    expect(answer.result.message).not.toMatch(/junk/);
     expect(posted).toEqual([]);
   });
 

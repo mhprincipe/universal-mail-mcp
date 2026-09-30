@@ -7,6 +7,11 @@ export default defineConfig({
     // run in the slow tier, with vitest.protocol.config.ts.
     exclude: [...configDefaults.exclude, '**/*.protocol.test.ts', '**/*.package.test.ts'],
     setupFiles: ['testkit/src/setup.ts'],
+    // Many tests start real workers, git and setup's processes, and parse real
+    // PDFs; with the whole suite in parallel on a busy machine (Docker running
+    // beside it) 5 s wasn't enough, and a test cut off at 5 s kept running into
+    // the next one's mailbox (2.4.2). A test that truly hangs still fails.
+    testTimeout: 20_000,
     coverage: {
       provider: 'v8',
       // Product code only. The test kit is proven by its own TK tests and must

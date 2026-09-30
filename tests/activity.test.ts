@@ -204,3 +204,33 @@ describe('the 2.4.1 actions in the activity log', () => {
     expect(activityLine(entry({ action: 'trashed', count: 1 }))).toBe('Claude trashed 1 message in me');
   });
 });
+
+describe('undoing only what changed', () => {
+  it('ACT-10 a mark or flag is logged, and undone, only for the messages it really changed; none changed, nothing logged; not known, all of them (added: 2.4.2, security review)', () => {
+    const marked = success({ mailbox: 'INBOX', uids: [1, 2, 3], read: true, changed: [1, 3] });
+    expect(activityFor('mark_read', { mailbox: 'INBOX', uids: [1, 2, 3] }, marked)).toMatchObject({
+      action: 'marked read', count: 2, undo: { kind: 'flag', mailbox: 'INBOX', uids: [1, 3], flag: 'read', value: false }
+    });
+    expect(activityFor('flag_email', { mailbox: 'INBOX', uid: 4, flagged: true }, success({ mailbox: 'INBOX', uid: 4, flagged: true, changed: [] }))).toBeUndefined();
+    expect(activityFor('mark_unread', { mailbox: 'INBOX', uids: [5, 6] }, success({ mailbox: 'INBOX', uids: [5, 6], read: false }))).toMatchObject({ count: 2, undo: { uids: [5, 6] } });
+  });
+
+  it('ACT-10 the server reads each message\'s flags in the same step that checks it before the change, and says which changed', async () => {
+    const { loadConfig } = await import('../src/config.js');
+    const { ImapGateway } = await import('../src/mail/imap.js');
+    const gateway = new ImapGateway(loadConfig({ AUTH_MODE: 'builtin', MAIL_ADDRESS: 'me@example.invalid', MAIL_APP_PASSWORD: 'dummy-password', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' }));
+    const seen = new Map([[1, false], [2, true], [3, false]]);
+    const client = {
+      capabilities: new Set(['MOVE', 'UIDPLUS']),
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      fetchAll: vi.fn(async (set: string) => set.split(',').map(Number).map(uid => ({ uid, envelope: { messageId: `<m${uid}@x>` }, flags: new Set(seen.get(uid) ? ['\\Seen'] : []) }))),
+      messageFlagsAdd: vi.fn(async () => true),
+      messageFlagsRemove: vi.fn(async () => true)
+    };
+    vi.spyOn(gateway, 'run').mockImplementation(fn => fn(client as never));
+    expect(await gateway.setFlags('INBOX', [1, 2, 3], '\\Seen', true)).toEqual([1, 3]);
+    expect(client.fetchAll).toHaveBeenCalledTimes(1);
+    expect(await gateway.setFlag('INBOX', 2, '\\Seen', true)).toBe(false);
+    expect(await gateway.setFlag('INBOX', 1, '\\Seen', true)).toBe(true);
+  });
+});

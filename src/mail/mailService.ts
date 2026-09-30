@@ -11,7 +11,7 @@ import { isSystemMessageId, systemMessageId } from '../systemMail.js';
 import type { MessageDetail, MessageSummary } from '../types.js';
 import { ImapGateway, type SearchInput } from './imap.js';
 import { composeRaw } from './mime.js';
-import { oneClickTarget, realOneClick, unsubscribeOneClick, type OneClickDeps } from '../unsubscribe.js';
+import { UNSUBSCRIBE_RANK, oneClickTarget, realOneClick, unsubscribeKind, unsubscribeOneClick, type OneClickDeps, type UnsubscribeKind } from '../unsubscribe.js';
 
 export type MailServiceOptions = {
   parser?: SafeParser;
@@ -90,7 +90,7 @@ export class MailService {
   // One page of results; cursor, when more matched, asks for the next page.
   async searchEmail(input: SearchInput): Promise<ToolEnvelope<MessageSummary[]> & { cursor?: string }> {
     const page = await this.imap.searchPage(input);
-    return { ...success(page.messages), ...(page.next ? { cursor: String(page.next) } : {}) };
+    return { ...success(page.messages, 'Success', 'OK', page.warning ? [page.warning] : undefined), ...(page.next ? { cursor: String(page.next) } : {}) };
   }
 
   async getEmail(mailbox: string, uid: number, options: { client?: ImapFlow } = {}): Promise<ToolEnvelope<MessageDetail>> {
@@ -414,7 +414,9 @@ export class MailService {
     ].join('\n');
     const note = input.text?.trim() ? `${input.text}\n\n` : '';
     const subject = /^fwd?:/i.test(original.subject ?? '') ? original.subject! : `Fwd: ${original.subject ?? ''}`;
-    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, to: input.to, cc: input.cc, bcc: input.bcc, subject, text: `${note}${details}\n\n${original.text ?? ''}`, attachments: mimeParts(files) });
+    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, to: input.to, cc: input.cc, bcc: input.bcc, subject, text: `${note}${details}\n\n${original.text ?? ''}`, attachments: mimeParts(files),
+      // In the same conversation as the original, not an answer to it (FWD-07).
+      ...(original.messageId ? { references: [original.messageId] } : {}) });
     return this.sendRaw({ ...built, to: input.to, cc: input.cc, bcc: input.bcc, attachments: files });
   }
 
@@ -422,22 +424,24 @@ export class MailService {
   // sender (by address, whatever its case), most first.
   async summarizeSenders(mailbox: string, messages: number, top: number) {
     const rows = await this.imap.senderStats(mailbox, messages);
-    const senders = new Map<string, { address: string; name?: string; messages: number; unread: number; newest?: string; oneClickUnsubscribe: boolean }>();
+    // unsubscribe: the best way any of a sender's messages offers (WHO-06);
+    // cautions: every one its messages raise, each once (WHO-07).
+    type Sender = { address: string; name?: string; messages: number; unread: number; newest?: string; unsubscribe: UnsubscribeKind; cautions: Set<string> };
+    const senders = new Map<string, Sender>();
     for (const row of rows) {
       if (!row.from) continue;
       const address = row.from.address.toLowerCase();
-      const entry = senders.get(address) ?? { address, messages: 0, unread: 0, oneClickUnsubscribe: false };
+      const entry = senders.get(address) ?? { address, messages: 0, unread: 0, unsubscribe: 'none', cautions: new Set<string>() };
       entry.messages++;
       if (!row.read) entry.unread++;
       if (row.date && (!entry.newest || row.date > entry.newest)) entry.newest = row.date;
       if (!entry.name && row.from.name) entry.name = row.from.name;
-      entry.oneClickUnsubscribe ||= row.oneClick;
+      if (UNSUBSCRIBE_RANK[row.unsubscribe] > UNSUBSCRIBE_RANK[entry.unsubscribe]) entry.unsubscribe = row.unsubscribe;
+      for (const caution of row.cautions ?? []) entry.cautions.add(caution);
       senders.set(address, entry);
     }
-    const ranked = [...senders.values()].sort((a, b) => b.messages - a.messages || a.address.localeCompare(b.address)).slice(0, top).map(entry => {
-      const cautions = cautionsFor({ from: [{ ...(entry.name ? { name: entry.name } : {}), address: entry.address }], replyTo: [] });
-      return { ...entry, ...(cautions.length ? { cautions } : {}) };
-    });
+    const ranked = [...senders.values()].sort((a, b) => b.messages - a.messages || a.address.localeCompare(b.address)).slice(0, top)
+      .map(({ cautions, ...entry }) => ({ ...entry, ...(cautions.size ? { cautions: [...cautions] } : {}) }));
     return success({ mailbox, looked: rows.length, senders: ranked, untrustedContent: true as const },
       `The ${rows.length} newest messages in ${mailbox}, by sender.`);
   }
@@ -446,12 +450,23 @@ export class MailService {
   // never for an email that looks like a scam. The email itself is untouched.
   async unsubscribe(mailbox: string, uid: number) {
     const { summary, listUnsubscribe, listUnsubscribePost } = await this.imap.fetchListHeaders(mailbox, uid);
+    // The account's own email (UNS-11, found live: told to mark it as junk).
+    if (summary.from[0]?.address.toLowerCase() === this.config.MAIL_ADDRESS.toLowerCase()) {
+      throw new MailError('MAIL-UNSUBSCRIBE-MANUAL', 'This email is from this account itself, so there is nothing to unsubscribe from.', 'FAILED', false, { offers: 'own' });
+    }
     if (summary.cautions?.length) {
       throw new MailError('MAIL-UNSUBSCRIBE-CAUTION', "This email shows signs of a scam, so its unsubscribe link wasn't used: answering it would only tell the sender this address is read. Mark it as junk instead.");
     }
     const target = oneClickTarget(listUnsubscribe, listUnsubscribePost);
     if (!target) {
-      throw new MailError('MAIL-UNSUBSCRIBE-MANUAL', "This sender doesn't offer one-click unsubscribe. The owner can use the unsubscribe link in their mail app, or mark the email as junk.");
+      // Said as it is (UNS-02): what the sender offers instead, and what the owner can do.
+      const offers = unsubscribeKind(listUnsubscribe, listUnsubscribePost);
+      const words: Record<Exclude<UnsubscribeKind, 'one-click'>, string> = {
+        link: "This sender offers only an unsubscribe link, which Universal Mail doesn't open itself (a link is made for a person to check). The owner can use it from their mail app.",
+        email: 'This sender offers only an email address to unsubscribe with. The owner can use the unsubscribe option in their mail app.',
+        none: "This email offers no way to unsubscribe. If it's unwanted, it can be marked as junk."
+      };
+      throw new MailError('MAIL-UNSUBSCRIBE-MANUAL', words[offers as Exclude<UnsubscribeKind, 'one-click'>], 'FAILED', false, { offers });
     }
     await phase('unsubscribe', () => unsubscribeOneClick(target, this.oneClick));
     return success({ mailbox, uid, unsubscribed: true, sender: target.hostname },
@@ -521,10 +536,14 @@ export class MailService {
   async junkEmail(mailbox: string, target: number | number[]) { return this.moveEmail(mailbox, target, await this.specialFolder('junk')); }
   async restoreEmail(mailbox: string, target: number | number[], destination?: string) { return this.moveEmail(mailbox, target, destination ?? await this.specialFolder('inbox')); }
   // One message (uid) or a batch (uids): a batch is one STORE command.
+  // changed: the messages that weren't already so (ACT-10), for the log and undo.
   private async flag(mailbox: string, target: number | number[], flag: '\\Seen' | '\\Flagged', value: boolean) {
-    if (Array.isArray(target)) await this.imap.setFlags(mailbox, target, flag, value);
-    else await this.imap.setFlag(mailbox, target, flag, value);
-    return Array.isArray(target) ? { mailbox, uids: target } : { mailbox, uid: target };
+    if (Array.isArray(target)) {
+      const changed = await this.imap.setFlags(mailbox, target, flag, value);
+      return { mailbox, uids: target, changed: Array.isArray(changed) ? changed : target };
+    }
+    const changed = await this.imap.setFlag(mailbox, target, flag, value);
+    return { mailbox, uid: target, changed: changed === false ? [] : [target] };
   }
   async markRead(mailbox: string, target: number | number[]) { return success({ ...(await this.flag(mailbox, target, '\\Seen', true)), read: true }); }
   async markUnread(mailbox: string, target: number | number[]) { return success({ ...(await this.flag(mailbox, target, '\\Seen', false)), read: false }); }

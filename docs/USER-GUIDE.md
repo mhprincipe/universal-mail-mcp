@@ -111,6 +111,7 @@ Talk to your AI normally. Some examples:
 - *"Show everything I've flagged."*
 - *"Archive every LinkedIn job alert in yahoo from this week."*
 - *"What does the PDF my landlord sent say?"* (reads attachments: text, PDF, Word, pictures)
+- *"Find the email with the insurance PDF."* (search knows attachment names)
 - *"Forward the invoice from Sam to my accountant."* (the attachments go with it)
 - *"Send Pat last month's statement PDF, and a CSV of the totals."* (a file from your mail, and one your AI writes)
 - *"Who fills my inbox? Unsubscribe me from the newsletters I never open, and mark the rest of that junk as spam."*
@@ -130,7 +131,11 @@ Good to know:
   mistyped address and a scammer's first "reply to this".
 - **Unsubscribing** uses the standard one-click way that large senders offer.
   It's never used for an email that looks like a scam (that would only confirm
-  your address is read); your AI suggests marking those as junk instead.
+  your address is read); your AI suggests marking those as junk instead. Some
+  senders (LinkedIn's job alerts, for one) offer only a link: your AI says so,
+  and you use it from your mail app. Universal Mail doesn't open links for you.
+- **Undo does only what's needed.** Undoing "mark read" puts back only the
+  messages that were unread before.
 - **Send limits.** Each account sends at most 30 emails an hour and 200 a day,
   so a confused AI can't flood anyone. Change them on your page.
 - **Nothing is deleted permanently.** "Delete" means Trash, and anything in

@@ -9,6 +9,8 @@ export type MessageSummary = {
   untrustedContent: true;
   // Scam warnings about the sender (SCM-05), in plain words; absent when none.
   cautions?: string[];
+  // Its attachments' names, from the message's structure (FND-01); absent when none.
+  attachmentNames?: string[];
 };
 export type MessageDetail = MessageSummary & {
   cc: Address[]; bcc: Address[]; replyTo: Address[]; text?: string; html?: string;

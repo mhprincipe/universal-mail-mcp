@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import { createApp } from '../../src/app.js';
 import { cautionsFor } from '../../src/cautions.js';
 import { ImapGateway, headerValues } from '../../src/mail/imap.js';
-import { oneClickTarget } from '../../src/unsubscribe.js';
+import { unsubscribeKind } from '../../src/unsubscribe.js';
 
 // The whole tool layer over real HTTP and MCP, with the mail server replaced
 // by an in-memory mailbox (ImapGateway's methods): fast enough for the unit
@@ -66,10 +66,11 @@ export async function startToolFixture(options: { env?: NodeJS.ProcessEnv } = {}
   // A folder's newest messages as a server would describe them for counting.
   vi.spyOn(ImapGateway.prototype, 'senderStats').mockImplementation(async (mailbox, n) => Promise.all(
     [...rows.values()].filter(r => r.mailbox === mailbox).sort((a, b) => a.uid - b.uid).slice(-n).map(async row => {
-      const { from } = await replyHeaders(row.raw);
+      const { from, replyTo } = await replyHeaders(row.raw);
+      const cautions = cautionsFor({ from, replyTo });
       const date = (await simpleParser(row.raw)).date?.toISOString();
       const headers = headerValues(Buffer.from(row.raw.toString('utf8').split(/\r?\n\r?\n/)[0]!));
-      return { ...(from[0] ? { from: from[0] } : {}), ...(date ? { date } : {}), read: row.read, oneClick: oneClickTarget(headers['list-unsubscribe'], headers['list-unsubscribe-post']) !== undefined };
+      return { ...(from[0] ? { from: from[0] } : {}), ...(date ? { date } : {}), read: row.read, unsubscribe: unsubscribeKind(headers['list-unsubscribe'], headers['list-unsubscribe-post']), ...(cautions.length ? { cautions } : {}) };
     })));
   vi.spyOn(ImapGateway.prototype, 'findByMessageId').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.messageId === id).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'findThreadUids').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.raw.toString().includes(id)).map(r => r.uid));

@@ -138,12 +138,15 @@ export function buildMcpServer(mail: MailAccess, hooks: ToolHooks = {}): McpServ
 
   registerTool('search_email', {
     title: 'Search email',
-    description: `Search one folder, newest first. Filter by messageId to re-find a message after a write, because UIDs change on every move. If more matched than limit, the answer has a cursor: pass it back as cursor for the next page. Without account, every connected account is searched (no cursor then). ${CAUTIONS} ${UNTRUSTED}`,
+    description: `Search one folder, newest first. Filter by messageId to re-find a message after a write, because UIDs change on every move. If more matched than limit, the answer has a cursor: pass it back as cursor for the next page. Without account, every connected account is searched (no cursor then). Each result names its attachments (attachmentNames). Text search doesn't look at attachment names: to find mail with files, use hasAttachments or attachmentName. ${CAUTIONS} ${UNTRUSTED}`,
     inputSchema: z.object({
       ...account, mailbox: z.string().default('INBOX'), messageId: z.string().optional(),
       text: z.string().optional(), from: z.string().optional(), to: z.string().optional(),
       subject: z.string().optional(), since: z.string().datetime().optional(), before: z.string().datetime().optional(),
-      read: z.boolean().optional(), flagged: z.boolean().optional(), limit: z.number().int().min(1).max(100).default(25),
+      read: z.boolean().optional(), flagged: z.boolean().optional(),
+      hasAttachments: z.boolean().optional().describe('true: only messages with attachments; false: only without.'),
+      attachmentName: z.string().min(1).max(200).optional().describe('Only messages with an attachment whose name contains this (any case), such as "invoice" or ".pdf".'),
+      limit: z.number().int().min(1).max(100).default(25),
       cursor: z.string().regex(/^\d+$/).optional().describe('From the previous page\'s answer, for the next page.')
     }),
     annotations: { readOnlyHint: true, idempotentHint: true }

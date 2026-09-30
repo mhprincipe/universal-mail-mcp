@@ -4,6 +4,33 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.4.2 (2026-09-30): what the first live run found
+
+- **Find mail with attachments** (FND-01..05): search results name their
+  attachments, and search can ask for mail with attachments, or by an
+  attachment's name. (Found live: a search for "pdf" found nothing; mail
+  servers' text search doesn't look at attachment names.)
+- **Faster filtered searches** (FND-03): a search the server matches loosely
+  (Yahoo's subject search) reads 50 candidates at a time, not 5: 20 round trips
+  and 8.6 s in the live log.
+- **What a sender offers to unsubscribe** (WHO-06, UNS-02, UNS-11): the summary
+  says one click, a link, an email address or none (LinkedIn offers a link:
+  the live "No" was right, but said too little). The refusal says the same,
+  and your own email is simply "nothing to unsubscribe from".
+- **More scam warnings** (SCM-07): insurers, banks, lenders, credit bureaus,
+  phone companies, shops and government services, found live with "Liberty
+  Mutual Team" sent from an unrelated domain; the sender summary shows
+  "replies go elsewhere" too (WHO-07).
+- **Forwards join the original's conversation** (FWD-07).
+- **Undo does only what changed** (ACT-10, ACT-11); **at most 20 emails wait
+  to be read** (PAR-09); **the reader's memory limit counts only its own
+  memory** (ATT-12): the security review's remaining small items.
+- **Tidying:** the v1 files moved to `docs/v1/`; a deprecated way of starting a
+  process in the test kit replaced; unit tests get 20 seconds; the live-test
+  prompts rewritten for Yahoo's delivery delay.
+- **Proposed, not built:** confirming a new recipient on your page
+  ([docs/DESIGN-CONFIRM-ON-PAGE.md](docs/DESIGN-CONFIRM-ON-PAGE.md)).
+
 ## 2.4.1 (2026-09-30): sending files and cleaning up
 
 - **Send attachments** (OUT-01..07): send, reply and drafts can carry

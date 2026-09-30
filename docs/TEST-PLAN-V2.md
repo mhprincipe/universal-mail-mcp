@@ -188,6 +188,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | PAR-06 | an ordinary email caught behind a stuck or crashing one still opens *(added during build: killing a worker also failed the innocent emails queued on it, and PAR-04 would then have remembered them as unsafe)* | U |
 | PAR-07 | a slow-starting worker doesn't count against an email's time limit, and a worker that never starts is reported as unavailable, not blamed on the email *(added during build: under load, a fresh worker's start-up ran out an ordinary email's time limit)* | U |
 | PAR-08 | an HTML-only email has readable text made from its HTML (words, no tags, no styles); an email with its own text part keeps it *(added: found live)* | U |
+| PAR-09 | past 20 waiting, an email is turned away at once ("busy, try again"), not remembered as unsafe; those waiting still open *(added: 2.4.2, security review)* | U |
 
 **Thread strategies**
 
@@ -535,6 +536,7 @@ what it says about the person's position is true.
 | ATT-09 | reading an attachment applies the same structure limits as opening the email (depth, parts, header size) *(added: security review)* | U |
 | ATT-10 | in the built image, the sandbox reads a PDF attachment: the reader and its libraries ship with it | K (package) |
 | ATT-11 | each kind, read as the worker reads it: text with its charset, HTML, PDF, Word, an image, a large image, another kind, damaged files, a missing position *(added: coverage: the worker's code wasn't counted)* | U |
+| ATT-12 | memory the rest of the server takes during a read doesn't count against it *(added: 2.4.2)* | U |
 
 **Send limits**
 
@@ -555,6 +557,7 @@ what it says about the person's position is true.
 | SCM-04 | no false alarm on ordinary mail: the real companies, their mail services' subdomains, friends, newsletters replying on their own domain | U |
 | SCM-05 | search results and an opened email carry the cautions, and the tools say to pass them on | U |
 | SCM-06 | a hostile sender name (thousands of @s, or a long run with no spaces) is checked in a moment, not seconds: it runs on the main thread *(added: security review)* | U |
+| SCM-07 | insurers, banks, lenders, credit bureaus, phone companies, shops and government services, named whole or with generic words, from someone else's address; quiet from their own, and on names that only share a word *(added: 2.4.2, found live)* | U |
 
 **First-time recipients**
 
@@ -579,6 +582,8 @@ what it says about the person's position is true.
 | ACT-07 | what it keeps stays under 16 KB, oldest dropped first (the settings record has a 64 KB limit) *(added: security review)* | U |
 | ACT-08 | undo finds the account by its address: after a rename it still works; if that address is gone, it refuses *(added: security review)* | U |
 | ACT-09 | forwards, unsubscribes and junk are listed (junk with undo); attachments on sends and drafts are counted, never named; the page's words for each *(added: 2.4.1)* | U |
+| ACT-10 | a mark or flag is logged, and undone, only for the messages it really changed (read in the same step that checks them); none changed: nothing logged; not known: all *(added: 2.4.2, security review)* | U |
+| ACT-11 | on a real server, a mark says which it changed *(added: 2.4.2)* | P |
 
 **Accessibility**
 
@@ -612,6 +617,7 @@ what it says about the person's position is true.
 | FWD-04 | a message that isn't there: refused, nothing sent | U |
 | FWD-05 | needs Send; marked as reaching outside | U |
 | FWD-06 | on a real server: the forward reaches the SMTP capture with the original's text and attachments | P |
+| FWD-07 | a forward refers to the original (References), without claiming to answer it *(added: 2.4.2, found live)* | U |
 
 **Unsubscribing**
 
@@ -627,6 +633,7 @@ what it says about the person's position is true.
 | UNS-08 | needs Organize; marked as reaching outside; never read-only | U |
 | UNS-09 | the real parts: DNS answers passed on; https with the certificate checked (an untrusted one refused before anything is sent) *(added: coverage)* | U |
 | UNS-10 | on a real server: the headers come from the stored message; the email stays unread | P |
+| UNS-11 | the account's own email: nothing to unsubscribe from, no talk of junk; other refusals say what the sender offers *(added: 2.4.2, found live)* | U |
 
 **Junk**
 
@@ -637,6 +644,16 @@ what it says about the person's position is true.
 | JNK-03 | needs Organize; one or a batch; not read-only | U |
 | JNK-04 | on a real server: the folder marked Junk, whatever its name (Yahoo's "Bulk") | P |
 
+**Finding mail with attachments** *(added: 2.4.2, found live)*
+
+| ID | Behavior | Tier |
+|---|---|---|
+| FND-01 | each search result names its attachments; inline pictures with a content id aren't attachments | U |
+| FND-02 | only with (or without) attachments, or by an attachment's name, any case; pages still fill, and paging never skips or repeats | U |
+| FND-03 | a search checked after the server's reads 50 at a time (a plain one only what it shows); a page looks at 1,000 at most, then answers with a cursor and a warning | U |
+| FND-04 | the search tool takes both filters, says so, and passes the warning on | U |
+| FND-05 | on a real server, from the stored message structure | P |
+
 **Who fills a folder**
 
 | ID | Behavior | Tier |
@@ -646,6 +663,8 @@ what it says about the person's position is true.
 | WHO-03 | only the newest N by position, read-only, envelopes, flags and two headers, never a body; system emails left out | U |
 | WHO-04 | needs only Read; marked read-only | U |
 | WHO-05 | on a real server: counts from the server's envelopes, flags and headers | P |
+| WHO-06 | the best way each sender offers to unsubscribe: one click, a link, an email address, or none *(added: 2.4.2, found live)* | U |
+| WHO-07 | a sender whose replies go to another domain carries that caution, once *(added: 2.4.2, found live)* | U |
 
 **Exit:** all of the above green; then tried live (not yet).
 
@@ -742,9 +761,9 @@ also where a later reader finds out why a line of code exists.
 | Diagnostics | 15 |
 | Subscription | 33 |
 | Serving people (2.4) | 36 |
-| Files and clean-up (2.4.1) | 32 |
-| **New** | **403** |
-| **Total** | **558** |
+| Files and clean-up (2.4.1, 2.4.2) | 50 |
+| **New** | **421** |
+| **Total** | **576** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

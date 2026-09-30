@@ -104,3 +104,44 @@ describe('scam warnings in the tools', () => {
     expect(await gateway.fetchSummary('INBOX', 4)).not.toHaveProperty('cautions');
   });
 });
+
+describe('more companies people are impersonated as', () => {
+  it('SCM-07 insurers, banks, lenders, credit bureaus, phone companies, shops and government services, found live: "Liberty Mutual Team" sent from dayinhistory.org (added: 2.4.2)', () => {
+    const claims: Array<[string, string, RegExp]> = [
+      ['onthisday@ses.dayinhistory.org', 'Liberty Mutual Team', /name says Liberty Mutual.*dayinhistory\.org/],
+      ['quotes@save-now.example', 'Progressive Insurance', /Progressive/],
+      ['claims@mail-help.example', 'GEICO', /GEICO/],
+      ['agent@claims.example', 'State Farm', /State Farm/],
+      ['member@verify.example', 'USAA', /USAA/],
+      ['notice@billing.example', 'AT&T', /AT&T/],
+      ['alerts@tmo-billing.example', 'T-Mobile', /T-Mobile/],
+      ['report@credit-check.example', 'Experian', /Experian/],
+      ['benefits@gov-help.example', 'Social Security Administration', /Social Security/],
+      ['orders@deals.example', 'Walmart', /Walmart/],
+      ['refund@taxes.example', 'TurboTax', /TurboTax/]
+    ];
+    for (const [address, name, words] of claims) expect(cautionsFor({ from: from(address, name) })[0], name).toMatch(words);
+  });
+
+  it('SCM-07 the same companies from their own addresses stay quiet, and names that only share a word with one aren\'t claims', () => {
+    const ordinary = [
+      { from: from('noreply@email.libertymutual.com', 'Liberty Mutual Insurance') },
+      { from: from('info@email.progressive.com', 'Progressive') },
+      { from: from('geico@email.geico.com', 'GEICO') },
+      { from: from('no-reply@statefarm.com', 'State Farm') },
+      { from: from('usaa.customer.service@mailcenter.usaa.com', 'USAA') },
+      { from: from('att@emaildl.att-mail.com', 'AT&T') },
+      { from: from('noreply@t-mobile.com', 'T-Mobile') },
+      { from: from('alerts@experian.com', 'Experian') },
+      { from: from('noreply@ssa.gov', 'Social Security Administration') },
+      { from: from('help@walmart.com', 'Walmart') },
+      { from: from('turbotax@intuit.com', 'TurboTax') },
+      // Only a word in common with a company name.
+      { from: from('editor@pwa.example', 'Progressive Web Apps Weekly') },
+      { from: from('market@farmstand.example', 'Farmers Market News') },
+      { from: from('hello@discovery.com', 'Discovery') },
+      { from: from('team@trust.example', 'Trust & Safety') }
+    ];
+    for (const message of ordinary) expect(cautionsFor(message), JSON.stringify(message)).toEqual([]);
+  });
+});

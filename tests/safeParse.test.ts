@@ -240,3 +240,36 @@ describe('an attachment inside a hostile structure', () => {
     await expect(parser.attachment(Buffer.from(nested(200), 'latin1'), 0)).rejects.toMatchObject({ code: 'MAIL-PARSE-UNSAFE', details: { reason: expect.stringMatching(/depth limit/) } });
   });
 });
+
+describe('many emails at once', () => {
+  it('PAR-09 past a limit, waiting emails are turned away at once ("busy, try again"), not held in memory; those already waiting still open (added: 2.4.2, security review)', { timeout: 30_000 }, async () => {
+    parser = createSafeParser({ maxWaiting: 2 });
+    const email = (n: number) => Buffer.from(ordinary.replace('<m1@example.invalid>', `<m${n}@busy.example>`));
+    // One opens, two wait, the fourth is turned away.
+    const results = await Promise.allSettled([1, 2, 3, 4].map(n => parser!.parse(email(n))));
+    expect(results.slice(0, 3).map(r => r.status)).toEqual(['fulfilled', 'fulfilled', 'fulfilled']);
+    expect(results[3]).toMatchObject({ status: 'rejected', reason: { code: 'MAIL-PARSER-BUSY', retryable: true } });
+    // Turned away isn't failed: the same email opens once there's room.
+    expect(await parser.parse(email(4))).toMatchObject({ messageId: '<m4@busy.example>' });
+    // The limit a server gets unless told otherwise.
+    const defaults = createSafeParser();
+    try {
+      const many = await Promise.allSettled(Array.from({ length: 25 }, (_, n) => defaults.parse(email(100 + n))));
+      expect(many.filter(r => r.status === 'rejected')).toHaveLength(4);
+    } finally { await defaults.close(); }
+  });
+});
+
+describe('whose memory counts', () => {
+  it('ATT-12 memory the rest of the server takes while an email is read doesn\'t count against it: only the reader\'s own (added: 2.4.2: a busy server could stop a read)', { timeout: 30_000 }, async () => {
+    parser = createSafeParser({ maxExternalMb: 64, workerFile: fixture('slowAnswerWorker.mjs') });
+    // Loaded first: the limit is measured from when an email's reading starts.
+    await parser.parse(Buffer.from(ordinary.replace('<m1@example.invalid>', '<warm@example.invalid>')));
+    const reading = parser.parse(Buffer.from(ordinary));
+    // Meanwhile the server itself takes 200 MB (a big message fetched, say).
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const elsewhere = Buffer.alloc(200 * 1024 * 1024, 1);
+    await expect(reading).resolves.toMatchObject({ messageId: '<m1@example.invalid>' });
+    expect(elsewhere.length).toBe(200 * 1024 * 1024);
+  });
+});

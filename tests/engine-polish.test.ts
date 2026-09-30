@@ -69,7 +69,8 @@ describe('the engine, polished', () => {
   it('POL-05 an unconfirmed batch is read back: all as asked is success; anything else is unknown, not retried', async () => {
     const broken = () => Promise.reject(new Error('connection lost'));
     let client = fakeClient({ store: broken, flagged: () => true });
-    await expect(new ImapGateway(config()).setFlags('INBOX', [3, 4], '\\Flagged', true)).resolves.toBeUndefined();
+    // Which ones it changed can't be told: all of them, as far as undo knows (ACT-10).
+    await expect(new ImapGateway(config()).setFlags('INBOX', [3, 4], '\\Flagged', true)).resolves.toEqual([3, 4]);
     expect(client.messageFlagsAdd).toHaveBeenCalledTimes(1);
     vi.restoreAllMocks();
     client = fakeClient({ store: broken, flagged: uid => uid === 3 });

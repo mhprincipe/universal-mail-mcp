@@ -32,6 +32,18 @@ export function oneClickTarget(listUnsubscribe: string | undefined, listUnsubscr
   return undefined;
 }
 
+// What a sender offers (WHO-06, UNS-02; found live: LinkedIn's job alerts give
+// a link, not one click): one click, the standard Universal Mail answers; a
+// link, for a person to open; an email address; or nothing.
+export type UnsubscribeKind = 'one-click' | 'link' | 'email' | 'none';
+export const UNSUBSCRIBE_RANK: Record<UnsubscribeKind, number> = { 'one-click': 3, link: 2, email: 1, none: 0 };
+export function unsubscribeKind(listUnsubscribe: string | undefined, listUnsubscribePost: string | undefined): UnsubscribeKind {
+  if (oneClickTarget(listUnsubscribe, listUnsubscribePost)) return 'one-click';
+  const targets = [...(listUnsubscribe ?? '').matchAll(/<([^>]*)>/g)].map(match => match[1]!.trim().toLowerCase());
+  if (targets.some(target => /^https?:\/\//.test(target))) return 'link';
+  return targets.some(target => target.startsWith('mailto:')) ? 'email' : 'none';
+}
+
 const unsafe = () => new MailError('MAIL-UNSUBSCRIBE-FAILED', "This sender's unsubscribe address isn't one Universal Mail will contact, so nothing was sent.", 'FAILED', false, { reason: 'unsafe address' });
 
 export async function unsubscribeOneClick(url: URL, deps: OneClickDeps): Promise<void> {

@@ -33,11 +33,11 @@ high-severity problem in a production dependency (REL-08).
 
 | Item | Why it's accepted | What would change it |
 |---|---|---|
-| **`newRecipientsConfirmed` is set by the AI.** A prompt-injected AI could set it without asking the owner. | The tool description and the refusal's remedy both say never to set it without asking; a send confirmed this way shows "someone new" in the activity log; the send limits cap the damage; ChatGPT asks the owner before every send anyway; and Send is off unless the owner ticks it. | A confirmation the owner gives on their page (or by email) instead of in chat. A 2.5 candidate. |
+| **`newRecipientsConfirmed` is set by the AI.** A prompt-injected AI could set it without asking the owner. *(2.4.2: the fix is designed, for the owner's decision: [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md).)* | The tool description and the refusal's remedy both say never to set it without asking; a send confirmed this way shows "someone new" in the activity log; the send limits cap the damage; ChatGPT asks the owner before every send anyway; and Send is off unless the owner ticks it. | A confirmation the owner gives on their page (or by email) instead of in chat. A 2.5 candidate. |
 | **The sign-in metadata advertises only `none`** for the token step, while ChatGPT's signed assertion is also accepted (SIG-83). | Harmless: the assertion is an extra proof, verified against the app's own keys. | Advertising `private_key_jwt` too, once ChatGPT's use of it is seen live. |
 | **Refresh tokens aren't tied to how the app first proved itself.** An app that signed in with an assertion can refresh as a public client. | Both proofs are for the same app, with the same published document from its own origin, and the refresh token is bound to that app. | Recording the proof used and requiring it again. |
-| **The parsing queue has no length limit.** Many large reads at once wait in memory. | One owner, one server instance, and each read is size-limited. | A queue limit that answers "busy" beyond it. |
-| **Undoing "mark read" marks every message in that batch unread**, including any that were already unread before. | Minor and visible; the log doesn't record each message's earlier state. | Recording which messages actually changed. |
+| ~~**The parsing queue has no length limit.**~~ **Fixed in 2.4.2** (PAR-09): at most 20 wait; past that, "busy, try again". | | |
+| ~~**Undoing "mark read" marks every message in that batch unread.**~~ **Fixed in 2.4.2** (ACT-10, ACT-11): each mark or flag records the messages it really changed, read in the same step that checks them. | | |
 | **A failed settings save is logged and retried with the next change** (INS-05). A restart before then loses that change, now including the newest activity entries. | Existing behaviour; saves haven't failed live. | Retrying on a timer as well. |
 
 ## Not in scope for 2.4
@@ -66,5 +66,19 @@ Known and accepted, added in 2.4.1:
 |---|---|---|
 | **Sending to someone the account already knows isn't held**, attachments or not. An injected AI could forward a document to a known contact. | Known contacts are the owner's own; the log shows the send and its attachment count; limits apply. | Holding every send with attachments for the owner's confirmation. |
 | **One-click unsubscribe tells a real sender the address is in use.** | That's what unsubscribing is; scams are refused. | — |
-| **The sandbox's memory watch sees the whole process.** Other work at the same moment (another big message fetched) counts toward a parse's 160 MB. | A false stop only fails that one read ("couldn't be opened safely"); it can be retried. | Moving the parser to its own process. |
+| ~~**The sandbox's memory watch sees the whole process.**~~ **Fixed in 2.4.2** (ATT-12): what the server's own thread takes meanwhile is taken off. | | |
 | **Files from the owner's computer or the chat can't be attached.** | The AI apps don't pass uploaded files to connectors reliably; the safe way is an upload box on the owner's page. | The owner's decision (OPEN-QUESTIONS). |
+
+# 2.4.2: what the first live run found
+
+Reviewed the same way. The changes close three of the accepted items above
+(the parse queue, undo for marks, the memory watch) and add little new surface:
+
+| Path | The risk | What stops it | Test |
+|---|---|---|---|
+| **Attachment names in search results** | Names are written by the sender: they could carry instructions, or be misleading | Every result stays marked untrusted; names are shown, never acted on | FND-01 |
+| **Searching by attachment name** | A pattern that takes the server a long time, or a scan of a huge folder | A plain substring (no pattern language); 1,000 messages looked at per page at most, then a cursor | FND-02, FND-03 |
+| **What a sender offers to unsubscribe** | Following a sender's link from the server | Still only the one-click standard is ever used; a link or an address is reported, never opened | UNS-02, WHO-06 |
+
+Still open: the new-recipient confirmation. Its fix is designed, for the
+owner's decision: [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md).

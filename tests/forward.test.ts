@@ -68,3 +68,15 @@ describe('forwarding', () => {
     expect(sentCopies()).toEqual([]);
   });
 });
+
+describe('a forward in the conversation', () => {
+  it('FWD-07 refers to the original (References), so mail apps can group them, without claiming to answer it (no In-Reply-To) (added: 2.4.2, found live)', async () => {
+    f = await startToolFixture();
+    const raw = await messageWithAttachments([{ filename: 'invoice.pdf', contentType: 'application/pdf', content: invoice }], { subject: 'Your invoice', messageId: '<original-7@shop.example>' });
+    const { uid } = await f.seedRaw('INBOX', raw);
+    await f.call('forward_email', { mailbox: 'INBOX', uid, to: ['accountant@example.invalid'], newRecipientsConfirmed: true });
+    const parsed = await simpleParser(sentCopies()[0]!.raw);
+    expect(parsed.references).toBe('<original-7@shop.example>');
+    expect(parsed.inReplyTo).toBeUndefined();
+  });
+});

@@ -54,12 +54,12 @@ async function fixture(extraEnv: NodeJS.ProcessEnv = {}) {
   // No list headers on the fixture's mail; every sender is the account itself.
   vi.spyOn(ImapGateway.prototype, 'fetchListHeaders').mockImplementation(async (mailbox, uid) => ({ summary: summary(get(mailbox, uid)) }));
   vi.spyOn(ImapGateway.prototype, 'senderStats').mockImplementation(async mailbox => [...rows.values()].filter(r => r.mailbox === mailbox)
-    .map(r => ({ from: { address: 'self@example.invalid' }, read: r.read, oneClick: false })));
+    .map(r => ({ from: { address: 'self@example.invalid' }, read: r.read, unsubscribe: 'none' as const })));
   vi.spyOn(ImapGateway.prototype, 'findByMessageId').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.messageId === id).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'findThreadUids').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.raw.toString().includes(id)).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'append').mockImplementation(append);
   vi.spyOn(ImapGateway.prototype, 'deleteMessage').mockImplementation(async (mailbox, uid) => { get(mailbox, uid); rows.delete(uid); });
-  vi.spyOn(ImapGateway.prototype, 'setFlag').mockImplementation(async (mailbox, uid, flag, enabled) => { const row = get(mailbox, uid); if (flag === '\\Seen') row.read = enabled; else if (flag === '\\Flagged') row.flagged = enabled; });
+  vi.spyOn(ImapGateway.prototype, 'setFlag').mockImplementation(async (mailbox, uid, flag, enabled) => { const row = get(mailbox, uid); if (flag === '\\Seen') row.read = enabled; else if (flag === '\\Flagged') row.flagged = enabled; return true; });
   const relocate = (mailbox: string, uid: number, destination: string) => {
     const row = get(mailbox, uid); rows.delete(uid); const movedUid = nextUid++;
     rows.set(movedUid, { ...row, mailbox: destination, uid: movedUid }); return movedUid;

@@ -1,6 +1,6 @@
 # Universal Mail MCP — design
 
-**Status:** built and in use (version 2.4.1, 2026-09-30). Written as the
+**Status:** built and in use (version 2.4.2, 2026-09-30). Written as the
 proposal of 2026-09-24; where the build learned something, the section says
 so, and the journal (docs/TDD-JOURNAL.md) has the detail. The user-facing
 summary is docs/USER-GUIDE.md.

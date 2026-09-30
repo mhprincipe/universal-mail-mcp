@@ -43,8 +43,8 @@ describe('cleaning up on a real mail server', () => {
     await p.ok('mark_read', { mailbox: 'Counted', uid: first.uid });
     const answer = await p.ok('summarize_senders', { mailbox: 'Counted' });
     expect(answer).toMatchObject({ looked: 3, senders: [
-      { address: 'deals@shop.example.com', name: 'Shop', messages: 2, unread: 2, oneClickUnsubscribe: true },
-      { address: 'sam@example.org', name: 'Sam', messages: 1, unread: 0, oneClickUnsubscribe: false }
+      { address: 'deals@shop.example.com', name: 'Shop', messages: 2, unread: 2, unsubscribe: 'one-click' },
+      { address: 'sam@example.org', name: 'Sam', messages: 1, unread: 0, unsubscribe: 'none' }
     ] });
   });
 });

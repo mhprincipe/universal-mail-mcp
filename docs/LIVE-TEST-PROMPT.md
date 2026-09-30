@@ -79,60 +79,64 @@ Good to know, so you don't count them as problems: Gmail folders are labels, so 
 ## What's new in 2.4
 
 Attachments, scam warnings, the check before writing to someone new, and the
-activity log. It reads only mail that's already there, sends only to your own
-address, and makes one send attempt that is held on purpose (to an address that
-can't exist, so nothing could leave even if it weren't). Replace `yahoo` with
-the account's name.
+activity log. Rewritten after the first live run (2.4.2): Yahoo can take a few
+minutes to deliver mail you send yourself, so the test email is sent first and
+looked for last. It reads only mail that's already there, sends only to your
+own address, and makes one send attempt that is held on purpose (to an address
+that can't exist). Replace `yahoo` with the account's name.
 
 ```text
-Please test the new Universal Mail features on my account "yahoo" (pass account "yahoo" on every call), in this order. Use only the Universal Mail tools. Never send to anyone but my own address, and never confirm a new recipient. Don't change any message. If a step fails, say so and go on.
+Please test the new Universal Mail features on my account "yahoo" (pass account "yahoo" on every call), in this order. Use only the Universal Mail tools. Never send to anyone but my own address, and never confirm a new recipient. Don't change any message except the test email this prompt sends. If a step fails, say so and go on.
 
 Keep a table: step, tool, worked (yes/no), what you saw, anything odd. Show it at the end.
 
-1. Find a message with an attachment: search my Inbox with text "pdf" (limit 10) and open the results one at a time with get_email (at most 10) until one has a non-empty attachments list. If none, try Archive the same way. Tell me its subject, whether it was read before you opened it, and its attachments (name, type, size, index).
-2. Read its first attachment with get_attachment. Tell me what kind it came back as (text, image, unsupported or unreadable) and, for text, what it's about in one sentence of your own. If it has a PDF, Word file or picture you haven't read, read one of those too. Then re-find the message by messageId and tell me whether its read state is unchanged.
-3. Search my Inbox for the 50 newest messages. List every one that carries cautions, with the caution in full, and say whether each looks right to you. If none, say so.
-4. Send an email to nobody@example.invalid with the subject "Universal Mail new-recipient test" and one line of body. It should be held with MAIL-NEW-RECIPIENT and nothing sent. Tell me exactly what the answer said. Do not confirm or retry.
-5. Send me an email at my own address with the subject "Universal Mail 2.4 test" and one line of body. It should go straight through, since it's my own address.
-6. Search the Inbox for "Universal Mail 2.4 test" (at most 5 searches). Flag it, then move it to Archive.
+1. First, send me an email at my own address with the subject "Universal Mail 2.4 test" and one line of body. It should go straight through, since it's my own address. My provider can take a few minutes to deliver it, so go on with the next steps.
+2. Find mail with attachments: search my Inbox with hasAttachments true (limit 5). Tell me each one's subject and attachment names. If none, try Archive.
+3. Open the first with get_email, then read its first attachment with get_attachment. Tell me what kind it came back as (text, image, unsupported or unreadable) and, for text, what it's about in one sentence of your own. Then re-find the message by messageId and tell me whether its read state is unchanged.
+4. Search my Inbox for the 50 newest messages. List every one that carries cautions, with the caution in full, and say whether each looks right to you. If none, say so.
+5. Send an email to nobody@example.invalid with the subject "Universal Mail new-recipient test" and one line of body. It should be held with MAIL-NEW-RECIPIENT and nothing sent. Tell me exactly what the answer said. Do not confirm or retry.
+6. Now find the step 1 email: search the Inbox for "Universal Mail 2.4 test", up to 8 times. If it still isn't there, say so and skip to step 7. Flag it, then move it to Archive.
 7. Show the table and your notes. Then tell me: open my Universal Mail page, look at Recent activity, and press "Put back" on the archive and "Unflag again" on the flag.
 ```
 
-Afterwards, on your page: **Recent activity** should list the send (1
-recipient), the flag and the move to Archive. **Put back** on the move returns
-the message to the Inbox. **Unflag again** should then say the message has
-moved since and change nothing: undo never acts on a message that isn't where
-it was left. The held send isn't listed, because nothing was sent. Unflag and
-trash the test message in your mail app when you're done.
+Afterwards, on your page: **Recent activity** should list the send, the flag
+and the move to Archive. **Put back** on the move returns the message to the
+Inbox. **Unflag again** should then say the message has moved since and change
+nothing: undo never acts on a message that isn't where it was left. The held
+send isn't listed, because nothing was sent. Unflag and trash the test message
+in your mail app when you're done.
 
 ---
 
-## What's new in 2.4.1
+## What's new in 2.4.1 and 2.4.2
 
-Sending files, forwarding, the sender summary, junk and unsubscribe. It sends
-only to your own address, moves only the messages it creates, and unsubscribes
-from nothing unless you name a newsletter yourself. Replace `yahoo` with the
-account's name.
+Sending files, forwarding, the sender summary, unsubscribe, finding mail with
+attachments, and marks that know what they changed. Rewritten after the first
+live run: the test email is sent first and looked for last, files are found
+with the attachment search, and nothing of yours is marked as junk (junk is
+tested automatically; to try it, mark a real spam message). Replace `yahoo`
+with the account's name.
 
 ```text
-Please test the new Universal Mail features on my account "yahoo" (pass account "yahoo" on every call), in this order. Use only the Universal Mail tools. Never send to anyone but my own address. Don't unsubscribe from anything and don't mark anything as junk except the test messages below. If a step fails, say so and go on.
+Please test the new Universal Mail features on my account "yahoo" (pass account "yahoo" on every call), in this order. Use only the Universal Mail tools. Never send to anyone but my own address. Don't unsubscribe from anything, don't mark anything as junk, and don't change any message except the test messages this prompt creates. If a step fails, say so and go on.
 
 Keep a table: step, tool, worked (yes/no), what you saw, anything odd. Show it at the end.
 
-1. Summarize who sends to my Inbox (summarize_senders, the default 500 messages). Show me the top 10 with their counts, unread counts, and which offer one-click unsubscribe, and any cautions.
-2. Find a message with an attachment (search my Inbox with text "pdf", limit 10, and open them with get_email until one has attachments). Note its uid and the attachment's index.
-3. Send me an email at my own address with the subject "Universal Mail 2.4.1 files", a one-line body, that attachment (attachments: its folder, uid and index), and a small CSV you write (files: "totals.csv" with two lines). Tell me what the answer lists as attached.
-4. Search the Inbox for "Universal Mail 2.4.1 files" (at most 5 searches). Open it and list its attachments: both files should be there, with the right names.
-5. Forward that message to my own address with the note "Forward test" (forward_email). Then search for "Fwd: Universal Mail 2.4.1 files" (at most 5 searches) and tell me whether the note, the original's details, and both attachments are there.
-6. Mark the forwarded copy as junk (junk_email). Tell me which folder it went to. Then restore it to the Inbox (restore_email).
-7. Try unsubscribe on the original test message (it isn't a newsletter): it should say one-click isn't offered, and change nothing.
-8. Clean up: trash the test messages you created (Inbox and Sent).
-9. Show the table and your notes. Then tell me to open my Universal Mail page and check Recent activity: the send (with 2 attachments), the forward, the junk move and the restore should be listed.
+1. First, find the newest message in my Inbox that has attachments (search_email with hasAttachments true, limit 1), and open it with get_email to get its first attachment's index. Then send me an email at my own address with the subject "Universal Mail 2.4.2 files", a one-line body, that attachment (attachments: its folder, uid and index), and a CSV you write (files: "totals.csv" with two lines). Tell me what the answer lists as attached. Delivery can take a few minutes, so go on.
+2. Summarize who sends to my Inbox (summarize_senders). Show me the top 10 with counts, unread counts, how each offers to unsubscribe (one-click, link, email or none), and any cautions.
+3. Search my Inbox with attachmentName "pdf" (limit 5) and list the subjects and attachment names.
+4. From step 2, pick a sender whose unsubscribe is "link", if there is one, find one of its emails (search by from, limit 1) and call unsubscribe on it. It should refuse, saying the sender offers only a link, and change nothing. Never pick a sender marked one-click.
+5. Now find the step 1 email: search the Inbox for "Universal Mail 2.4.2 files", up to 8 times. Open it: both attachments should be there with the right names. If it hasn't arrived, use its copy in the Sent folder for the next steps and say so.
+6. Forward it to my own address with the note "Forward test" (forward_email). The answer should list both attachments.
+7. Mark it read, then mark it read again: the second answer's changed list should be empty. Then mark it unread.
+8. Clean up: trash the test messages you created, in the Inbox and in Sent (search for the forward up to 3 times; if it hasn't arrived, say so).
+9. Show the table and your notes. Then tell me to open my Universal Mail page and check Recent activity: the send (2 attachments), the forward, the first mark read (the second shouldn't be listed: it changed nothing), the mark unread and the trash.
 ```
 
 To try unsubscribing for real, ask your AI about one newsletter you really
-want to leave: *"Unsubscribe me from <the newsletter>."* It uses the one-click
-way only if the sender offers it.
+want to leave: *"Unsubscribe me from <the newsletter>."* It unsubscribes you
+itself only where the sender offers one click; otherwise it tells you what the
+sender offers instead.
 
 ---
 

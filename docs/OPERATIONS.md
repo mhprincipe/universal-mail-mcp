@@ -131,7 +131,10 @@ log as the `unsubscribe` phase.
 ### Messages and attachments that couldn't be read
 
 Messages and attachments are read in a separate worker with a 10-second limit,
-a 256 MB heap and a watch on the memory it takes outside the heap (160 MB).
+a 256 MB heap and a watch on the memory it takes outside the heap (160 MB,
+counting only the reader's own: what the rest of the server takes meanwhile
+doesn't count, since 2.4.2). At most 20 wait behind the one being read; past
+that, `MAIL-PARSER-BUSY` ("try again in a moment").
 One that passes a limit is stopped, remembered (so it isn't tried again), and
 answered `MAIL-PARSE-UNSAFE`; the email itself still opens when only an
 attachment failed. The server log line names the limit, never the content.

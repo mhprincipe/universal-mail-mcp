@@ -34,13 +34,49 @@ const BRANDS: Brand[] = [
   { name: 'Zelle', aliases: ['zelle'], domains: ['zellepay.com'] },
   { name: 'Norton', aliases: ['norton', 'norton lifelock', 'norton antivirus'], domains: ['norton.com', 'nortonlifelock.com'] },
   { name: 'McAfee', aliases: ['mcafee'], domains: ['mcafee.com'] },
-  { name: 'Geek Squad', aliases: ['geek squad', 'best buy'], domains: ['bestbuy.com', 'geeksquad.com'] }
+  { name: 'Geek Squad', aliases: ['geek squad', 'best buy'], domains: ['bestbuy.com', 'geeksquad.com'] },
+  // Added 2.4.2 (SCM-07, found live: "Liberty Mutual Team" from dayinhistory.org).
+  // Kept out: companies whose domain is one letter from an everyday one
+  // (Discover and discovery.com, Square and squire.com, Truist and trust).
+  { name: 'Liberty Mutual', aliases: ['liberty mutual'], domains: ['libertymutual.com'] },
+  { name: 'Progressive', aliases: ['progressive'], domains: ['progressive.com'] },
+  { name: 'GEICO', aliases: ['geico'], domains: ['geico.com'] },
+  { name: 'State Farm', aliases: ['state farm'], domains: ['statefarm.com'] },
+  { name: 'Allstate', aliases: ['allstate'], domains: ['allstate.com'] },
+  { name: 'USAA', aliases: ['usaa'], domains: ['usaa.com'] },
+  { name: 'Nationwide', aliases: ['nationwide'], domains: ['nationwide.com'] },
+  { name: 'Farmers Insurance', aliases: ['farmers'], domains: ['farmers.com'] },
+  { name: 'U.S. Bank', aliases: ['us bank', 'u s bank', 'usbank'], domains: ['usbank.com'] },
+  { name: 'PNC', aliases: ['pnc', 'pnc bank'], domains: ['pnc.com'] },
+  { name: 'Charles Schwab', aliases: ['schwab', 'charles schwab'], domains: ['schwab.com'] },
+  { name: 'Fidelity', aliases: ['fidelity', 'fidelity investments'], domains: ['fidelity.com'] },
+  { name: 'Vanguard', aliases: ['vanguard'], domains: ['vanguard.com'] },
+  { name: 'Navy Federal', aliases: ['navy federal', 'navy federal credit union'], domains: ['navyfederal.org'] },
+  { name: 'Synchrony', aliases: ['synchrony', 'synchrony bank'], domains: ['synchrony.com', 'mysynchrony.com', 'synchronybank.com'] },
+  { name: 'Experian', aliases: ['experian'], domains: ['experian.com'] },
+  { name: 'Equifax', aliases: ['equifax'], domains: ['equifax.com'] },
+  { name: 'TransUnion', aliases: ['transunion'], domains: ['transunion.com'] },
+  { name: 'Rocket Mortgage', aliases: ['rocket mortgage'], domains: ['rocketmortgage.com'] },
+  { name: 'AT&T', aliases: ['at t', 'att'], domains: ['att.com', 'att.net', 'att-mail.com'] },
+  { name: 'Verizon', aliases: ['verizon', 'verizon wireless'], domains: ['verizon.com', 'verizonwireless.com', 'verizon.net'] },
+  { name: 'T-Mobile', aliases: ['t mobile', 'tmobile'], domains: ['t-mobile.com'] },
+  { name: 'Xfinity', aliases: ['xfinity', 'comcast', 'comcast xfinity'], domains: ['xfinity.com', 'comcast.com', 'comcast.net'] },
+  { name: 'Social Security', aliases: ['social security', 'social security administration', 'ssa'], domains: ['ssa.gov'] },
+  { name: 'Medicare', aliases: ['medicare'], domains: ['medicare.gov', 'cms.gov'] },
+  { name: 'Walmart', aliases: ['walmart'], domains: ['walmart.com'] },
+  { name: 'eBay', aliases: ['ebay'], domains: ['ebay.com'] },
+  { name: 'Costco', aliases: ['costco'], domains: ['costco.com'] },
+  { name: 'The Home Depot', aliases: ['home depot'], domains: ['homedepot.com'] },
+  { name: 'Cash App', aliases: ['cash app', 'cashapp'], domains: ['cash.app', 'squareup.com'] },
+  { name: 'TurboTax', aliases: ['turbotax', 'intuit', 'intuit turbotax', 'quickbooks'], domains: ['turbotax.com', 'intuit.com'] },
+  { name: 'Spotify', aliases: ['spotify'], domains: ['spotify.com'] }
 ];
 
 // Words that don't change whose name it is: "PayPal Support" is PayPal.
 const GENERIC = new Set(['support', 'team', 'service', 'services', 'security', 'alert', 'alerts', 'billing', 'account', 'accounts', 'customer',
   'care', 'notification', 'notifications', 'no', 'reply', 'noreply', 'inc', 'com', 'online', 'help', 'desk', 'center', 'centre', 'department',
-  'dept', 'official', 'verification', 'verify', 'update', 'updates', 'info', 'mail', 'the', 'your', 'order', 'orders', 'payments', 'payment', 'fraud', 'prevention']);
+  'dept', 'official', 'verification', 'verify', 'update', 'updates', 'info', 'mail', 'the', 'your', 'order', 'orders', 'payments', 'payment', 'fraud', 'prevention',
+  'insurance']);
 
 const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'gov', 'ac', 'edu']);
 // The domain a company registers: mail.bank.example → bank.example, and
@@ -55,8 +91,12 @@ const officialFor = (brand: Brand, domain: string) => brand.domains.includes(reg
 
 function claimedBrand(name: string | undefined): Brand | undefined {
   if (!name) return undefined;
-  const words = name.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w && !GENERIC.has(w)).join(' ');
-  return words ? BRANDS.find(b => b.aliases.includes(words)) : undefined;
+  const all = name.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean);
+  // As written, or without its generic words: a company whose own name has
+  // one of them ("Social Security") is still named whole (SCM-07).
+  const whole = all.join(' ');
+  const words = all.filter(w => !GENERIC.has(w)).join(' ');
+  return BRANDS.find(b => b.aliases.includes(whole) || (words !== '' && b.aliases.includes(words)));
 }
 
 // Letters that pass for others at a glance: rn/m, 0/o, 1/l, vv/w.

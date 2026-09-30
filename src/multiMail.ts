@@ -111,12 +111,12 @@ export function createMultiMail(services: Map<string, AccountService>) {
     async search(input: SearchInput, reachable: string[]): Promise<ToolEnvelope<TaggedSummary[]>> {
       const settled = await Promise.allSettled(reachable.map(async account => {
         const result = await services.get(account)!.searchEmail(input);
-        return (result.data ?? []).map(summary => ({ ...summary, account }));
+        return { rows: (result.data ?? []).map(summary => ({ ...summary, account })), warnings: (result.warnings ?? []).map(w => `${account}: ${w}`) };
       }));
       const found: TaggedSummary[] = [];
       const warnings: string[] = [];
       settled.forEach((outcome, index) => {
-        if (outcome.status === 'fulfilled') found.push(...outcome.value);
+        if (outcome.status === 'fulfilled') { found.push(...outcome.value.rows); warnings.push(...outcome.value.warnings); }
         else warnings.push(`Couldn't search ${reachable[index]}: ${classify(outcome.reason).message}`);
       });
       // Newest first across every account; messages without a date go last.

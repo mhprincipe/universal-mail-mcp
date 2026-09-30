@@ -16,7 +16,8 @@ export type SafeParser = {
 // worker's heap limit doesn't cover the buffers a PDF inflates into (ATT-08,
 // security review), and those belong to the worker's thread, so it's the
 // process's resident memory that shows them.
-export type SafeParserOptions = { timeoutMs?: number; startupTimeoutMs?: number; memoryMb?: number; maxExternalMb?: number; workerFile?: URL };
+// maxWaiting: how many may wait behind the one being read (PAR-09).
+export type SafeParserOptions = { timeoutMs?: number; startupTimeoutMs?: number; memoryMb?: number; maxExternalMb?: number; maxWaiting?: number; workerFile?: URL };
 
 // Under tests Node runs the TypeScript source directly; built, it runs the .js.
 const defaultWorkerFile = new URL(import.meta.url.endsWith('.ts') ? './parseWorker.ts' : './parseWorker.js', import.meta.url);
@@ -32,6 +33,8 @@ const unsafe = (reason: string) =>
   new MailError('MAIL-PARSE-UNSAFE', "This email couldn't be opened safely.", 'FAILED', false, { reason });
 const unavailable = (reason: string) =>
   new MailError('MAIL-PARSER-UNAVAILABLE', "Emails can't be opened right now. Try again in a minute.", 'FAILED', true, { reason });
+const busy = () =>
+  new MailError('MAIL-PARSER-BUSY', 'Universal Mail is opening many emails at once. Try again in a moment.', 'FAILED', true, { reason: 'queue full' });
 
 // The worker takes one email at a time; the rest wait in a queue. So when a
 // worker is killed or crashes, the email it held is the culprit, and the
@@ -46,6 +49,9 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
   // The server has 512 MB in all (Cloud Run's default).
   const maxGrowthBytes = (options.maxExternalMb ?? 160) * 1024 * 1024;
   const workerFile = options.workerFile ?? defaultWorkerFile;
+  // Emails wait in memory, whole: past this many, one is turned away at once
+  // rather than held (PAR-09, security review: the queue had no limit).
+  const maxWaiting = options.maxWaiting ?? 20;
   const queue: Job[] = [];
   // Fingerprints of emails that failed, so they are refused at once next time.
   // Not Message-IDs: any sender can copy one, and so block a genuine email.
@@ -80,10 +86,15 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
   };
 
   const startClock = (run: Running) => {
-    // Checked often while a job runs: growth since it started.
-    const before = process.memoryUsage.rss();
+    // Checked often while a job runs: the process's growth since it started,
+    // less what the server's own thread took meanwhile (its heap and its
+    // buffers, which Node counts per thread), so a busy server doesn't stop a
+    // read that isn't to blame (ATT-12). What's left is the reader's.
+    const own = () => { const m = process.memoryUsage(); return m.heapUsed + m.external; };
+    const before = { rss: process.memoryUsage.rss(), own: own() };
     run.watch = setInterval(() => {
-      if (process.memoryUsage.rss() - before <= maxGrowthBytes) return;
+      const growth = process.memoryUsage.rss() - before.rss - Math.max(0, own() - before.own);
+      if (growth <= maxGrowthBytes) return;
       retire(run.worker, 'memory limit');
       void run.worker.terminate();
     }, 25);
@@ -136,6 +147,7 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
   const submit = <T>(raw: Buffer, attachment?: number | 'files') => {
     const fingerprint = createHash('sha256').update(raw).digest('hex') + (attachment === undefined ? '' : `#${attachment}`);
     if (failed.has(fingerprint)) return Promise.reject(unsafe('failed before'));
+    if (queue.length >= maxWaiting) return Promise.reject(busy());
     return new Promise<T>((resolve, reject) => {
       queue.push({ raw, ...(attachment === undefined ? {} : { attachment }), fingerprint, resolve: resolve as (result: unknown) => void, reject });
       pump();

@@ -54,6 +54,10 @@ a release runs them again before building.
   and the case is added. The journal records each check (for example 12 of 12).
 - **The coverage floor only rises** (`vitest.config.ts` thresholds; raised to
   93/83/94/96 on 2.3.1 and to 93/84/94/96 on 2.4.0, the levels the suite reaches).
+- **A unit test has 20 seconds, not Vitest's 5.** Many start real workers, git
+  and setup's processes, or parse real PDFs; on a busy machine 5 s wasn't
+  enough, and a test cut off at 5 s went on running into the next test's
+  mailbox (2.4.2).
 - **Nothing reaches a real mailbox from the automated tiers.** Live checks on
   the owner's mailbox are read-only unless the owner asks for more.
 - **Write test code with an editor, not through shell-quoted scripts**: twice a

@@ -4,7 +4,7 @@ import { ImapFlow } from 'imapflow';
 import { imapTransport, type AppConfig } from '../config.js';
 import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
 import { isSystemMessageId } from '../systemMail.js';
-import { oneClickTarget } from '../unsubscribe.js';
+import { unsubscribeKind, type UnsubscribeKind } from '../unsubscribe.js';
 import type { Address, FolderInfo, MessageSummary } from '../types.js';
 
 export type SearchInput = {
@@ -18,6 +18,10 @@ export type SearchInput = {
   before?: Date;
   read?: boolean;
   flagged?: boolean;
+  // Checked here, not by the server (FND-02): only with (or without)
+  // attachments, or with one whose name contains these words.
+  hasAttachments?: boolean;
+  attachmentName?: string;
   limit: number;
   // Paging: only messages with a lower UID than this (the last page's cursor).
   beforeUid?: number;
@@ -68,6 +72,27 @@ export function headerValues(raw: Buffer | undefined): Record<string, string> {
   }
   return values;
 }
+
+// The attachments a message's structure shows (FND-01), by name: parts sent
+// as attachments, and named ones without a content id (a picture a newsletter
+// shows in its text has one). An attached email counts as one, not its insides.
+function attachmentsIn(root: any): string[] | undefined {
+  if (!root) return undefined;
+  const names: string[] = [];
+  const walk = (part: any) => {
+    const type = String(part?.type ?? '').toLowerCase();
+    if (Array.isArray(part?.childNodes) && part.childNodes.length && type !== 'message/rfc822') { part.childNodes.forEach(walk); return; }
+    const filename: string | undefined = part?.dispositionParameters?.filename ?? part?.parameters?.name;
+    if (String(part?.disposition ?? '').toLowerCase() === 'attachment' || (filename && !part?.id)) names.push(filename ?? `(unnamed ${type})`);
+  };
+  walk(root);
+  return names.length ? names : undefined;
+}
+
+// A page reads candidates 50 at a time when it checks them itself, and looks
+// at 1,000 at most (FND-03).
+const FILTERED_BATCH = 50;
+const MAX_EXAMINED = 1000;
 
 const withCautions = (from: Address[], replyTo: Address[]) => {
   const cautions = cautionsFor({ from, replyTo });
@@ -213,7 +238,7 @@ export class ImapGateway {
   // One page, newest first. next: the cursor for the page after it (the
   // lowest UID on this page), when more matched than the limit. New mail gets
   // higher UIDs, so paging never repeats or skips a message.
-  async searchPage(input: SearchInput): Promise<{ messages: MessageSummary[]; next?: number }> {
+  async searchPage(input: SearchInput): Promise<{ messages: MessageSummary[]; next?: number; warning?: string }> {
     if (input.beforeUid !== undefined && input.beforeUid <= 1) return { messages: [] };
     return this.read(async client => {
       const lock = await this.openToRead(client, input.mailbox);
@@ -250,20 +275,45 @@ export class ImapGateway {
         const plain = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
         const wantedSubject = input.subject ? plain(input.subject) : undefined;
         const subjectMatches = (m: MessageSummary) => !wantedSubject || plain(m.subject ?? '').includes(wantedSubject);
+        // A server's search can't see attachments, so they're checked here too
+        // (FND-02, found live: a search for "pdf" found nothing).
+        const wantedName = input.attachmentName ? plain(input.attachmentName) : undefined;
+        const attachmentsMatch = (m: MessageSummary) => {
+          const names = m.attachmentNames ?? [];
+          if (input.hasAttachments !== undefined && input.hasAttachments !== names.length > 0) return false;
+          return !wantedName || names.some(name => plain(name).includes(wantedName));
+        };
+        const checkedHere = Boolean(input.since || input.before || wantedSubject || input.hasAttachments !== undefined || wantedName);
         // System emails don't exist, as far as a search is concerned, so they
         // mustn't use up the page either (SIG-82, found live: "asked for 5, got
-        // 3"). Older messages fill in until the page is full; the cursor is the
-        // lowest UID looked at, so paging never skips or repeats.
+        // 3"). Older messages fill in until the page is full, looked at newest
+        // first; the cursor is the lowest UID looked at, so paging never skips
+        // or repeats. When results are checked here, many may be thrown away,
+        // so they're read 50 at a time (FND-03, found live: a loose subject
+        // match read 5 at a time took 20 round trips), and a page looks at
+        // 1,000 at most before answering with a cursor to go on.
         const messages: MessageSummary[] = [];
         let lowest: number | undefined;
-        while (messages.length < input.limit && remaining.length) {
-          const batch = remaining.slice(-(input.limit - messages.length));
-          remaining = remaining.slice(0, remaining.length - batch.length);
+        let examined = 0;
+        while (messages.length < input.limit && remaining.length && examined < MAX_EXAMINED) {
+          const needed = input.limit - messages.length;
+          const batch = remaining.slice(-(checkedHere ? Math.max(needed, FILTERED_BATCH) : needed));
           lowest = batch[0];
-          const rows = await client.fetchAll(batch, { envelope: true, flags: true, size: true }, { uid: true });
-          messages.push(...rows.sort((a, b) => b.uid - a.uid).map(m => this.summary(input.mailbox, m)).filter(m => !isSystemMessageId(m.messageId) && inTime(m) && subjectMatches(m)));
+          const rows = await client.fetchAll(batch, { envelope: true, flags: true, size: true, bodyStructure: true }, { uid: true });
+          for (const row of [...rows].sort((a, b) => b.uid - a.uid)) {
+            examined++;
+            const m = this.summary(input.mailbox, row);
+            if (!isSystemMessageId(m.messageId) && inTime(m) && subjectMatches(m) && attachmentsMatch(m)) messages.push(m);
+            if (messages.length >= input.limit) { lowest = row.uid; break; }
+          }
+          remaining = remaining.filter(uid => uid < lowest!);
         }
-        return { messages, ...(remaining.length && lowest !== undefined ? { next: lowest } : {}) };
+        const more = remaining.length > 0 && lowest !== undefined;
+        const stopped = more && messages.length < input.limit;
+        return {
+          messages, ...(more ? { next: lowest } : {}),
+          ...(stopped ? { warning: `Looked at the newest ${MAX_EXAMINED.toLocaleString('en-US')} messages that could match and found ${messages.length}. Pass the cursor to look further back.` } : {})
+        };
       } finally { lock.release(); }
     });
   }
@@ -294,7 +344,8 @@ export class ImapGateway {
       flagged: Boolean(m.flags?.has('\\Flagged')),
       size: m.size || undefined,
       untrustedContent: true,
-      ...withCautions(map(m.envelope?.from), map(m.envelope?.replyTo))
+      ...withCautions(map(m.envelope?.from), map(m.envelope?.replyTo)),
+      ...(attachmentsIn(m.bodyStructure) ? { attachmentNames: attachmentsIn(m.bodyStructure) } : {})
     };
   }
 
@@ -379,21 +430,24 @@ export class ImapGateway {
   }
 
   // Who sends to this folder (WHO-03): its newest n messages by position,
-  // read-only: each one's sender, date, whether it's been read, and whether
-  // one click unsubscribes. Envelopes, flags and two headers; never a body.
-  async senderStats(mailbox: string, n: number): Promise<Array<{ from?: Address; date?: string; read: boolean; oneClick: boolean }>> {
+  // read-only: each one's sender, date, whether it's been read, how it offers
+  // to unsubscribe (WHO-06), and its cautions, Reply-To included (WHO-07).
+  // Envelopes, flags and two headers; never a body.
+  async senderStats(mailbox: string, n: number): Promise<Array<{ from?: Address; date?: string; read: boolean; unsubscribe: UnsubscribeKind; cautions?: string[] }>> {
     return this.read(async client => {
       const lock = await this.openToRead(client, mailbox);
       try {
         const rows: any[] = await this.newest(client, n, { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });
+        const map = (items: any[] | undefined) => (items ?? []).filter(x => x?.address).map(person);
         return rows.filter(row => !isSystemMessageId(row.envelope?.messageId)).map(row => {
-          const sender = (row.envelope?.from ?? []).find((x: any) => x?.address);
+          const sender = map(row.envelope?.from)[0];
           const date: string | undefined = row.envelope?.date?.toISOString?.();
           const headers = headerValues(row.headers);
           return {
-            ...(sender ? { from: person(sender) } : {}), ...(date ? { date } : {}),
+            ...(sender ? { from: sender } : {}), ...(date ? { date } : {}),
             read: Boolean(row.flags?.has('\\Seen')),
-            oneClick: oneClickTarget(headers['list-unsubscribe'], headers['list-unsubscribe-post']) !== undefined
+            unsubscribe: unsubscribeKind(headers['list-unsubscribe'], headers['list-unsubscribe-post']),
+            ...withCautions(map(row.envelope?.from), map(row.envelope?.replyTo))
           };
         });
       } finally { lock.release(); }
@@ -589,8 +643,9 @@ export class ImapGateway {
 
   // A change that includes a system email is refused whole, and touches
   // nothing. Checked on the connection making the change, just before it.
+  // With each one's flags, so a change can say what it really changed (ACT-10).
   private async refuseSystemOn(client: ImapFlow, uids: number[]) {
-    const rows = await client.fetchAll(uids.join(','), { envelope: true }, { uid: true });
+    const rows = await client.fetchAll(uids.join(','), { envelope: true, flags: true }, { uid: true });
     if (rows.some(m => isSystemMessageId(m.envelope?.messageId))) throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
     return rows;
   }
@@ -602,7 +657,9 @@ export class ImapGateway {
     });
   }
 
-  async setFlag(mailbox: string, uid: number, flag: '\\Seen' | '\\Flagged', value: boolean): Promise<void> {
+  // Whether it changed (ACT-10): false when it was already so; true when it
+  // wasn't, or when a lost answer means it can't be told.
+  async setFlag(mailbox: string, uid: number, flag: '\\Seen' | '\\Flagged', value: boolean): Promise<boolean> {
     const desired = async (): Promise<boolean | null> => this.read(async client => {
       const lock = await this.openToRead(client, mailbox);
       try {
@@ -614,21 +671,22 @@ export class ImapGateway {
     const mutate = async () => this.run(async client => {
       const lock = await client.getMailboxLock(mailbox);
       try {
-        await this.refuseSystemOn(client, [uid]);
+        const [before] = await this.refuseSystemOn(client, [uid]);
         const ok = value
           ? await client.messageFlagsAdd(uid, [flag], { uid: true })
           : await client.messageFlagsRemove(uid, [flag], { uid: true });
         if (!ok) throw new Error('Flag update not confirmed');
+        return !before || Boolean(before.flags?.has(flag)) !== value;
       } finally { lock.release(); }
     });
-    try { await mutate(); }
+    try { return await mutate(); }
     catch (error) {
       // Refused before any change (a system email): nothing to reconcile.
       if (error instanceof MailError && error.code === 'MESSAGE_NOT_FOUND') throw error;
       const state = await desired().catch(() => { throw mutationFailure(error); });
-      if (state === value) return;
+      if (state === value) return true;
       if (state === null) throw new MailError('MESSAGE_NOT_FOUND', `UID ${uid} was not found in ${mailbox}.`, 'NOT_FOUND');
-      if (isTransient(error)) { await mutate().catch(e => { throw mutationFailure(e); }); return; }
+      if (isTransient(error)) { await mutate().catch(e => { throw mutationFailure(e); }); return true; }
       throw mutationFailure(error);
     }
   }
@@ -636,17 +694,20 @@ export class ImapGateway {
   // Many messages, one STORE command. If the outcome isn't confirmed, each
   // message's flags are read back: all as asked is success, anything else is
   // reported as unknown (never retried blindly).
-  async setFlags(mailbox: string, uids: number[], flag: '\\Seen' | '\\Flagged', value: boolean): Promise<void> {
+  // The UIDs it changed (ACT-10): those that weren't already so, read in the
+  // same step that checks them; all of them when a lost answer hides which.
+  async setFlags(mailbox: string, uids: number[], flag: '\\Seen' | '\\Flagged', value: boolean): Promise<number[]> {
     const set = uids.join(',');
     try {
-      await this.run(async client => {
+      return await this.run(async client => {
         const lock = await client.getMailboxLock(mailbox);
         try {
-          await this.refuseSystemOn(client, uids);
+          const before = await this.refuseSystemOn(client, uids);
           const ok = value
             ? await client.messageFlagsAdd(set, [flag], { uid: true })
             : await client.messageFlagsRemove(set, [flag], { uid: true });
           if (!ok) throw new Error('Flag update not confirmed');
+          return before.filter(m => Boolean(m.flags?.has(flag)) !== value).map(m => m.uid).sort((a, b) => a - b);
         } finally { lock.release(); }
       });
     } catch (error) {
@@ -655,7 +716,7 @@ export class ImapGateway {
         const lock = await this.openToRead(client, mailbox);
         try { return await client.fetchAll(set, { flags: true }, { uid: true }); } finally { lock.release(); }
       }).catch(() => { throw mutationFailure(error); });
-      if (states.length === uids.length && states.every(m => Boolean(m.flags?.has(flag)) === value)) return;
+      if (states.length === uids.length && states.every(m => Boolean(m.flags?.has(flag)) === value)) return [...uids];
       throw mutationFailure(error);
     }
   }
