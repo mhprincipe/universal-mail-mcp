@@ -61,7 +61,8 @@ export function createActivityLog(options) {
         flush
     };
 }
-const MOVES = { move_email: 'moved', archive_email: 'archived', trash_email: 'trashed', restore_email: 'restored' };
+const MOVES = { move_email: 'moved', archive_email: 'archived', trash_email: 'trashed', restore_email: 'restored', junk_email: 'moved to junk' };
+const SENDS = { send_email: 'sent', reply_email: 'replied', forward_email: 'forwarded' };
 const targets = (args) => args.uids ?? (args.uid !== undefined ? [args.uid] : []);
 // What a successful organize or send tool did, or undefined when it's not an
 // action worth listing (a read, a failure, nothing changed).
@@ -86,14 +87,17 @@ export function activityFor(tool, args, envelope) {
     if (tool === 'flag_email') {
         return { action: args.flagged ? 'flagged' : 'unflagged', count: targets(args).length, from: args.mailbox, undo: { kind: 'flag', mailbox: args.mailbox, uids: targets(args), flag: 'flagged', value: !args.flagged } };
     }
-    if (tool === 'send_email' || tool === 'reply_email') {
-        const recipients = tool === 'send_email' ? [...(args.to ?? []), ...(args.cc ?? []), ...(args.bcc ?? [])].length : undefined;
-        return { action: tool === 'send_email' ? 'sent' : 'replied', count: 1, ...(recipients !== undefined ? { recipients } : {}), ...(args.newRecipientsConfirmed ? { newRecipients: true } : {}) };
+    const attachments = Array.isArray(data.attachments) && data.attachments.length ? { attachments: data.attachments.length } : {};
+    if (SENDS[tool]) {
+        const recipients = tool === 'reply_email' ? undefined : [...(args.to ?? []), ...(args.cc ?? []), ...(args.bcc ?? [])].length;
+        return { action: SENDS[tool], count: 1, ...(recipients !== undefined ? { recipients } : {}), ...attachments, ...(args.newRecipientsConfirmed ? { newRecipients: true } : {}) };
     }
     if (tool === 'create_draft')
-        return { action: 'drafted', count: 1 };
+        return { action: 'drafted', count: 1, ...attachments };
     if (tool === 'update_draft')
-        return { action: 'updated a draft', count: 1 };
+        return { action: 'updated a draft', count: 1, ...attachments };
+    if (tool === 'unsubscribe')
+        return { action: 'unsubscribed', count: 1 };
     if (tool === 'create_folder')
         return data.created ? { action: 'created folder', count: 1, to: data.path } : undefined;
     return undefined;

@@ -4,6 +4,7 @@ import { ImapFlow } from 'imapflow';
 import { imapTransport } from '../config.js';
 import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
 import { isSystemMessageId } from '../systemMail.js';
+import { oneClickTarget } from '../unsubscribe.js';
 // How many of a folder's newest messages a missed Message-ID search checks.
 // A message just moved or saved has the folder's highest UID, so it's among them.
 const RECENT_SCAN = 200;
@@ -24,6 +25,19 @@ const person = (x) => {
     const name = x.name?.trim();
     return name && name.toLowerCase() !== x.address.toLowerCase() ? { name, address: x.address } : { address: x.address };
 };
+// Header lines as the server sends them (any case, folded over lines), by
+// lowercase name; the first of each wins.
+export function headerValues(raw) {
+    const values = {};
+    for (const line of (raw?.toString('utf8') ?? '').replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/)) {
+        const colon = line.indexOf(':');
+        if (colon <= 0)
+            continue;
+        const name = line.slice(0, colon).trim().toLowerCase();
+        values[name] ??= line.slice(colon + 1).trim();
+    }
+    return values;
+}
 const withCautions = (from, replyTo) => {
     const cautions = cautionsFor({ from, replyTo });
     return cautions.length ? { cautions } : {};
@@ -350,6 +364,51 @@ export class ImapGateway {
                     messageId: m.envelope?.messageId || undefined, subject: m.envelope?.subject || undefined,
                     from: map(m.envelope?.from), replyTo: map(m.envelope?.replyTo), to: map(m.envelope?.to), cc: map(m.envelope?.cc), references
                 };
+            }
+            finally {
+                lock.release();
+            }
+        });
+    }
+    // A mailing list's unsubscribe headers (UNS-07), with the message's summary
+    // (for its cautions), read-only, never the message itself.
+    async fetchListHeaders(mailbox, uid) {
+        return this.read(async (client) => {
+            const lock = await this.openToRead(client, mailbox);
+            try {
+                const m = await this.fetchOneFresh(client, uid, { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });
+                if (!m || isSystemMessageId(m.envelope?.messageId))
+                    throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
+                const headers = headerValues(m.headers);
+                return {
+                    summary: this.summary(mailbox, m),
+                    ...(headers['list-unsubscribe'] ? { listUnsubscribe: headers['list-unsubscribe'] } : {}),
+                    ...(headers['list-unsubscribe-post'] ? { listUnsubscribePost: headers['list-unsubscribe-post'] } : {})
+                };
+            }
+            finally {
+                lock.release();
+            }
+        });
+    }
+    // Who sends to this folder (WHO-03): its newest n messages by position,
+    // read-only: each one's sender, date, whether it's been read, and whether
+    // one click unsubscribes. Envelopes, flags and two headers; never a body.
+    async senderStats(mailbox, n) {
+        return this.read(async (client) => {
+            const lock = await this.openToRead(client, mailbox);
+            try {
+                const rows = await this.newest(client, n, { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });
+                return rows.filter(row => !isSystemMessageId(row.envelope?.messageId)).map(row => {
+                    const sender = (row.envelope?.from ?? []).find((x) => x?.address);
+                    const date = row.envelope?.date?.toISOString?.();
+                    const headers = headerValues(row.headers);
+                    return {
+                        ...(sender ? { from: person(sender) } : {}), ...(date ? { date } : {}),
+                        read: Boolean(row.flags?.has('\\Seen')),
+                        oneClick: oneClickTarget(headers['list-unsubscribe'], headers['list-unsubscribe-post']) !== undefined
+                    };
+                });
             }
             finally {
                 lock.release();

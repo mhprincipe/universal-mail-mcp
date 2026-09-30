@@ -83,7 +83,7 @@ export function createSafeParser(options = {}) {
             }
             if (running?.id !== reply.id)
                 return;
-            finish(reply.ok ? { result: 'attachment' in reply ? reply.attachment ?? undefined : reply.message } : { reason: reply.reason });
+            finish(reply.ok ? { result: 'files' in reply ? reply.files : 'attachment' in reply ? reply.attachment ?? undefined : reply.message } : { reason: reply.reason });
         });
         created.on('error', (error) => retire(created, error.code === 'ERR_WORKER_OUT_OF_MEMORY' ? 'memory limit' : `worker error: ${error.message}`));
         created.on('exit', () => {
@@ -107,7 +107,7 @@ export function createSafeParser(options = {}) {
         running = { id: nextId++, job, worker: current };
         if (ready.has(current))
             startClock(running);
-        current.postMessage({ id: running.id, raw: job.raw, ...(job.attachment !== undefined ? { attachment: job.attachment } : {}) });
+        current.postMessage({ id: running.id, raw: job.raw, ...(job.attachment === 'files' ? { files: true } : job.attachment !== undefined ? { attachment: job.attachment } : {}) });
     }
     // An attachment that failed is remembered by the email and its position, so
     // it never stops the email itself from opening.
@@ -123,6 +123,7 @@ export function createSafeParser(options = {}) {
     return {
         parse: raw => submit(raw),
         attachment: (raw, index) => submit(raw, index),
+        files: raw => submit(raw, 'files'),
         async close() {
             await worker?.terminate();
             worker = undefined;

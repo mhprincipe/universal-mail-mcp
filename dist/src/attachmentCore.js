@@ -60,4 +60,13 @@ export async function readAttachment(raw, index) {
         return { ...base, kind: 'unreadable' };
     }
 }
+export async function attachmentFiles(raw) {
+    await checkStructure(raw, defaultLimits);
+    const parsed = await simpleParser(raw, { skipHtmlToText: true, skipTextToHtml: true, skipImageLinks: true });
+    return (parsed.attachments ?? []).map(a => ({
+        ...(a.filename ? { filename: a.filename } : {}),
+        contentType: a.contentType.toLowerCase().split(';')[0].trim(),
+        content: a.content
+    }));
+}
 //# sourceMappingURL=attachmentCore.js.map

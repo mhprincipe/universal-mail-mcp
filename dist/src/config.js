@@ -24,6 +24,9 @@ const schema = z.object({
     // Caps what a tool result returns, which MAX_MESSAGE_BYTES does not: that
     // limits the fetch. get_thread can return up to 100 bodies in one response.
     MAX_BODY_CHARS: z.coerce.number().int().positive().default(100_000),
+    // Attachments sent with one message, together (OUT-03): under the 25 MB
+    // most providers take once encoded.
+    MAX_ATTACHMENT_BYTES: z.coerce.number().int().positive().default(18 * 1024 * 1024),
     // A search the server hasn't answered by then is stopped (SEARCH_TOO_SLOW).
     SEARCH_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
     // Send limits per account (LIM-01): changed on your page.

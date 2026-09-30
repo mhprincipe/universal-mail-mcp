@@ -4,16 +4,22 @@
 const plural = (n) => `${n} message${n === 1 ? '' : 's'}`;
 // The words the page shows for one entry.
 export function activityLine(e) {
+    const details = (...parts) => { const shown = parts.filter(Boolean); return shown.length ? ` (${shown.join(', ')})` : ''; };
     const someoneNew = e.newRecipients ? 'someone new' : '';
-    if (e.action === 'sent') {
-        const detail = [e.recipients ? `${e.recipients} recipient${e.recipients === 1 ? '' : 's'}` : '', someoneNew].filter(Boolean).join(', ');
-        return `${e.app} sent 1 message${detail ? ` (${detail})` : ''} from ${e.account}`;
+    const files = e.attachments ? `${e.attachments} attachment${e.attachments === 1 ? '' : 's'}` : '';
+    if (e.action === 'sent' || e.action === 'forwarded') {
+        const recipients = e.recipients ? `${e.recipients} recipient${e.recipients === 1 ? '' : 's'}` : '';
+        return `${e.app} ${e.action} 1 message${details(recipients, files, someoneNew)} from ${e.account}`;
     }
     if (e.action === 'replied')
-        return `${e.app} replied to 1 message${someoneNew ? ` (${someoneNew})` : ''} from ${e.account}`;
+        return `${e.app} replied to 1 message${details(files, someoneNew)} from ${e.account}`;
     if (e.action === 'created folder')
         return `${e.app} created the folder ${e.to} in ${e.account}`;
-    return `${e.app} ${e.action} ${plural(e.count)} in ${e.account}`;
+    if (e.action === 'moved to junk')
+        return `${e.app} moved ${plural(e.count)} to junk in ${e.account}`;
+    if (e.action === 'unsubscribed')
+        return `${e.app} unsubscribed from a mailing list in ${e.account}`;
+    return `${e.app} ${e.action} ${plural(e.count)}${details(files)} in ${e.account}`;
 }
 // What the undo button says.
 export function undoLabel(e) {

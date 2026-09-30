@@ -6,10 +6,12 @@ server in your own Google Cloud account. Your AI can search, read, organize
 and, when you allow it, send your email. You choose, per app and per account,
 what each may do.
 
-**Status:** version 2.4.0. Installed and in daily use: every tool tested live
-on Yahoo with Claude and with ChatGPT; Gmail connected live. 2.4 adds reading
+**Status:** version 2.4.1. Installed and in daily use: every tool tested live
+on Yahoo with Claude and with ChatGPT; Gmail connected live. 2.4 added reading
 attachments, scam warnings, a check before writing to someone new, send limits,
-and an activity log with undo (not yet tried live). What changed in each version:
+and an activity log with undo; 2.4.1 adds sending attachments, forwarding,
+marking junk, one-click unsubscribe and a "who fills my inbox" summary (neither
+yet tried live). What changed in each version:
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
@@ -31,12 +33,12 @@ Then connect Claude and ChatGPT and choose their permissions: see the
 | Document | For |
 |---|---|
 | [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | installing, connecting apps, accounts and permissions, everyday use, troubleshooting |
-| [docs/TOOLS.md](docs/TOOLS.md) | the 17 tools: inputs, answers, permissions, codes |
+| [docs/TOOLS.md](docs/TOOLS.md) | the 21 tools: inputs, answers, permissions, codes |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | releasing, updating, logs and timings, known provider behaviour |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | a map of the code |
 | [docs/TESTING.md](docs/TESTING.md) | the test tiers, the rules, the test kit, live runs |
 | [docs/DESIGN-V2.md](docs/DESIGN-V2.md) | what it is and why: the full design and its decisions |
-| [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) | the 2.4 security review: what was found, what was fixed, what's left |
+| [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) | the 2.4 and 2.4.1 security reviews: what was found, what was fixed, what's left |
 | [docs/DESIGN-PROVIDER-SIGNIN.md](docs/DESIGN-PROVIDER-SIGNIN.md) | proposed for 2.5: signing in with Microsoft and Google (for Outlook), for the owner's review |
 | [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md) | every test, by ID |
 | [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md) | every red-green cycle and live run |

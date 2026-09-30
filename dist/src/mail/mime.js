@@ -11,6 +11,7 @@ export async function composeRaw(input, keepBcc = false) {
         from: input.from, to: input.to, cc: input.cc, bcc: keepBcc ? input.bcc : undefined, subject: input.subject,
         text: input.text, html: input.html, messageId, inReplyTo: input.inReplyTo,
         references: input.references, keepBcc,
+        ...(input.attachments?.length ? { attachments: input.attachments.map(a => ({ ...(a.filename ? { filename: a.filename } : {}), contentType: a.contentType, content: a.content })) } : {}),
         headers: { 'X-Universal-Mail-Operation-ID': operationId, ...input.headers }
     });
     return { raw: info.message, messageId, operationId };
