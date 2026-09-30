@@ -106,9 +106,9 @@ describe('scam warnings in the tools', () => {
 });
 
 describe('more companies people are impersonated as', () => {
-  it('SCM-07 insurers, banks, lenders, credit bureaus, phone companies, shops and government services, found live: "Liberty Mutual Team" sent from dayinhistory.org (added: 2.4.2)', () => {
+  it('SCM-07 insurers, banks, lenders, credit bureaus, phone companies, shops and government services, found live: "Liberty Mutual Team" sent from an unrelated domain (added: 2.4.2)', () => {
     const claims: Array<[string, string, RegExp]> = [
-      ['onthisday@ses.dayinhistory.org', 'Liberty Mutual Team', /name says Liberty Mutual.*dayinhistory\.org/],
+      ['news@ses.trivia-daily.example', 'Liberty Mutual Team', /name says Liberty Mutual.*trivia-daily\.example/],
       ['quotes@save-now.example', 'Progressive Insurance', /Progressive/],
       ['claims@mail-help.example', 'GEICO', /GEICO/],
       ['agent@claims.example', 'State Farm', /State Farm/],

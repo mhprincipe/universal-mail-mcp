@@ -35,7 +35,7 @@ const BRANDS: Brand[] = [
   { name: 'Norton', aliases: ['norton', 'norton lifelock', 'norton antivirus'], domains: ['norton.com', 'nortonlifelock.com'] },
   { name: 'McAfee', aliases: ['mcafee'], domains: ['mcafee.com'] },
   { name: 'Geek Squad', aliases: ['geek squad', 'best buy'], domains: ['bestbuy.com', 'geeksquad.com'] },
-  // Added 2.4.2 (SCM-07, found live: "Liberty Mutual Team" from dayinhistory.org).
+  // Added 2.4.2 (SCM-07, found live: "Liberty Mutual Team" from an unrelated domain).
   // Kept out: companies whose domain is one letter from an everyday one
   // (Discover and discovery.com, Square and squire.com, Truist and trust).
   { name: 'Liberty Mutual', aliases: ['liberty mutual'], domains: ['libertymutual.com'] },
