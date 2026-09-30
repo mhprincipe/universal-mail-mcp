@@ -11,13 +11,13 @@ open:
 
 | Open | Whose | Notes |
 |---|---|---|
-| Updating the installation to 2.4.2, then the two rewritten live prompts | owner | USER-GUIDE §6, then "What's new in 2.4" and "What's new in 2.4.1 and 2.4.2" in LIVE-TEST-PROMPT.md |
+| The one live-test prompt on 2.4.2, on Yahoo and on Gmail | owner | LIVE-TEST-PROMPT.md: it now uses all 21 tools in one run |
 | Attaching files from your computer or the chat | owner's decision | not built: would need an upload box on your page (the AI apps don't pass uploaded files to connectors reliably) |
 | **Confirming new recipients on your page** | owner's decision | [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md) ends with four questions |
 | **The 2.5 design: signing in with Microsoft and Google** | owner's decision | [DESIGN-PROVIDER-SIGNIN.md](DESIGN-PROVIDER-SIGNIN.md) ends with the questions only you can answer |
 | The security review's accepted items | owner's decision | [SECURITY-REVIEW.md](SECURITY-REVIEW.md), "Known and accepted": chiefly whether confirming a new recipient should move from the chat to your page |
 | A screen-reader and phone check of the page | owner | the automated rules pass (A11Y-01); a person hasn't tried it |
-| A full live run on Gmail | owner | the Gmail prompt in LIVE-TEST-PROMPT.md |
+| ~~A full live run on Gmail~~ | done 2026-09-30 | every tool worked; Gmail's text search is loose (OPERATIONS) |
 | Deleting v1 for good | owner | about a week after it was switched off: its project, its Auth0 tenant, and only v1's Yahoo app password |
 | Selling | owner | the steps under "Selling it" below |
 | Free-trial detection | owner's decision | decision 10 |

@@ -24,7 +24,7 @@ a release runs them again before building.
 
 | What | Automated tiers | Live |
 |---|---|---|
-| The 21 tools, their rules and answers | unit (faked mail) and slow (real IMAP/SMTP servers in Yahoo, Gmail and minimal layouts, with broken connections) | the live-test prompt on Yahoo (every tool, with Claude and with ChatGPT); Gmail connected, its full prompt not yet run |
+| The 21 tools, their rules and answers | unit (faked mail) and slow (real IMAP/SMTP servers in Yahoo, Gmail and minimal layouts, with broken connections) | the live-test prompt on Yahoo (every tool, with Claude and with ChatGPT) and on Gmail (every tool, with Claude, 2026-09-30) |
 | Provider quirks | slow tier, with the fault proxy imitating each (for example Yahoo's missing header search) | found on Yahoo, then turned into tests |
 | Sign-in (identity documents, PKCE, tokens, approval, passkeys, grants) | unit, with Claude's and ChatGPT's real published documents and a software passkey | Claude and ChatGPT connected and approved |
 | Your page | unit, over real HTTP with a session, forms and a software passkey; every page checked with axe's accessibility rules (A11Y-01) | used on a desktop browser; the phone test is open; not yet with a screen reader |

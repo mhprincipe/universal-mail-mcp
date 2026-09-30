@@ -147,10 +147,9 @@ attachment failed. The server log line names the limit, never the content.
 
 ### The live test
 
-`docs/LIVE-TEST-PROMPT.md` has prompts that exercise every tool on one account
-(Yahoo-style and Gmail), only on messages the test creates. Run one app at a
-time: two at once queue behind each other on the same account and blur the
-timings.
+`docs/LIVE-TEST-PROMPT.md` has one prompt that uses all 21 tools on one account,
+only on mail the test creates (it reads the rest). Run one app at a time: two
+at once queue behind each other on the same account and blur the timings.
 
 ---
 
@@ -167,3 +166,4 @@ timings.
 | Yahoo | adds a `References … .ref` header to mail it stores | its own; Universal Mail adds none (ENG-19) |
 | Any | an open folder isn't told about new mail until asked | not found → NOOP → asked once more (ENG-25) |
 | Gmail | folders are labels; archive = All Mail; threads by conversation id | provider profile |
+| Gmail | text search matches words anywhere, not the phrase asked, so it can return unrelated mail (seen live, 2026-09-30) | Gmail's own search; a subject search is checked here, exact |
