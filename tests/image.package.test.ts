@@ -56,6 +56,14 @@ describe('the server image', () => {
     expect(docker('exec', id, 'printenv', 'UPDATE_FEED_URL')).toBe('https://updates.example.invalid/latest.json');
   }, 120_000);
 
+  it('ACT-06 asked to stop (as Cloud Run does, with SIGTERM), it saves what is waiting and exits cleanly at once, not killed at the deadline (added: activity log)', async () => {
+    const { id } = await run({ ...records(), PUBLIC_URL: 'https://universal-mail-test-uc.a.run.app' });
+    const started = Date.now();
+    docker('stop', '--time', '8', id);
+    expect(docker('inspect', '-f', '{{.State.ExitCode}}', id)).toBe('0');
+    expect(Date.now() - started).toBeLessThan(6000);
+  }, 120_000);
+
   it('REL-03 damaged settings: unhealthy, with the setting named in its log, never a value', async () => {
     const env = records();
     const { id, base } = await run({ ...env, UNIVERSAL_MAIL_STATE: '{not json', PUBLIC_URL: 'https://universal-mail-test-uc.a.run.app' });

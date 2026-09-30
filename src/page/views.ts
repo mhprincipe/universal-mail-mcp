@@ -1,4 +1,6 @@
 import { escape, mask } from '../signin/pages.js';
+import type { ActivityEntry } from '../activity.js';
+import { activityLine, undoLabel } from './activity.js';
 import type { Action, Grant } from '../signin/grants.js';
 import type { SubscriptionState } from '../subscription/state.js';
 import { longDate } from '../subscription/subscription.js';
@@ -69,7 +71,7 @@ function subscriptionLine(s: SubscriptionState): string {
 }
 
 export function dashboard(view: {
-  base: string; csrf: string; now: number; accounts: AccountView[]; apps: AppView[]; canGrantSend: boolean;
+  base: string; csrf: string; now: number; accounts: AccountView[]; apps: AppView[]; canGrantSend: boolean; activity?: ActivityEntry[];
   subscription?: SubscriptionState; buyUrl?: string;
   message?: { kind: 'ok' | 'error'; text: string }; report?: string; problem?: string;
 }): string {
@@ -109,6 +111,13 @@ ${form(base, '/accounts/remove', csrf, `<input type="hidden" name="name" value="
 ${form(base, '/apps/disconnect', csrf, `<input type="hidden" name="app" value="${escape(app.appId)}">`, 'Disconnect')}</div>`;
   }).join('\n') : '<p class="note">No apps are connected yet.</p>';
 
+  // What each app did (ACT-02): newest first, never content.
+  const entries = view.activity ?? [];
+  const activity = entries.length ? entries.map(e => {
+    const label = undoLabel(e);
+    const where = e.from && e.to ? `${e.from} → ${e.to}` : e.from ?? e.to ?? '';
+    return `<div class="row">${escape(activityLine(e))} <span class="note">${where ? `${escape(where)} · ` : ''}${escape(ago(e.at, view.now))}${e.undone ? ' · Undone' : ''}</span>${label ? form(base, '/activity/undo', csrf, `<input type="hidden" name="id" value="${escape(e.id)}">`, label) : ''}</div>`;
+  }).join('\n') : '<p class="note">Nothing yet. What your AI apps change in your mail shows here for 30 days.</p>';
   return layout('Universal Mail', `
 <div style="text-align:right">${form(base, '/signout', csrf, '', 'Sign out')}</div>
 <h1>Universal Mail</h1>
@@ -124,7 +133,8 @@ ${subscription}
 <section><h2>Health</h2>${form(base, '/check', csrf, '', 'Check that everything works')}
 ${view.report ? `<p>Copy this report and paste it into your AI for help. It contains no mail and no secrets.</p><textarea readonly>${escape(view.report)}</textarea>` : ''}</section>
 <section><h2>Sign-in</h2><p><button type="button" id="fingerprint" data-csrf="${escape(csrf)}" data-base="${escape(`${base}/fingerprint`)}">Add a fingerprint</button></p>
-<script src="${escape(`${base}/fingerprint.js`)}"></script></section>`);
+<script src="${escape(`${base}/fingerprint.js`)}"></script></section>
+<section><h2>Recent activity</h2>${activity}</section>`);
 }
 
 // Adding a fingerprint, in the browser: options from the server, the device
