@@ -44,6 +44,22 @@ export function createAuthorizationServer(options) {
     const usedCodes = new Map();
     const usedChecks = new Map();
     const usedAssertions = new Map();
+    // An app's identity document and keys, kept five minutes: the token step
+    // is public, and must not fetch for every request that names an app (SIG-87).
+    const DOCUMENT_TTL_MS = 5 * 60_000;
+    const fetchedDocuments = new Map();
+    const cached = (key, fetch) => {
+        const hit = fetchedDocuments.get(key);
+        if (hit && clock.now() - hit.at < DOCUMENT_TTL_MS)
+            return hit.value;
+        const value = fetch();
+        fetchedDocuments.set(key, { at: clock.now(), value });
+        // A failed fetch isn't kept: the next request tries again.
+        value.catch(() => { if (fetchedDocuments.get(key)?.value === value)
+            fetchedDocuments.delete(key); });
+        return value;
+    };
+    const clientDocument = (clientId) => cached(`doc ${clientId}`, () => fetchClientDocument(clientId, options.trustedOrigins, options.documents));
     const checkAudience = options.checkAudience ?? resource.replace(/\/mcp$/, '/check');
     const seal = async (claims, lifetime) => new EncryptJWT(claims)
         .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
@@ -83,8 +99,8 @@ export function createAuthorizationServer(options) {
         if (!clientId || claimed !== clientId)
             return undefined;
         try {
-            const doc = await fetchClientDocument(clientId, options.trustedOrigins, options.documents);
-            const keySet = createLocalJWKSet(await fetchClientKeys(doc, options.trustedOrigins, options.documents));
+            const doc = await clientDocument(clientId);
+            const keySet = createLocalJWKSet(await cached(`keys ${clientId} ${doc.jwks_uri}`, () => fetchClientKeys(doc, options.trustedOrigins, options.documents)));
             const { payload } = await jwtVerify(form.client_assertion, keySet, {
                 issuer: clientId, subject: clientId, audience: [issuer, `${issuer}/token`],
                 algorithms: ['RS256', 'PS256', 'ES256'], currentDate: new Date(clock.now()), requiredClaims: ['exp', 'jti']
@@ -136,7 +152,7 @@ export function createAuthorizationServer(options) {
                 return { ok: false, error: 'invalid_request' };
             let doc;
             try {
-                doc = await fetchClientDocument(clientId, options.trustedOrigins, options.documents);
+                doc = await clientDocument(clientId);
             }
             catch (error) {
                 return { ok: false, error: error instanceof SigninRefusal ? error.reason : 'client_invalid' };

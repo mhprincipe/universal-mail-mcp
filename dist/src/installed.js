@@ -21,7 +21,9 @@ const stateSchema = z.object({
         sentCopyMode: z.enum(['unverified', 'yahoo', 'append']), safeMove: z.boolean().optional(),
         reliableHeaderSearch: z.boolean().optional(),
         // Turned off on your page: nothing can send from it (design §3.6).
-        sending: z.boolean().optional()
+        sending: z.boolean().optional(),
+        // Changed on your page (LIM-02); unset: the defaults.
+        sendLimits: z.object({ perHour: z.number().int().min(1).max(1000), perDay: z.number().int().min(1).max(10_000) }).optional()
     })).min(1),
     // Setup writes {} before any app has connected.
     grants: z.object({ apps: z.array(grant).optional(), connections: z.record(z.string(), z.number().int().min(0)).optional() }),
@@ -99,7 +101,7 @@ export function readInstalled(env) {
 export function mailSettings(accounts, passwords) {
     return {
         MAIL_ACCOUNTS: JSON.stringify(accounts.map(a => ({
-            name: a.name, email: a.email, imap: a.imap, smtp: a.smtp, sentCopyMode: a.sentCopyMode, sending: a.sending ?? true,
+            name: a.name, email: a.email, imap: a.imap, smtp: a.smtp, sentCopyMode: a.sentCopyMode, sending: a.sending ?? true, ...(a.sendLimits ? { sendLimits: a.sendLimits } : {}),
             ...(a.reliableHeaderSearch === undefined ? {} : { reliableHeaderSearch: a.reliableHeaderSearch })
         }))),
         MAIL_PASSWORDS: JSON.stringify(Object.fromEntries(accounts.map(a => [a.name, passwords[a.name]])))

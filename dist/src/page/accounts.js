@@ -113,6 +113,21 @@ export function accountActions(tools, deps) {
         await deps.notify('An email account was renamed', `${account.email}: "${name}" is now "${to}". Apps that were allowed to use it still are, under the new name.`);
         tools.back(res, session, { kind: 'ok', text: `${name} is now called ${to}.` });
     });
+    // Send limits (LIM-02): whole numbers, no more an hour than a day.
+    tools.post('/accounts/limits', async (req, res, session) => {
+        const account = store.accounts().find(a => a.name === String(req.body.name ?? ''));
+        if (!account)
+            return tools.back(res, session, { kind: 'error', text: 'That account isn\'t here any more.' });
+        const whole = (value) => /^\d{1,5}$/.test(String(value ?? '').trim()) ? Number(String(value).trim()) : NaN;
+        const perHour = whole(req.body.perHour);
+        const perDay = whole(req.body.perDay);
+        if (!(perHour >= 1 && perHour <= 1000 && perDay >= 1 && perDay <= 10_000 && perHour <= perDay)) {
+            return tools.back(res, session, { kind: 'error', text: 'Limits are whole numbers: 1 to 1,000 an hour and 1 to 10,000 a day, and no more an hour than a day.' });
+        }
+        store.putAccount({ ...account, sendLimits: { perHour, perDay } });
+        await deps.notify(`Sending limits changed for ${account.name}`, `${account.email} can now send up to ${perHour} messages an hour and ${perDay} a day.`);
+        tools.back(res, session, { kind: 'ok', text: `${account.name} can now send up to ${perHour} an hour and ${perDay} a day.` });
+    });
     tools.post('/accounts/sending', async (req, res, session) => {
         const account = store.accounts().find(a => a.name === String(req.body.name ?? ''));
         if (!account)

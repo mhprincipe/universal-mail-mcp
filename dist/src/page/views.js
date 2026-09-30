@@ -1,4 +1,5 @@
 import { escape, mask } from '../signin/pages.js';
+import { activityLine, undoLabel } from './activity.js';
 import { longDate } from '../subscription/subscription.js';
 // Readable at phone width: one column, nothing wider than the screen.
 const layout = (title, body) => `<!doctype html>
@@ -8,7 +9,7 @@ const layout = (title, body) => `<!doctype html>
 button,input,select{font-size:1rem;max-width:100%}button{padding:.5rem .9rem;margin:.2rem 0}input[type=text],input[type=email],input[type=password]{width:100%;padding:.4rem}
 section{border-top:1px solid #ddd;margin-top:1.2rem;padding-top:.6rem}.row{margin:.6rem 0}.note{color:#555}.error{color:#a00}.ok{color:#060}
 textarea{width:100%;min-height:12rem;font-family:ui-monospace,monospace;font-size:.8rem}fieldset{margin:.5rem 0;min-width:0}</style>
-</head><body>${body}</body></html>`;
+</head><body><main>${body}</main></body></html>`;
 const csrfField = (csrf) => `<input type="hidden" name="csrf" value="${escape(csrf)}">`;
 const form = (base, path, csrf, inner, label) => `<form method="post" action="${escape(`${base}${path}`)}">${csrfField(csrf)}${inner}<button>${escape(label)}</button></form>`;
 export function ago(then, now) {
@@ -70,6 +71,9 @@ ${a.status === 'password' ? '<span class="error">⚠ Password not accepted</span
 ${form(base, '/accounts/password', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>New app password <input type="password" name="password" autocomplete="off" required></label>`, 'Save password')}
 </details>
 ${form(base, '/accounts/sending', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><input type="hidden" name="on" value="${a.sending ? 'off' : 'on'}">`, a.sending ? 'Turn sending off' : 'Turn sending on')}
+<details><summary>Sending limits: Up to ${a.sendLimits.perHour} an hour and ${a.sendLimits.perDay} a day</summary>
+${form(base, '/accounts/limits', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>An hour <input type="number" name="perHour" min="1" max="1000" value="${a.sendLimits.perHour}" required></label><label>A day <input type="number" name="perDay" min="1" max="10000" value="${a.sendLimits.perDay}" required></label>`, 'Save limits')}
+</details>
 <details><summary>Rename</summary>
 ${form(base, '/accounts/rename', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>New name (what your AI calls it) <input type="text" name="to" autocomplete="off" required></label>`, 'Rename')}
 </details>
@@ -86,6 +90,13 @@ ${form(base, '/accounts/remove', csrf, `<input type="hidden" name="name" value="
 <details><summary>Permissions</summary>${form(base, '/apps/permissions', csrf, `<input type="hidden" name="app" value="${escape(app.appId)}">${boxes}${view.canGrantSend ? '' : '<p class="note">Giving Send needs your fingerprint.</p>'}`, 'Save permissions')}</details>
 ${form(base, '/apps/disconnect', csrf, `<input type="hidden" name="app" value="${escape(app.appId)}">`, 'Disconnect')}</div>`;
     }).join('\n') : '<p class="note">No apps are connected yet.</p>';
+    // What each app did (ACT-02): newest first, never content.
+    const entries = view.activity ?? [];
+    const activity = entries.length ? entries.map(e => {
+        const label = undoLabel(e);
+        const where = e.from && e.to ? `${e.from} → ${e.to}` : e.from ?? e.to ?? '';
+        return `<div class="row">${escape(activityLine(e))} <span class="note">${where ? `${escape(where)} · ` : ''}${escape(ago(e.at, view.now))}${e.undone ? ' · Undone' : ''}</span>${label ? form(base, '/activity/undo', csrf, `<input type="hidden" name="id" value="${escape(e.id)}">`, label) : ''}</div>`;
+    }).join('\n') : '<p class="note">Nothing yet. What your AI apps change in your mail shows here for 30 days.</p>';
     return layout('Universal Mail', `
 <div style="text-align:right">${form(base, '/signout', csrf, '', 'Sign out')}</div>
 <h1>Universal Mail</h1>
@@ -99,9 +110,10 @@ ${form(base, '/accounts/add', csrf, `<label>Email address <input type="email" na
 <details><summary>Connect an AI app</summary><p>In Claude: Settings → Connectors → Add custom connector, and paste your AI-app address (the one setup showed, ending in /mcp). In ChatGPT (Plus or higher, on the web): Settings → Security and login → turn on Developer mode; then add a new app with the + button, name it Universal Mail, paste the same address and choose OAuth. Then approve it with a code. ChatGPT asks before each change to your mail; you can approve a tool once for the whole chat.</p></details></section>
 ${subscription}
 <section><h2>Health</h2>${form(base, '/check', csrf, '', 'Check that everything works')}
-${view.report ? `<p>Copy this report and paste it into your AI for help. It contains no mail and no secrets.</p><textarea readonly>${escape(view.report)}</textarea>` : ''}</section>
+${view.report ? `<p>Copy this report and paste it into your AI for help. It contains no mail and no secrets.</p><textarea readonly aria-label="Report for help">${escape(view.report)}</textarea>` : ''}</section>
 <section><h2>Sign-in</h2><p><button type="button" id="fingerprint" data-csrf="${escape(csrf)}" data-base="${escape(`${base}/fingerprint`)}">Add a fingerprint</button></p>
-<script src="${escape(`${base}/fingerprint.js`)}"></script></section>`);
+<script src="${escape(`${base}/fingerprint.js`)}"></script></section>
+<section><h2>Recent activity</h2>${activity}</section>`);
 }
 // Adding a fingerprint, in the browser: options from the server, the device
 // makes a key pair, the public half goes back.

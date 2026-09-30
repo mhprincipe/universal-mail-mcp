@@ -25,7 +25,7 @@ export class ParseLimitExceeded extends Error {
 }
 // A first pass with the same splitter mailparser uses. It enforces the three
 // limits while holding only the MIME structure, not the content.
-function checkStructure(raw, limits) {
+export function checkStructure(raw, limits) {
     return new Promise((resolve, reject) => {
         const splitter = new Splitter({ maxHeadSize: limits.maxHeaderBytes, maxChildNodes: limits.maxParts });
         splitter.on('data', (chunk) => {
@@ -67,8 +67,8 @@ export async function parseMessage(raw, limits = defaultLimits) {
         html: typeof parsed.html === 'string' ? parsed.html : undefined,
         inReplyTo: parsed.inReplyTo || undefined,
         references: normalizeRefs(parsed.references),
-        attachments: (parsed.attachments ?? []).map(a => ({
-            filename: a.filename || undefined, contentType: a.contentType, size: a.size, contentId: a.contentId || undefined
+        attachments: (parsed.attachments ?? []).map((a, index) => ({
+            index, filename: a.filename || undefined, contentType: a.contentType, size: a.size, contentId: a.contentId || undefined
         }))
     };
 }

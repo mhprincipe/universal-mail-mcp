@@ -16,6 +16,8 @@ export function createSafeParser(options = {}) {
     const timeoutMs = options.timeoutMs ?? 10_000;
     const startupTimeoutMs = options.startupTimeoutMs ?? 30_000;
     const memoryMb = options.memoryMb ?? 256;
+    // The server has 512 MB in all (Cloud Run's default).
+    const maxGrowthBytes = (options.maxExternalMb ?? 160) * 1024 * 1024;
     const workerFile = options.workerFile ?? defaultWorkerFile;
     const queue = [];
     // Fingerprints of emails that failed, so they are refused at once next time.
@@ -29,8 +31,9 @@ export function createSafeParser(options = {}) {
         const done = running;
         running = undefined;
         clearTimeout(done.timer);
-        if ('message' in outcome) {
-            done.job.resolve(outcome.message);
+        clearInterval(done.watch);
+        if ('result' in outcome) {
+            done.job.resolve(outcome.result);
         }
         else if ('unavailable' in outcome) {
             done.job.reject(unavailable(outcome.unavailable));
@@ -51,6 +54,14 @@ export function createSafeParser(options = {}) {
         finish(ready.has(retired) ? { reason } : { unavailable: reason });
     };
     const startClock = (run) => {
+        // Checked often while a job runs: growth since it started.
+        const before = process.memoryUsage.rss();
+        run.watch = setInterval(() => {
+            if (process.memoryUsage.rss() - before <= maxGrowthBytes)
+                return;
+            retire(run.worker, 'memory limit');
+            void run.worker.terminate();
+        }, 25);
         run.timer = setTimeout(() => {
             retire(run.worker, 'time limit');
             void run.worker.terminate();
@@ -72,7 +83,7 @@ export function createSafeParser(options = {}) {
             }
             if (running?.id !== reply.id)
                 return;
-            finish(reply.ok ? { message: reply.message } : { reason: reply.reason });
+            finish(reply.ok ? { result: 'attachment' in reply ? reply.attachment ?? undefined : reply.message } : { reason: reply.reason });
         });
         created.on('error', (error) => retire(created, error.code === 'ERR_WORKER_OUT_OF_MEMORY' ? 'memory limit' : `worker error: ${error.message}`));
         created.on('exit', () => {
@@ -96,18 +107,22 @@ export function createSafeParser(options = {}) {
         running = { id: nextId++, job, worker: current };
         if (ready.has(current))
             startClock(running);
-        current.postMessage({ id: running.id, raw: job.raw });
+        current.postMessage({ id: running.id, raw: job.raw, ...(job.attachment !== undefined ? { attachment: job.attachment } : {}) });
     }
+    // An attachment that failed is remembered by the email and its position, so
+    // it never stops the email itself from opening.
+    const submit = (raw, attachment) => {
+        const fingerprint = createHash('sha256').update(raw).digest('hex') + (attachment === undefined ? '' : `#${attachment}`);
+        if (failed.has(fingerprint))
+            return Promise.reject(unsafe('failed before'));
+        return new Promise((resolve, reject) => {
+            queue.push({ raw, ...(attachment === undefined ? {} : { attachment }), fingerprint, resolve: resolve, reject });
+            pump();
+        });
+    };
     return {
-        parse(raw) {
-            const fingerprint = createHash('sha256').update(raw).digest('hex');
-            if (failed.has(fingerprint))
-                return Promise.reject(unsafe('failed before'));
-            return new Promise((resolve, reject) => {
-                queue.push({ raw, fingerprint, resolve, reject });
-                pump();
-            });
-        },
+        parse: raw => submit(raw),
+        attachment: (raw, index) => submit(raw, index),
         async close() {
             await worker?.terminate();
             worker = undefined;

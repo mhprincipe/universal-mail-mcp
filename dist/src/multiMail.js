@@ -1,6 +1,6 @@
 import { createAccounts } from './accounts.js';
 import { MailError, classify, success } from './errors.js';
-import { MailService } from './yahoo/mailService.js';
+import { MailService } from './mail/mailService.js';
 // One service — and so one connection gateway and one folder cache — per
 // account. A shared cache would hand one account another account's folders.
 export function createAccountServices(accounts) {
@@ -34,7 +34,7 @@ export function createMailRouter(accounts, hooks = {}) {
     const sendingOff = new Set(accounts.filter(a => a.sending === false).map(a => a.name));
     const plain = createAccountServices(accounts);
     const services = new Map([...plain].map(([name, service]) => [name, watched(name, service, hooks)]));
-    const directory = createAccounts(accounts.map(a => ({ name: a.name, address: a.config.YAHOO_EMAIL })));
+    const directory = createAccounts(accounts.map(a => ({ name: a.name, address: a.config.MAIL_ADDRESS })));
     const multi = createMultiMail(services);
     const access = (grant) => {
         // An account the grant doesn't mention doesn't exist, as far as this caller knows.

@@ -1,4 +1,7 @@
 import { lookup } from 'node:dns/promises';
+import { DEFAULT_SEND_LIMITS } from '../sendLimits.js';
+import { createActivityLog } from '../activity.js';
+import { activityActions } from '../page/activity.js';
 import express from 'express';
 import { createMcpExpressApp } from '@modelcontextprotocol/express';
 import { toNodeHandler } from '@modelcontextprotocol/node';
@@ -171,15 +174,18 @@ export function createSigninApp(env, deps = {}) {
     };
     // When each app last made a request (shown on your page).
     const lastUsed = new Map();
+    // What each app did (ACT-01..05), saved with the settings when there are any.
+    const activity = createActivityLog({ clock, saved: store?.noted().activity, ...(store ? { save: (entries) => store.note({ activity: entries }) } : {}) });
     if (store) {
         subscription = createSubscription({ store, clock, serviceUrl: env.LICENSE_SERVICE_URL, fetchImpl: deps.fetchImpl, pageUrl: `${issuer}/${key}`, notify: (subject, text) => approval.notify(subject, text) });
         const sub = subscription;
         mountPage(app, {
             key, owner: approval.owner, signInAddress: () => store.signInAddress(), clock, notify: approval.notify,
             view: () => ({
-                accounts: store.accounts().map(a => ({ name: a.name, email: a.email, sending: a.sending ?? true, status: status.get(a.name) ?? 'unknown' })),
+                accounts: store.accounts().map(a => ({ name: a.name, email: a.email, sending: a.sending ?? true, sendLimits: a.sendLimits ?? DEFAULT_SEND_LIMITS, status: status.get(a.name) ?? 'unknown' })),
                 apps: auth.grants.snapshot().apps.map(g => ({ ...g, lastUsed: lastUsed.get(g.appId) })),
-                subscription: sub.current(), buyUrl: sub.buyUrl()
+                subscription: sub.current(), buyUrl: sub.buyUrl(),
+                activity: activity.list()
             }),
             extend: tools => {
                 // Subscribing: the code from the receipt (design §13.1).
@@ -192,6 +198,7 @@ export function createSigninApp(env, deps = {}) {
                 });
                 accountActions(tools, { store, mailCheck: deps.mailCheck, grants: auth.grants, status, notify: approval.notify });
                 appActions(tools, { store, grants: auth.grants, disconnect: approval.disconnect, notify: approval.notify });
+                activityActions(tools, { activity, getMail: () => getMail(), accountFor: email => store.accounts().find(a => a.email.toLowerCase() === email.toLowerCase())?.name });
                 // Check that everything works: the report, shown for copying.
                 tools.post('/check', async (_req, res, session) => {
                     const report = await serverCheck(VERSION);
@@ -245,7 +252,8 @@ export function createSigninApp(env, deps = {}) {
         }
         lastUsed.set(who.appId, clock.now());
         const access = getMail().forGrant(grant.accounts);
-        await toNodeHandler(createMcpHandler(() => buildMcpServer(access)))(req, res, req.body);
+        const appName = grant.appName ?? new URL(who.appId).host;
+        await toNodeHandler(createMcpHandler(() => buildMcpServer(access, { record: (account, described) => { const email = store?.accounts().find(a => a.name === account)?.email; activity.record({ ...described, app: appName, account, ...(email ? { email } : {}) }); } })))(req, res, req.body);
     });
     // The check (design §7): only setup's check token opens it. Setup says which
     // version it installed; the answer is the report, redacted by construction.
@@ -285,7 +293,9 @@ export function createSigninApp(env, deps = {}) {
             // The mail access as it is right now (it changes when your page changes an account).
             mail: () => getMail(),
             accountNames: () => getMail().names,
-            noteCheck
+            noteCheck,
+            // The activity log, to flush before the server stops.
+            activity
         } });
 }
 //# sourceMappingURL=server.js.map

@@ -1,4 +1,5 @@
 import { phase, timedClient } from '../timing.js';
+import { cautionsFor } from '../cautions.js';
 import { ImapFlow } from 'imapflow';
 import { imapTransport } from '../config.js';
 import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
@@ -23,6 +24,10 @@ const person = (x) => {
     const name = x.name?.trim();
     return name && name.toLowerCase() !== x.address.toLowerCase() ? { name, address: x.address } : { address: x.address };
 };
+const withCautions = (from, replyTo) => {
+    const cautions = cautionsFor({ from, replyTo });
+    return cautions.length ? { cautions } : {};
+};
 export class ImapGateway {
     config;
     options;
@@ -41,7 +46,7 @@ export class ImapGateway {
             host: this.config.IMAP_HOST,
             port: this.config.IMAP_PORT,
             ...imapTransport(this.config),
-            auth: { user: this.config.YAHOO_EMAIL, pass: this.config.YAHOO_APP_PASSWORD },
+            auth: { user: this.config.MAIL_ADDRESS, pass: this.config.MAIL_APP_PASSWORD },
             logger: false
         });
         c.on('error', () => undefined);
@@ -274,7 +279,8 @@ export class ImapGateway {
             read: Boolean(m.flags?.has('\\Seen')),
             flagged: Boolean(m.flags?.has('\\Flagged')),
             size: m.size || undefined,
-            untrustedContent: true
+            untrustedContent: true,
+            ...withCautions(map(m.envelope?.from), map(m.envelope?.replyTo))
         };
     }
     // includeSystem: only for the server's own handling of system emails, never for a tool.
@@ -344,6 +350,32 @@ export class ImapGateway {
                     messageId: m.envelope?.messageId || undefined, subject: m.envelope?.subject || undefined,
                     from: map(m.envelope?.from), replyTo: map(m.envelope?.replyTo), to: map(m.envelope?.to), cc: map(m.envelope?.cc), references
                 };
+            }
+            finally {
+                lock.release();
+            }
+        });
+    }
+    // Has this account ever written to this address (RCP-01)? Its Sent folder,
+    // To or Cc, read-only.
+    async hasSentTo(sent, address) {
+        const own = this.config.MAIL_ADDRESS.toLowerCase();
+        const wanted = address.toLowerCase();
+        return this.read(async (client) => {
+            const lock = await this.openToRead(client, sent);
+            try {
+                // The server's search is a first pass: it matches parts of addresses,
+                // and Sent can hold mail someone else wrote (RCP-05, security review).
+                // A hit counts only when it's from this account and names the address
+                // exactly. The newest 50 are enough to find one.
+                const hits = await client.search({ or: [{ to: address }, { cc: address }] }, { uid: true });
+                if (!Array.isArray(hits) || !hits.length)
+                    return false;
+                const newest = [...hits].sort((x, y) => x - y).slice(-50);
+                const rows = await client.fetchAll(newest, { envelope: true }, { uid: true });
+                const names = (list) => (list ?? []).map(x => x.address?.toLowerCase());
+                return rows.some(row => names(row.envelope?.from).includes(own)
+                    && [...names(row.envelope?.to), ...names(row.envelope?.cc)].includes(wanted));
             }
             finally {
                 lock.release();
