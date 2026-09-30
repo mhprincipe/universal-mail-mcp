@@ -60,6 +60,15 @@ describe('the release plumbing agrees with itself', () => {
     expect(JSON.parse(read('release.json')).image.startsWith(`${OFFICIAL_IMAGE_REPOSITORY}@sha256:`)).toBe(true);
   });
 
+  it('REL-08 every change, and so every release, fails on a known high-severity problem in a production dependency, before any test runs (added: 2.4)', () => {
+    const ci = read('.github/workflows/ci.yml');
+    const audit = ci.indexOf('npm audit --omit=dev --audit-level=high');
+    expect(audit).toBeGreaterThan(-1);
+    expect(audit).toBeLessThan(ci.indexOf('npx vitest run --coverage'));
+    // The release workflow runs CI first.
+    expect(read('.github/workflows/release.yml')).toContain('uses: ./.github/workflows/ci.yml');
+  });
+
   it('REL-06 the workflow pushes to that store, publishes through publish-setup.mjs, and serves the feed from the release branch', () => {
     const workflow = read('.github/workflows/release.yml');
     // Read from release-files.mjs, never written out a second time.

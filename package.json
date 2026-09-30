@@ -15,7 +15,7 @@
     "coverage": "vitest run --coverage",
     "test:protocol": "vitest run --config vitest.protocol.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:all": "npm run typecheck && npm run coverage && npm run test:protocol"
+    "test:all": "npm audit --omit=dev --audit-level=high && npm run typecheck && npm run coverage && npm run test:protocol"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.0",

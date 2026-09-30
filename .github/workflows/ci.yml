@@ -20,6 +20,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # A known high-severity problem in anything the server ships with stops
+      # the change here, and so any release (REL-08).
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npx vitest run --coverage
 
