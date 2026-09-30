@@ -22,7 +22,7 @@ const layout = (title: string, body: string) => `<!doctype html>
 <title>${escape(title)}</title>
 <style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem;line-height:1.5}
 button{font-size:1rem;padding:.6rem 1rem}fieldset{margin:1rem 0}.note{color:#555}.error{color:#a00}</style>
-</head><body>${body}</body></html>`;
+</head><body><main>${body}</main></body></html>`;
 
 const who = (app: AppShown) => `<strong>${escape(app.name)}</strong> <span class="note">(${escape(new URL(app.origin).host)})</span>`;
 const csrfField = (csrf: string) => `<input type="hidden" name="csrf" value="${escape(csrf)}">`;

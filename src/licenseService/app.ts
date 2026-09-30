@@ -196,7 +196,7 @@ export function createLicenseApp(deps: LicenseAppDeps) {
 }
 
 const page = (title: string, body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)}</title>
-<style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;line-height:1.5}.code{font-family:ui-monospace,monospace;font-size:1.4rem}button{font-size:1rem;padding:.6rem 1rem}</style></head><body>${body}</body></html>`;
+<style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;line-height:1.5}.code{font-family:ui-monospace,monospace;font-size:1.4rem}button{font-size:1rem;padding:.6rem 1rem}</style></head><body><main>${body}</main></body></html>`;
 
 const CHECKOUT_SCRIPT = `(() => {
   const s = JSON.parse(document.getElementById('settings').textContent);

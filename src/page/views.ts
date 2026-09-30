@@ -20,7 +20,7 @@ const layout = (title: string, body: string) => `<!doctype html>
 button,input,select{font-size:1rem;max-width:100%}button{padding:.5rem .9rem;margin:.2rem 0}input[type=text],input[type=email],input[type=password]{width:100%;padding:.4rem}
 section{border-top:1px solid #ddd;margin-top:1.2rem;padding-top:.6rem}.row{margin:.6rem 0}.note{color:#555}.error{color:#a00}.ok{color:#060}
 textarea{width:100%;min-height:12rem;font-family:ui-monospace,monospace;font-size:.8rem}fieldset{margin:.5rem 0;min-width:0}</style>
-</head><body>${body}</body></html>`;
+</head><body><main>${body}</main></body></html>`;
 
 const csrfField = (csrf: string) => `<input type="hidden" name="csrf" value="${escape(csrf)}">`;
 const form = (base: string, path: string, csrf: string, inner: string, label: string) =>
@@ -131,7 +131,7 @@ ${form(base, '/accounts/add', csrf, `<label>Email address <input type="email" na
 <details><summary>Connect an AI app</summary><p>In Claude: Settings → Connectors → Add custom connector, and paste your AI-app address (the one setup showed, ending in /mcp). In ChatGPT (Plus or higher, on the web): Settings → Security and login → turn on Developer mode; then add a new app with the + button, name it Universal Mail, paste the same address and choose OAuth. Then approve it with a code. ChatGPT asks before each change to your mail; you can approve a tool once for the whole chat.</p></details></section>
 ${subscription}
 <section><h2>Health</h2>${form(base, '/check', csrf, '', 'Check that everything works')}
-${view.report ? `<p>Copy this report and paste it into your AI for help. It contains no mail and no secrets.</p><textarea readonly>${escape(view.report)}</textarea>` : ''}</section>
+${view.report ? `<p>Copy this report and paste it into your AI for help. It contains no mail and no secrets.</p><textarea readonly aria-label="Report for help">${escape(view.report)}</textarea>` : ''}</section>
 <section><h2>Sign-in</h2><p><button type="button" id="fingerprint" data-csrf="${escape(csrf)}" data-base="${escape(`${base}/fingerprint`)}">Add a fingerprint</button></p>
 <script src="${escape(`${base}/fingerprint.js`)}"></script></section>
 <section><h2>Recent activity</h2>${activity}</section>`);
