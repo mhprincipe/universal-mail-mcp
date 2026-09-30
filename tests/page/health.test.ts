@@ -9,7 +9,7 @@ let p: Awaited<ReturnType<typeof startPage>> | undefined;
 afterEach(async () => { await p?.close(); p = undefined; });
 
 const reportIn = (html: string) => {
-  const text = /<textarea readonly>([\s\S]*?)<\/textarea>/.exec(html)?.[1];
+  const text = /<textarea readonly[^>]*>([\s\S]*?)<\/textarea>/.exec(html)?.[1];
   return text === undefined ? undefined : JSON.parse(text.replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
 };
 

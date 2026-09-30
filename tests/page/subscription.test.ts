@@ -206,7 +206,7 @@ describe('the subscription on your page', () => {
     const search = await tool(p, grant.connection, 'search_email', { account: 'me', limit: 1 });
     expect(search.code).not.toBe('SUBSCRIPTION-READ-ONLY');
     await p.signIn();
-    const report = JSON.parse(/<textarea readonly>([\s\S]*?)<\/textarea>/.exec((await p.act('/check', {})).html)![1]!.replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&'));
+    const report = JSON.parse(/<textarea readonly[^>]*>([\s\S]*?)<\/textarea>/.exec((await p.act('/check', {})).html)![1]!.replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&'));
     expect(() => ReportSchema.parse(report)).not.toThrow();
     expect(report.facts.subscription).toEqual({ state: 'read-only' });
     // Subscribing now: the very next call works again.
