@@ -346,6 +346,18 @@ export class ImapGateway {
     });
   }
 
+  // Has this account ever written to this address (RCP-01)? Its Sent folder,
+  // To or Cc, read-only.
+  async hasSentTo(sent: string, address: string): Promise<boolean> {
+    return this.read(async client => {
+      const lock = await this.openToRead(client, sent);
+      try {
+        const hits = await client.search({ or: [{ to: address }, { cc: address }] }, { uid: true });
+        return Array.isArray(hits) && hits.length > 0;
+      } finally { lock.release(); }
+    });
+  }
+
   async findByMessageId(mailbox: string, messageId: string): Promise<number[]> {
     return this.read(async client => {
       const lock = await this.openToRead(client, mailbox);

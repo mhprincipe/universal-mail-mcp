@@ -21,7 +21,7 @@ function service(limits: { perHour?: string; perDay?: string } = {}) {
   vi.spyOn(s.imap, 'append').mockResolvedValue(9);
   return { s, send, advance: (ms: number) => { now += ms; } };
 }
-const mail = { to: ['friend@example.invalid'], subject: 's', text: 't' };
+const mail = { to: ['friend@example.invalid'], subject: 's', text: 't', newRecipientsConfirmed: true };
 const MINUTE = 60_000;
 
 afterEach(() => vi.restoreAllMocks());
@@ -43,7 +43,7 @@ describe('send limits', () => {
     vi.spyOn(s.imap, 'fetchReplyHeaders').mockResolvedValue({ messageId: '<q@x>', subject: 'Q', from: [{ address: 'friend@example.invalid' }], replyTo: [], to: [], cc: [], references: [] });
     await s.sendEmail(mail);
     advance(2 * 60 * MINUTE);
-    await s.replyEmail({ mailbox: 'INBOX', uid: 1, text: 'r' });
+    await s.replyEmail({ mailbox: 'INBOX', uid: 1, text: 'r', newRecipientsConfirmed: true });
     advance(2 * 60 * MINUTE);
     await s.sendEmail(mail);
     advance(2 * 60 * MINUTE);

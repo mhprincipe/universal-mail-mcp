@@ -61,7 +61,7 @@ describe('system emails are invisible to the AI', () => {
       ['trash_email', { mailbox: 'Trash', uid: system[2]!.uid }],
       ['flag_email', { mailbox: 'INBOX', uid: inbox.uid, flagged: true }],
       ['mark_read', { mailbox: 'INBOX', uid: inbox.uid }],
-      ['reply_email', { mailbox: 'INBOX', uid: inbox.uid, text: 'forwarding your code' }]
+      ['reply_email', { newRecipientsConfirmed: true, mailbox: 'INBOX', uid: inbox.uid, text: 'forwarding your code' }]
     ];
     for (const [tool, args] of attempts) {
       expect((await p.call(tool, args)).result.code, `${tool} ${JSON.stringify(args)}`).toBe('MESSAGE_NOT_FOUND');

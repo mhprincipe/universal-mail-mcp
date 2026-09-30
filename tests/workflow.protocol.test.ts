@@ -64,8 +64,8 @@ async function sixteenTools(p: Product, folders: SpecialFolders) {
   expect(await find('INBOX', id)).toMatchObject([{ seen: false, flagged: false }]);
 
   // Sending: one delivery each, one Sent copy each
-  const sent = await ok('send_email', { to: ['friend@example.invalid'], subject: 'new', text: 'hello' });
-  const reply = await ok('reply_email', { ...at, text: 'reply' });
+  const sent = await ok('send_email', { newRecipientsConfirmed: true, to: ['friend@example.invalid'], subject: 'new', text: 'hello' });
+  const reply = await ok('reply_email', { newRecipientsConfirmed: true, ...at, text: 'reply' });
   expect(p.smtp.messages).toHaveLength(2);
   expect((await simpleParser(p.smtp.messages[1]!.raw)).inReplyTo).toBe(id);
   expect(await find(folders.sent, sent.messageId)).toHaveLength(1);
@@ -73,11 +73,13 @@ async function sixteenTools(p: Product, folders: SpecialFolders) {
 
   // Threads: the original and the reply in Sent
   expect(await ok('get_thread', at)).toHaveLength(2);
+  // The original has no attachments: asked for one anyway, it's plainly not there.
+  expect((await call('get_attachment', { ...at, index: 0 })).result).toMatchObject({ code: 'ATTACHMENT_NOT_FOUND' });
 
   expect([...called].sort()).toEqual(expectedTools);
 }
 
-describe('the 16-tool workflow on a real server', () => {
+describe('the 17-tool workflow on a real server', () => {
   const run = (profile: ProfileName) => async () => {
     const product = await startProduct(profile);
     try { await sixteenTools(product, profiles[profile].folders); } finally { await product.stop(); }
@@ -91,7 +93,7 @@ describe('a provider that saves Sent copies itself', () => {
   it.each(['yahoo', 'append'] as const)('PRO-05 server-sent: exactly one Sent copy per message (sent-copy mode %s)', async sentCopyMode => {
     const p = await startProduct('yahoo-like', { sentCopyMode, serverSavesSent: true });
     try {
-      const sent = await p.call('send_email', { to: ['friend@example.invalid'], subject: 'once', text: 'hello' });
+      const sent = await p.call('send_email', { newRecipientsConfirmed: true, to: ['friend@example.invalid'], subject: 'once', text: 'hello' });
       expect(sent.result.ok).toBe(true);
       // Yahoo mode doesn't look for the copy (ENG-24): it only says it's coming.
       if (sentCopyMode === 'yahoo') expect(sent.result.warnings).toEqual([expect.stringMatching(/files its own Sent copy/)]);
@@ -107,7 +109,7 @@ describe('interrupted changes', () => {
   it('PRO-07 a disconnect after DATA returns SEND_STATUS_UNKNOWN, with exactly one delivery', async () => {
     const p = await startProduct('yahoo-like', { smtpDropsAfterData: true });
     try {
-      const sent = await p.call('send_email', { to: ['friend@example.invalid'], subject: 'maybe', text: 'hello' });
+      const sent = await p.call('send_email', { newRecipientsConfirmed: true, to: ['friend@example.invalid'], subject: 'maybe', text: 'hello' });
       expect(sent.isError).toBe(true);
       expect(sent.result).toMatchObject({ code: 'SEND_STATUS_UNKNOWN', status: 'UNKNOWN' });
       // Delivered once, never retried, and no Sent copy claimed.
@@ -124,7 +126,7 @@ describe('interrupted changes', () => {
     const p = await startProduct('yahoo-like', { smtpDropsAfterData: true });
     try {
       const [original] = (await seed(p.server, { messages: [{ mailbox: 'INBOX', subject: 'question', from: 'friend@example.invalid' }] })).messages;
-      const replied = await p.call('reply_email', { mailbox: 'INBOX', uid: original!.uid, text: 'answer' });
+      const replied = await p.call('reply_email', { newRecipientsConfirmed: true, mailbox: 'INBOX', uid: original!.uid, text: 'answer' });
       expect(replied.result).toMatchObject({ code: 'SEND_STATUS_UNKNOWN', status: 'UNKNOWN' });
       expect(p.smtp.messages).toHaveLength(1);
       expect(await peek(p.server, 'Sent')).toEqual([]);

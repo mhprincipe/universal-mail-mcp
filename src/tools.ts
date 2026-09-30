@@ -168,13 +168,13 @@ export function buildMcpServer(mail: MailAccess): McpServer {
 
   registerTool('send_email', {
     title: 'Send email', description: `Send a new email. External side effect. ${ASK_ACCOUNT} Never automatically retry an UNKNOWN send result.`,
-    inputSchema: z.object({ ...account, to: recipients, cc: optionalRecipients, bcc: optionalRecipients, subject: z.string().max(998), text: z.string().optional(), html: z.string().optional() }),
+    inputSchema: z.object({ ...account, to: recipients, cc: optionalRecipients, bcc: optionalRecipients, subject: z.string().max(998), text: z.string().optional(), html: z.string().optional(), newRecipientsConfirmed: z.boolean().optional().describe('Only after the owner confirmed recipients this account has never written to (a MAIL-NEW-RECIPIENT answer). Never set it without asking them.') }),
     annotations: { idempotentHint: false, openWorldHint: true }
   }, wrap(({ account: name, ...a }) => mail.service(name, 'send').sendEmail(a)));
 
   registerTool('reply_email', {
     title: 'Reply to email', description: `Reply to an existing message with correct thread headers. External side effect. ${ASK_ACCOUNT} Never automatically retry an UNKNOWN send result.`,
-    inputSchema: mailboxUid.extend({ text: z.string().optional(), html: z.string().optional(), cc: optionalRecipients, bcc: optionalRecipients, replyAll: z.boolean().default(false) }),
+    inputSchema: mailboxUid.extend({ text: z.string().optional(), html: z.string().optional(), cc: optionalRecipients, bcc: optionalRecipients, replyAll: z.boolean().default(false), newRecipientsConfirmed: z.boolean().optional().describe('Only after the owner confirmed recipients this account has never written to (a MAIL-NEW-RECIPIENT answer). Never set it without asking them.') }),
     annotations: { idempotentHint: false, openWorldHint: true }
   }, wrap(({ account: name, ...a }) => mail.service(name, 'send').replyEmail(a)));
 

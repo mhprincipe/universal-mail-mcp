@@ -44,7 +44,7 @@ describe('what the full live run found, on a real mail server', () => {
     const updated = await p.ok('update_draft', { mailbox: draft.mailbox, uid: draft.uid, text: 'second' });
     const opened = await p.ok('get_email', { mailbox: updated.mailbox, uid: updated.uid });
     expect(opened.references).toEqual([]);
-    await p.ok('send_email', { to: ['friend@example.invalid'], subject: 'plain send', text: 'hello' });
+    await p.ok('send_email', { newRecipientsConfirmed: true, to: ['friend@example.invalid'], subject: 'plain send', text: 'hello' });
     const sent = p.smtp.messages.at(-1)!.raw.toString('utf8');
     expect(sent).not.toMatch(/^References:/im);
     expect(sent).not.toMatch(/\.ref@/i);

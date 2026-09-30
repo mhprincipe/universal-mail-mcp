@@ -48,7 +48,7 @@ describe('the slow tools, tuned', () => {
   });
 
   it('ENG-24 where the provider files its own Sent copy, sending doesn\'t go looking for it (it appears a minute later), and says so (added: tuning)', async () => {
-    const { value, lines } = await during(() => p.call('send_email', { to: ['friend@example.invalid'], subject: 'hello', text: 'hi' }));
+    const { value, lines } = await during(() => p.call('send_email', { newRecipientsConfirmed: true, to: ['friend@example.invalid'], subject: 'hello', text: 'hi' }));
     expect(value.result.ok).toBe(true);
     expect(lines.filter(l => /SEARCH|EXAMINE|SELECT|APPEND/i.test(l))).toEqual([]);
     expect(value.result.warnings.join(' ')).toMatch(/files its own Sent copy.*minute.*do not resend/i);
@@ -62,12 +62,12 @@ describe('the slow tools, tuned', () => {
     const [fresh] = (await seed(p.server, { messages: [{ mailbox: 'INBOX', subject: 'Just arrived', from: 'friend@example.invalid' }] })).messages;
     expect((await p.ok('get_email', { mailbox: 'INBOX', uid: fresh!.uid })).subject).toBe('Just arrived');
     const [another] = (await seed(p.server, { messages: [{ mailbox: 'INBOX', subject: 'Also just arrived', from: 'friend@example.invalid' }] })).messages;
-    expect((await p.ok('reply_email', { mailbox: 'INBOX', uid: another!.uid, text: 'got it' })).messageId).toBeTruthy();
+    expect((await p.ok('reply_email', { newRecipientsConfirmed: true, mailbox: 'INBOX', uid: another!.uid, text: 'got it' })).messageId).toBeTruthy();
   });
 
   it('ENG-24 a reply reads only the original\'s headers, not the whole message, and threads exactly as before', async () => {
     const [original] = (await seed(p.server, { messages: [{ mailbox: 'INBOX', subject: 'Question', messageId: '<q@example.invalid>', from: 'friend@example.invalid', headers: { References: '<earlier@example.invalid>' }, body: 'x'.repeat(50_000) }] })).messages;
-    const { value, lines } = await during(() => p.ok('reply_email', { mailbox: 'INBOX', uid: original!.uid, text: 'answer' }));
+    const { value, lines } = await during(() => p.ok('reply_email', { newRecipientsConfirmed: true, mailbox: 'INBOX', uid: original!.uid, text: 'answer' }));
     expect(value.messageId).toBeTruthy();
     expect(lines.filter(l => /BODY(\.PEEK)?\[\]/i.test(l))).toEqual([]);
     const sent = p.smtp.messages.at(-1)!;
@@ -83,7 +83,7 @@ describe('the slow tools, tuned', () => {
       const [m] = (await seed(p.server, { messages: [{ mailbox: 'INBOX', subject: 'Timed' }] })).messages;
       await p.ok('get_email', { mailbox: 'INBOX', uid: m!.uid });
       await p.ok('get_email', { mailbox: 'INBOX', uid: m!.uid });
-      await p.call('send_email', { to: ['friend@example.invalid'], subject: 'timed', text: 'hi' });
+      await p.call('send_email', { newRecipientsConfirmed: true, to: ['friend@example.invalid'], subject: 'timed', text: 'hi' });
       const lines = log.mock.calls.map(([l]) => { try { return JSON.parse(String(l)); } catch { return {}; } }).filter(e => e.event === 'tool');
       const read = lines.filter(e => e.name === 'get_email').at(-1);
       expect(read.phases['imap.fetchOne'].n).toBeGreaterThanOrEqual(1);

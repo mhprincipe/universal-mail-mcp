@@ -228,7 +228,7 @@ it('never puts the same recipient in the SMTP envelope twice', async () => {
   // to/cc/bcc were concatenated without dedupe, so one address listed twice
   // produced two RCPT TO commands and a possible duplicate delivery.
   const f = await fixture();
-  await f.ok('send_email', { to: ['dup@example.invalid'], cc: ['DUP@example.invalid'], bcc: ['other@example.invalid'], subject: 's', text: 'b' });
+  await f.ok('send_email', { newRecipientsConfirmed: true, to: ['dup@example.invalid'], cc: ['DUP@example.invalid'], bcc: ['other@example.invalid'], subject: 's', text: 'b' });
   const envelope = (f.sendMail.mock.calls[0]![0] as any).envelope;
   expect(envelope.to).toHaveLength(2);
   expect(envelope.to.filter((a: string) => a.toLowerCase() === 'dup@example.invalid')).toHaveLength(1);

@@ -10,7 +10,7 @@ describe('TK-13 product harness', () => {
       const folders = await product.ok('list_folders') as Array<{ path: string }>;
       expect(folders.map(f => f.path).sort()).toEqual(['Archive', 'Bulk', 'Draft', 'INBOX', 'Sent', 'Trash']);
 
-      await product.ok('send_email', { to: ['friend@example.invalid'], subject: 'harness', text: 'hello' });
+      await product.ok('send_email', { newRecipientsConfirmed: true, to: ['friend@example.invalid'], subject: 'harness', text: 'hello' });
       expect(product.smtp.messages.map(m => m.to)).toEqual([['friend@example.invalid']]);
 
       // A failed tool call comes back as data, not an exception.

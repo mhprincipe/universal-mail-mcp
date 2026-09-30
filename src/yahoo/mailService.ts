@@ -265,12 +265,41 @@ export class MailService {
     }
   }
 
-  async sendEmail(input: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; text?: string; html?: string }) {
-    const built = await composeRaw({ from: this.config.YAHOO_EMAIL, ...input });
+  // First-time recipients (RCP-01..03): anyone this account has never
+  // written to holds the send until the owner confirms. A check that can't be
+  // made asks too, rather than guessing.
+  private async holdForNewRecipients(recipients: string[], confirmed: boolean | undefined): Promise<void> {
+    if (confirmed) return;
+    const own = this.config.YAHOO_EMAIL.toLowerCase();
+    const seen = new Set<string>();
+    const others = recipients.filter(address => {
+      const key = address.toLowerCase();
+      if (key === own || seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+    if (!others.length) return;
+    let fresh: string[];
+    try {
+      const sent = (await this.imap.specialFolders()).sent;
+      if (!sent) throw new Error('no Sent folder');
+      fresh = [];
+      for (const address of others) if (!(await this.imap.hasSentTo(sent, address.toLowerCase()))) fresh.push(address);
+    } catch {
+      throw new MailError('MAIL-NEW-RECIPIENT', `Universal Mail couldn't check whether this account has written to ${others.join(', ')} before, so nothing was sent.`, 'FAILED', false, { newRecipients: others });
+    }
+    if (fresh.length) {
+      throw new MailError('MAIL-NEW-RECIPIENT', `This would be the first message to ${fresh.join(', ')}. Nothing was sent.`, 'FAILED', false, { newRecipients: fresh });
+    }
+  }
+
+  async sendEmail(input: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; text?: string; html?: string; newRecipientsConfirmed?: boolean }) {
+    await this.holdForNewRecipients([...input.to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed);
+    const { newRecipientsConfirmed: _confirmed, ...message } = input;
+    const built = await composeRaw({ from: this.config.YAHOO_EMAIL, ...message });
     return this.sendRaw({ ...built, to: input.to, cc: input.cc, bcc: input.bcc });
   }
 
-  async replyEmail(input: { mailbox: string; uid: number; text?: string; html?: string; cc?: string[]; bcc?: string[]; replyAll?: boolean }) {
+  async replyEmail(input: { mailbox: string; uid: number; text?: string; html?: string; cc?: string[]; bcc?: string[]; replyAll?: boolean; newRecipientsConfirmed?: boolean }) {
     // Only the headers a reply needs (ENG-24, tuning): not the whole message.
     const msg = await this.imap.fetchReplyHeaders(input.mailbox, input.uid);
     const primary = msg.replyTo[0]?.address ?? msg.from[0]?.address;
@@ -282,6 +311,7 @@ export class MailService {
     const refs = [...msg.references];
     if (msg.messageId && !refs.includes(msg.messageId)) refs.push(msg.messageId);
     const subject = /^re:/i.test(msg.subject ?? '') ? (msg.subject ?? '') : `Re: ${msg.subject ?? ''}`;
+    await this.holdForNewRecipients([...to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed);
     const built = await composeRaw({ from: this.config.YAHOO_EMAIL, to: [...to], cc: input.cc, bcc: input.bcc, subject, text: input.text, html: input.html, inReplyTo: msg.messageId, references: refs });
     return this.sendRaw({ ...built, to: [...to], cc: input.cc, bcc: input.bcc });
   }

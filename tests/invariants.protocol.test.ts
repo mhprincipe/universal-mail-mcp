@@ -40,7 +40,7 @@ describe.each(shapes)('safety invariants on %s', profile => {
     await p.call('search_email', { mailbox: 'INBOX' });
     await p.call('get_email', { mailbox: 'INBOX', uid: a!.uid });
     await p.call('get_thread', { mailbox: 'INBOX', uid: a!.uid, allFolders: true });
-    await p.call('reply_email', { mailbox: 'INBOX', uid: b!.uid, text: 'reply' });
+    await p.call('reply_email', { newRecipientsConfirmed: true, mailbox: 'INBOX', uid: b!.uid, text: 'reply' });
     await p.call('flag_email', { mailbox: 'INBOX', uid: a!.uid, flagged: true });
     await p.call('flag_email', { mailbox: 'INBOX', uid: a!.uid, flagged: false });
     let at = await follow('move_email', { mailbox: 'INBOX', uid: c!.uid, destination: 'Test' });
