@@ -38,7 +38,8 @@ tool log never contains arguments or answers.
    it to pass. Without the `gh` CLI:
    `curl -s "https://api.github.com/repos/mhprincipe/universal-mail-mcp/actions/runs?head_sha=$(git rev-parse HEAD)"`.
 5. **Tag the commit** `vX.Y.Z` (an annotated tag; put "security" in its first
-   line to mark a security release) and push the tag. Pin the tag to the commit
+   line to mark a security release: only the tag's message counts, never the
+   commit's, REL-09) and push the tag. Pin the tag to the commit
    you mean (`git tag -a vX.Y.Z <sha> -m "…"`) and check that commit's subject
    first: a script once tagged the previous commit when a check stopped the
    commit.

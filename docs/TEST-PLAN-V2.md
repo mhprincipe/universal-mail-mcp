@@ -408,6 +408,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | REL-06 | one image store, named once: the setup script, the workflow and setup's trusted image agree; the workflow publishes through `publish-setup.mjs` *(added)* | U |
 | REL-07 | each release is one commit on top of the last on the release branch, so a clone takes it with a plain `git pull`; the workflow never force-pushes *(added: found live)* | K (package) |
 | REL-08 | every change, and so every release, stops on a known high-severity problem in a production dependency, before any test runs *(added: 2.4)* | U |
+| REL-09 | whether a release is a security release comes from the tag's own first line, never the commit's; a tag that is only a pointer to the commit stops the release; the workflow fetches the real tag first *(added: found releasing 2.4.0)* | U |
 
 **Failure matrix.** Each test asserts the exact message, the code, and that
 what it says about the person's position is true.
@@ -673,14 +674,14 @@ also where a later reader finds out why a line of code exists.
 | Sign-in | 67 |
 | Setup | 71 |
 | Installed server | 6 |
-| Release | 11 |
+| Release | 12 |
 | Page and emails | 19 |
 | Everyday polish | 15 |
 | Diagnostics | 15 |
 | Subscription | 33 |
 | Serving people (2.4) | 35 |
-| **New** | **369** |
-| **Total** | **524** |
+| **New** | **370** |
+| **Total** | **525** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

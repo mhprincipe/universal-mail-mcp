@@ -1,5 +1,5 @@
-# A release: tag vX.Y.Z (add "-security" to the tag message's first line to
-# mark a security release). Everything is tested first; then the server image
+# A release: an annotated tag vX.Y.Z (put "security" in the tag message's first
+# line to mark a security release; the commit's own message doesn't count). Everything is tested first; then the server image
 # is built, pushed, signed and pinned by digest; setup's files and the update
 # feed are published on the release branch. Nothing here touches anyone's
 # installation: people update with  node setup.js  → 2 Update, which checks
@@ -37,7 +37,10 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           node -e "if (require('./package.json').version !== process.argv[1]) { console.error('package.json version differs from the tag'); process.exit(1) }" "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if git tag -l --format='%(contents:subject)' "$GITHUB_REF_NAME" | grep -qi security; then echo "security=true" >> "$GITHUB_OUTPUT"; else echo "security=false" >> "$GITHUB_OUTPUT"; fi
+          # The checkout leaves the tag as a plain pointer to the commit; fetch
+          # the real tag so its own message decides (REL-09).
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          node scripts/release-security.mjs "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           # The one place the image lives: the same constant setup trusts.
           echo "REPOSITORY=$(node --input-type=module -e "import('./scripts/release-files.mjs').then(m => console.log(m.REPOSITORY))")" >> "$GITHUB_ENV"
 
