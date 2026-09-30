@@ -145,3 +145,24 @@ describe('more companies people are impersonated as', () => {
     for (const message of ordinary) expect(cautionsFor(message), JSON.stringify(message)).toEqual([]);
   });
 });
+
+describe('newsletters sent through mailing services', () => {
+  it('SCM-08 sent by a mailing service with replies to the business\'s own domain is ordinary mail: quiet (added: 2.4.3, found live: 5 of 8 cautions were this)', () => {
+    const ordinary = [
+      { from: from('store@shops.shopifyemail.com', 'Honey Shop'), replyTo: from('info@honeyshop.example') },
+      { from: from('club@shared1.ccsend.com', 'Neighborhood Club'), replyTo: from('support@club.example') },
+      { from: from('news@mail.circle.so', 'Film Course'), replyTo: from('hello@filmcourse.example') },
+      { from: from('bounce-7@mail123.mcsv.net', 'Garden Shop'), replyTo: from('orders@garden.example') },
+      { from: from('info@em.sendgrid.net', 'Book Club'), replyTo: from('reading@books.example') }
+    ];
+    for (const message of ordinary) expect(cautionsFor(message), JSON.stringify(message)).toEqual([]);
+  });
+
+  it('SCM-08 still said: replies to a personal mailbox, replies elsewhere from a sender that isn\'t a mailing service, and a company\'s name through a mailing service', () => {
+    expect(cautionsFor({ from: from('shop@shared1.ccsend.com', 'Wine Shop'), replyTo: from('you@gmail.com') })).toEqual([
+      "Replies would go to you@gmail.com, not to the sender's own domain (ccsend.com)."
+    ]);
+    expect(cautionsFor({ from: from('news@digest.example'), replyTo: from('support@other.example') })[0]).toMatch(/Replies would go to support@other\.example/);
+    expect(cautionsFor({ from: from('alerts@shared1.ccsend.com', 'PayPal'), replyTo: from('help@paypal.com') })[0]).toMatch(/name says PayPal/);
+  });
+});

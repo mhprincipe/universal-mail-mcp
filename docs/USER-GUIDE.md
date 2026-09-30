@@ -179,6 +179,13 @@ When a new version is out you get an email. To install it:
 2. Run `node setup.js`, type **2 (Update)** and press Enter. It installs the new
    version, tests it, and puts the old one back if the test fails.
 
+When a version adds tools, you also get an email saying so. Your AI apps keep
+the list of tools they saw when you connected them, so refresh each one:
+**Claude**: Settings → Connectors → Universal Mail, its refresh option if there
+is one, otherwise Disconnect and Connect again (and approve on your page);
+**ChatGPT**: Settings → Apps → Universal Mail, the same way. Then ask a new
+chat "List the Universal Mail tools you have".
+
 `node setup.js` also offers **1 Check and fix**, **3 Show my address** and
 **4 Remove**.
 
@@ -196,6 +203,7 @@ When a new version is out you get an email. To install it:
 | The AI says a sender **doesn't offer one-click unsubscribe** | Open the email in your mail app and use its unsubscribe link, or ask your AI to mark it as junk. |
 | An app **did something you didn't want** | Your page → **Recent activity** → **Put back** (or undo the mark or flag). |
 | **Password not accepted** on your page | Make a new app password at your provider; your page → **Fix it**. |
+| The AI says a Universal Mail tool **doesn't exist** | It has an old list of tools: refresh the connector (§6), then start a new chat. |
 | The AI can't connect at all | Your page → **Check that everything works**. If the page won't load: Cloud Shell → `node setup.js` → **1 Check and fix**. |
 | Anything else | Your page → **Check that everything works** → paste the report into your AI, or run `node setup.js report` in Cloud Shell. |
 

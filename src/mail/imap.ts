@@ -258,7 +258,11 @@ export class ImapGateway {
         if (input.before) query.before = new Date(input.before.getTime() + DAY_MS);
         if (input.read !== undefined) query.seen = input.read;
         if (input.flagged !== undefined) query.flagged = input.flagged;
-        if (input.text) query.or = [{ from: input.text }, { to: input.text }, { subject: input.text }, { body: input.text }];
+        // Gmail's standard search matches the words anywhere, so a phrase found
+        // unrelated mail (FND-06, found live). Its own search takes the phrase
+        // in quotes, over the same fields.
+        if (input.text && client.capabilities?.has?.('X-GM-EXT-1')) query.gmraw = `"${input.text.replace(/"/g, '')}"`;
+        else if (input.text) query.or = [{ from: input.text }, { to: input.text }, { subject: input.text }, { body: input.text }];
         const result = await this.withinSearchLimit(client, client.search(query, { uid: true }));
         let remaining = Array.isArray(result) ? [...result].sort((a, b) => a - b) : [];
         if (!remaining.length && input.messageId && this.options.unreliableHeaderSearch) {

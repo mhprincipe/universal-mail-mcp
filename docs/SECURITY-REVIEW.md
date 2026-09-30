@@ -82,3 +82,11 @@ Reviewed the same way. The changes close three of the accepted items above
 
 Still open: the new-recipient confirmation. Its fix is designed, for the
 owner's decision: [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md).
+
+# 2.4.3
+
+| Change | The trade-off | Why it's accepted |
+|---|---|---|
+| **Newsletters through mailing services are quiet** (SCM-08) | A scam sent through a mailing service, with replies to the scammer's own business-looking domain, no longer gets the "replies go elsewhere" caution | The live run: 5 of 8 cautions were ordinary newsletters, and warnings that are usually wrong stop being read. A company's name from the wrong domain, look-alike and disguised domains, and replies to a personal mailbox are all still said. |
+| **Gmail's own search for text** (FND-06) | The phrase goes to Gmail as a search in Gmail's own syntax | Quotes are taken out of what's asked, so it's always one quoted phrase: nothing asked can become an operator. |
+| **The tool-change email** (NTC-01) | An email names tools; no mail content | Only tool names, the version, and the apps' names. |

@@ -166,4 +166,4 @@ at once queue behind each other on the same account and blur the timings.
 | Yahoo | adds a `References … .ref` header to mail it stores | its own; Universal Mail adds none (ENG-19) |
 | Any | an open folder isn't told about new mail until asked | not found → NOOP → asked once more (ENG-25) |
 | Gmail | folders are labels; archive = All Mail; threads by conversation id | provider profile |
-| Gmail | text search matches words anywhere, not the phrase asked, so it can return unrelated mail (seen live, 2026-09-30) | Gmail's own search; a subject search is checked here, exact |
+| Gmail | its standard text search matches words anywhere, not the phrase asked, so it returned unrelated mail (seen live, 2026-09-30) | on Gmail, text search uses Gmail's own search (X-GM-RAW) with the phrase in quotes (FND-06) |

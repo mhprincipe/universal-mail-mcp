@@ -27,7 +27,7 @@ export default defineConfig({
       // sign-in and the Phase 3 setup log and adapter (2026-09-25), and the
       // diagnostics check, the installed server, setup's menu, everyday polish
       // and your page (2026-09-25). Raise it; never lower it.
-      thresholds: { statements: 93, branches: 84, functions: 94, lines: 96 }
+      thresholds: { statements: 94, branches: 85, functions: 94, lines: 96 }
     }
   }
 });

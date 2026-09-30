@@ -13,7 +13,7 @@ import { providerOf, serverStages } from '../check/serverChecks.js';
 import { VERSION } from '../version.js';
 import { csv } from '../config.js';
 import { createMailRouter, type MailRouter } from '../multiMail.js';
-import { buildMcpServer } from '../tools.js';
+import { TOOL_NAMES, buildMcpServer } from '../tools.js';
 import type { WebAuthnCredential } from '@simplewebauthn/server';
 import { createAuthorizationServer, loadSigninKeys, type SigninKeys } from './authorization.js';
 import { createGrantStore, type GrantSnapshot } from './grants.js';
@@ -139,7 +139,10 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
 
   // What the server does on its own (reminders, update notices), checked as requests arrive.
   if (store) {
-    const duties = createDuties({ store, clock, feedUrl: env.UPDATE_FEED_URL, fetchImpl: deps.fetchImpl, notify: (subject, text) => approval.notify(subject, text) });
+    const duties = createDuties({
+      store, clock, feedUrl: env.UPDATE_FEED_URL, fetchImpl: deps.fetchImpl, notify: (subject, text) => approval.notify(subject, text),
+      tools: TOOL_NAMES, apps: () => auth.grants.snapshot().apps.map(app => app.appName ?? app.appId)
+    });
     app.use(async (_req, _res, next) => {
       await duties.run().catch(() => undefined);
       await subscription?.duty().catch(error => console.log(JSON.stringify({ event: 'subscription_duty_failed', error: (error as Error)?.name ?? typeof error })));

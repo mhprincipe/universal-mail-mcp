@@ -4,6 +4,22 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.4.3 (2026-09-30): from the everything test
+
+- **You're told when your AI apps can't see new tools** (NTC-01, NTC-02). Found
+  live: Claude kept the tool list it saw when it was connected, and couldn't
+  use five tools added since. When a version adds tools, you get one email
+  naming them, with how to refresh Claude and ChatGPT.
+- **Quieter scam warnings on newsletters** (SCM-08): mail sent through a
+  mailing service (Constant Contact, Shopify Email, Mailchimp and others) with
+  replies to the business's own domain is ordinary; 5 of 8 cautions in the live
+  run were this. Replies to a personal mailbox are still pointed out.
+- **Exact text search on Gmail** (FND-06): Gmail's standard search matched the
+  words anywhere; its own search takes the phrase.
+- **Account names with their provider** (ENG-29): "google (Gmail), yahoo
+  (Yahoo Mail)" in the tools and their refusals, so an AI doesn't guess "gmail".
+- The coverage floor rises to 94/85/94/96.
+
 ## 2.4.2 (2026-09-30): what the first live run found
 
 - **Find mail with attachments** (FND-01..05): search results name their

@@ -9,7 +9,8 @@ This page summarizes them.
 
 Every tool takes an optional **`account`**: the name you gave the account on
 your page (for example `yahoo` or `gmail`). It may be left out when the app can
-reach only one account. The tool's description lists only the accounts **this
+reach only one account. The tools list the names with their provider when it's
+known ("google (Gmail), yahoo (Yahoo Mail)"); the name alone is what the AI passes. The tool's description lists only the accounts **this
 app** was given, and an account it wasn't given answers `MAIL-ACCOUNT-UNKNOWN`
 with the names it can use.
 

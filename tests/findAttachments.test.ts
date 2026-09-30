@@ -99,3 +99,33 @@ describe('the search tool', () => {
     expect(answer.result).toMatchObject({ ok: true, cursor: '4001', warnings: ['Looked at the newest 1,000 messages.'] });
   });
 });
+
+describe('text search on Gmail', () => {
+  function gmail(capabilities: string[]) {
+    const gateway = new ImapGateway(config);
+    const asked: any[] = [];
+    const client = {
+      capabilities: new Set(capabilities),
+      mailbox: { path: 'INBOX', readOnly: true, exists: 0 },
+      getMailboxLock: vi.fn(async () => ({ release: vi.fn() })),
+      search: vi.fn(async (query: unknown) => { asked.push(query); return []; }),
+      fetchAll: vi.fn(async () => [])
+    };
+    vi.spyOn(gateway, 'run').mockImplementation(fn => fn(client as never));
+    return { gateway, asked };
+  }
+
+  it('FND-06 asks Gmail for the exact phrase with its own search, which honours quotes; its word search matched unrelated mail (added: 2.4.3, found live)', async () => {
+    const { gateway, asked } = gmail(['IMAP4rev1', 'X-GM-EXT-1']);
+    await gateway.searchPage({ mailbox: 'INBOX', limit: 5, text: 'Universal Mail "Gmail" test', from: 'me@example.org' });
+    expect(asked[0]).toMatchObject({ gmraw: '"Universal Mail Gmail test"', from: 'me@example.org' });
+    expect(asked[0].or).toBeUndefined();
+  });
+
+  it('FND-06 every other server keeps the standard search: sender, recipients, subject or body', async () => {
+    const { gateway, asked } = gmail(['IMAP4rev1']);
+    await gateway.searchPage({ mailbox: 'INBOX', limit: 5, text: 'invoice' });
+    expect(asked[0]).toMatchObject({ or: [{ from: 'invoice' }, { to: 'invoice' }, { subject: 'invoice' }, { body: 'invoice' }] });
+    expect(asked[0].gmraw).toBeUndefined();
+  });
+});

@@ -34,7 +34,10 @@ after each update.
 2. On your Universal Mail page, the app (Claude or ChatGPT) has **Read**,
    **Organize** and **Send** for **every** account, saved; and sending is on for
    each.
-3. One app at a time, in a new chat.
+3. Your AI app sees all 21 tools: ask a new chat "List the Universal Mail tools
+   you have". Fewer? Refresh the connector (USER-GUIDE §6); apps keep the list
+   they saw when they were connected.
+4. One app at a time, in a new chat.
 
 ## The prompt
 
@@ -108,7 +111,7 @@ test email comes back to the Inbox. Delete it in your mail app afterwards.
 | Sent copy | filed by Yahoo a minute or so later | at once |
 | Junk folder | Bulk | [Gmail]/Spam |
 | Archive | Archive | [Gmail]/All Mail (a message can show in several folders) |
-| Text search | matches the words asked | matches words anywhere, so it can return unrelated mail; subject searches are exact |
+| Text search | matches the words asked | the exact phrase (Gmail's own search, since 2.4.3) |
 | Extra headers | a `References … .ref` header on stored mail | none |
 
 ## If something looks slow or wrong

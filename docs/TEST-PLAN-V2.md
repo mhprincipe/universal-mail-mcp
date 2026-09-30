@@ -157,6 +157,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | ENG-26 | a pause of up to two minutes costs no check of the kept connection (the check took Yahoo about a second); longer, it's checked as before *(added: measured live, DIA-13)* | U |
 | ENG-27 | a folder already open for changes serves the reads that follow without opening it again (reads only peek, and nothing is marked read); another folder, or one open read-only, is read read-only *(added: measured live, DIA-13: 0.4-1 s per reopen)* | U+P |
 | ENG-28 | no provider's name in the engine: it lives in `src/mail/`; the settings are `MAIL_ADDRESS` and `MAIL_APP_PASSWORD`, the old `YAHOO_` names still work and the new ones win *(added: 2.4)* | U |
+| ENG-29 | accounts are described with their provider (by mail server, else address domain) in the tools and the refusals; the names to pass stay plain *(added: 2.4.3, found live)* | U |
 | ENG-14 | an unencrypted mail connection is allowed only to this machine; each transport setting maps to the right connection options *(added during build: the protocol tier's local test server is unencrypted, and the product must never allow that anywhere else)* | U |
 | ENG-15 | sending always requires encryption, on any port; a server that won't encrypt gets nothing, with a plain answer *(added during build: v1 only required it on port 587, so a custom port would have sent in whatever mode the server chose)* | U |
 | ENG-16 | several accounts load from the stored account list and a separate password list; v1's single-account settings become one account called `main`; a bad account is named in the error and its password never appears *(added during build: the accounts had no way in)* | U |
@@ -464,6 +465,8 @@ what it says about the person's position is true.
 | PG-17 | "last used" per app comes from the request log | S |
 | PG-18 | your page says how to connect ChatGPT as it is today: Plus or higher, Developer mode, a new app, the address, OAuth *(added: connecting ChatGPT)* | U |
 | PG-19 | an account can be renamed on your page: its password, settings and every app's permissions carry over; apps use the new name at once, on the same connection (no new sign-in); a taken or malformed name is refused; you're emailed *(added: the owner, after Gmail was named for its address)* | U |
+| NTC-01 | a version with new tools, apps connected: one email naming them and how to refresh each app; told once, even across a restart *(added: 2.4.3, found live)* | U |
+| NTC-02 | a new installation or the same tools: nothing; a server updated from before 2.4.3 with apps connected: told once *(added: 2.4.3)* | U |
 
 **Exit:** adding an account, fixing a revoked password and disconnecting an app all work at phone size.
 
@@ -558,6 +561,7 @@ what it says about the person's position is true.
 | SCM-05 | search results and an opened email carry the cautions, and the tools say to pass them on | U |
 | SCM-06 | a hostile sender name (thousands of @s, or a long run with no spaces) is checked in a moment, not seconds: it runs on the main thread *(added: security review)* | U |
 | SCM-07 | insurers, banks, lenders, credit bureaus, phone companies, shops and government services, named whole or with generic words, from someone else's address; quiet from their own, and on names that only share a word *(added: 2.4.2, found live)* | U |
+| SCM-08 | mail sent through a mailing service with replies to the business's own domain is quiet; replies to a personal mailbox, a non-service sender's replies elsewhere, and a company's name are still said *(added: 2.4.3, found live)* | U |
 
 **First-time recipients**
 
@@ -653,6 +657,7 @@ what it says about the person's position is true.
 | FND-03 | a search checked after the server's reads 50 at a time (a plain one only what it shows); a page looks at 1,000 at most, then answers with a cursor and a warning | U |
 | FND-04 | the search tool takes both filters, says so, and passes the warning on | U |
 | FND-05 | on a real server, from the stored message structure | P |
+| FND-06 | on Gmail, text search asks for the exact phrase with Gmail's own search; other servers keep the standard search *(added: 2.4.3, found live)* | U |
 
 **Who fills a folder**
 
@@ -751,19 +756,19 @@ also where a later reader finds out why a line of code exists.
 |---|---|
 | v1 baseline | 155 |
 | Test kit | 13 |
-| Engine | 84 |
+| Engine | 85 |
 | Sign-in | 67 |
 | Setup | 71 |
 | Installed server | 6 |
 | Release | 12 |
-| Page and emails | 19 |
+| Page and emails | 21 |
 | Everyday polish | 15 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| Serving people (2.4) | 36 |
-| Files and clean-up (2.4.1, 2.4.2) | 50 |
-| **New** | **421** |
-| **Total** | **576** |
+| Serving people (2.4) | 37 |
+| Files and clean-up (2.4.1-2.4.3) | 51 |
+| **New** | **426** |
+| **Total** | **581** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

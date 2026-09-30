@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TOOL_NAMES } from '../../src/tools.js';
 import { VERSION } from '../../src/version.js';
 import { ImapGateway } from '../../src/mail/imap.js';
 import { KEY, PUBLIC_URL, startPage } from './pageHarness.js';
@@ -129,5 +130,55 @@ describe('emails the server sends', () => {
     p = await startPage({ feed: { version: '9.0.0', security: true } });
     await p.get();
     expect(p.feedAsked).toEqual([]);
+  });
+});
+
+describe('when the tools change', () => {
+  // Found live (2026-09-30): Claude kept the tool list it saw when it was
+  // connected, and never saw five tools added since. The owner is told once,
+  // with the steps, whenever a new version brings tools the apps don't know.
+  const notices = () => p!.sent.filter(s => /tools/i.test(s.subject));
+
+  it('NTC-01 new tools since the last start: one email naming them and saying how to refresh each app; told once, even across a restart (added: 2.4.3, found live)', async () => {
+    const before = TOOL_NAMES.filter(name => name !== 'forward_email' && name !== 'junk_email');
+    p = await startPage({ state: { toolNames: before } });
+    p.app.signin!.grants.connect(claude, 'Claude', { me: ['read'] });
+    await p.get();
+    await p.get();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]!.subject).toBe('Universal Mail has new tools for your AI apps');
+    expect(notices()[0]!.text).toContain('forward_email, junk_email');
+    expect(notices()[0]!.text).toContain('Claude');
+    expect(notices()[0]!.text).toMatch(/Settings → Connectors/);
+    expect(notices()[0]!.text).toContain(`It should list ${TOOL_NAMES.length}.`);
+    await p.app.signin!.saved();
+    const saved = JSON.parse(p.saves.state.at(-1)!);
+    expect(saved.toolNames).toEqual([...TOOL_NAMES]);
+    await p.close();
+    p = await startPage({ state: saved });
+    p.app.signin!.grants.connect(claude, 'Claude', { me: ['read'] });
+    await p.get();
+    expect(notices()).toHaveLength(0);
+  });
+
+  it('NTC-02 a new installation (no apps yet) and a restart with the same tools say nothing; a server updated from before 2.4.3 with apps connected says so once', async () => {
+    // No list noted yet: a new installation.
+    p = await startPage({ state: { toolNames: undefined } });
+    await p.get();
+    expect(notices()).toHaveLength(0);
+    await p.app.signin!.saved();
+    expect(JSON.parse(p.saves.state.at(-1)!).toolNames).toEqual([...TOOL_NAMES]);
+    await p.close();
+    p = await startPage({ state: { toolNames: [...TOOL_NAMES] } });
+    p.app.signin!.grants.connect(claude, 'Claude', { me: ['read'] });
+    await p.get();
+    expect(notices()).toHaveLength(0);
+    await p.close();
+    // Updated from a version that didn't keep the list: its apps may hold an old one.
+    p = await startPage({ state: { toolNames: undefined } });
+    p.app.signin!.grants.connect(claude, 'Claude', { me: ['read'] });
+    await p.get();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]!.text).toContain(`Universal Mail ${VERSION} has ${TOOL_NAMES.length} tools`);
   });
 });

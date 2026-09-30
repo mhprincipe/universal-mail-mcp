@@ -1,3 +1,4 @@
+import { TOOL_NAMES } from '../../src/tools.js';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { request, type Server } from 'node:http';
 import { SignJWT, importJWK } from 'jose';
@@ -21,7 +22,7 @@ export function records(overrides: { state?: Record<string, unknown>; passwords?
       { name: 'me', email: 'me@example.invalid', provider: 'other', imap: { host: '127.0.0.1', port: 1, tls: 'none' }, smtp: { host: '127.0.0.1', port: 1, tls: 'starttls' }, sentCopyMode: 'yahoo', safeMove: true },
       { name: 'work', email: 'work@example.invalid', provider: 'other', imap: { host: '127.0.0.1', port: 2, tls: 'none' }, smtp: { host: '127.0.0.1', port: 2, tls: 'starttls' }, sentCopyMode: 'append', safeMove: true }
     ],
-    grants: {}, fingerprints: [], trialReminder: false,
+    grants: {}, fingerprints: [], trialReminder: false, toolNames: [...TOOL_NAMES],
     ...overrides.state
   };
   const credentials = {

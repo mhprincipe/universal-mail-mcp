@@ -22,9 +22,12 @@ export function newer(candidate: string, current: string): boolean {
 export function createDuties(deps: {
   store: InstallStore; clock: { now(): number }; feedUrl?: string; fetchImpl?: typeof fetch;
   notify(subject: string, text: string): Promise<void>;
+  // The tools this version has, and the apps connected now (NTC-01).
+  tools?: readonly string[]; apps?(): string[];
 }) {
   let trialChecked = -Infinity;
   let feedChecked = -Infinity;
+  let toolsChecked = false;
 
   const trial = async (now: number) => {
     if (now - trialChecked < HOUR) return;
@@ -55,5 +58,35 @@ export function createDuties(deps: {
     }
   };
 
-  return { run: async () => { const now = deps.clock.now(); await trial(now); await updates(now); } };
+  // New tools (NTC-01, NTC-02; found live: Claude kept the tool list it saw
+  // when it was connected, and never saw five tools added since). Once per
+  // start: the tools are compared with those noted last time; new ones, with
+  // apps connected, are told once. A server updated from a version that noted
+  // none has its apps told the whole count, once. A new installation, or the
+  // same tools, says nothing.
+  const tools = async () => {
+    if (toolsChecked || !deps.tools) return;
+    toolsChecked = true;
+    const current = [...deps.tools];
+    const saved = deps.store.noted().toolNames;
+    const known = Array.isArray(saved) ? saved.filter((name): name is string => typeof name === 'string') : undefined;
+    const added = known ? current.filter(name => !known.includes(name)) : undefined;
+    const unchanged = known !== undefined && known.length === current.length && added!.length === 0;
+    if (!unchanged) deps.store.note({ toolNames: current });
+    const apps = deps.apps?.() ?? [];
+    if (!apps.length || (added && !added.length)) return;
+    const what = added
+      ? `Universal Mail ${VERSION} added: ${added.join(', ')}.`
+      : `Universal Mail ${VERSION} has ${current.length} tools. Apps connected before this version may still use an older list of them.`;
+    await deps.notify('Universal Mail has new tools for your AI apps', `${what}
+
+Your AI apps keep the list of tools they saw when you connected them, so they may not use new ones until you refresh the connection. Connected now: ${apps.join(', ')}.
+
+Claude: Settings → Connectors → Universal Mail. Use its refresh option if there is one; otherwise Disconnect, then Connect again, and approve it on your Universal Mail page (then check its permissions there).
+ChatGPT: Settings → Apps → Universal Mail, the same way.
+
+Then start a new chat and ask: "List the Universal Mail tools you have." It should list ${current.length}.`);
+  };
+
+  return { run: async () => { const now = deps.clock.now(); await tools(); await trial(now); await updates(now); } };
 }
