@@ -32,6 +32,34 @@ page.**
    failure or a serious harm. Rare cases are deferred or cut, and §12 records
    which and why.
 
+### Serving people *(added 2026-09-29, the owner's question: "how do we make this serve humans in the best fashion?")*
+
+Every feature is checked against these. What each already has is in brackets.
+
+1. **The person stays in charge.** The AI proposes; the person decides,
+   especially for anything that leaves the mailbox. Everything reversible stays
+   reversible, and they can see what was done in their name. *(Send only with
+   permission, per app and account; nothing deleted permanently; the activity
+   log with undo on the page.)*
+2. **Less email, not more.** Less time in the inbox; nothing that invites
+   checking more. *(Search, batch organizing, drafts to approve.)*
+3. **Protection from the mail itself.** Email is where scams live, and an AI
+   reading it can be manipulated by it. *(Mail and attachments treated as
+   untrusted; scam warnings on senders; a first message to someone new is held
+   until the owner confirms; links are never followed.)*
+4. **Respect for everyone in the mailbox.** Other people's messages are in it.
+   It is never a way to mine them or to flood anyone. *(Send limits per account;
+   replies never add recipients quietly; the log never records content.)*
+5. **Private by default.** Each person's own server; no mail stored or seen by
+   anyone else; least data kept.
+6. **For everyone.** Plain words, an accessible page, working by voice, setup a
+   non-technical person can finish. *(Accessibility checks on the page's HTML;
+   setup help in plain words. A guided installer is still open.)*
+7. **Honest.** Clear messages that say what to do next; no silent failures;
+   "tested with", never claims.
+8. **Affordable, and never a trap.** A low price, a trial without a card,
+   reading that keeps working after a lapse, removal in one command.
+
 v1 proved the engine: all 16 tools against a real mailbox, with the safety
 rules intact. It also proved the problem. Setup took most of a day, needed two
 external accounts configured by hand, and failed silently at almost every step.
