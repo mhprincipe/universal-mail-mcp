@@ -169,9 +169,25 @@ export function cautionsFor(message) {
         if (official)
             cautions.push(`The sender's domain ${registrable(domain)} looks like ${official} but isn't it.`);
     }
-    const replyTo = message.replyTo?.find(r => r.address && registrable(domainOf(r.address)) !== registrable(domain));
+    const replyTo = message.replyTo?.find(r => r.address && registrable(domainOf(r.address)) !== registrable(domain) && !throughMailingService(domain, r.address));
     if (replyTo)
         cautions.push(`Replies would go to ${replyTo.address}, not to the sender's own domain (${registrable(domain)}).`);
     return cautions;
+}
+// Newsletters go out through mailing services, with replies to the business's
+// own domain: ordinary mail (SCM-08, found live: 5 of 8 cautions were this).
+// Replies to a personal mailbox are still worth a word.
+const MAILING_SERVICES = new Set([
+    'ccsend.com', 'constantcontact.com', 'mcsv.net', 'mcdlv.net', 'rsgsv.net', 'list-manage.com', 'mailchimpapp.net', 'mandrillapp.com',
+    'sendgrid.net', 'amazonses.com', 'mailgun.org', 'mailgun.net', 'sparkpostmail.com', 'shopifyemail.com', 'klaviyomail.com',
+    'hubspotemail.net', 'circle.so', 'substack.com', 'beehiiv.com', 'mlsend.com', 'sendinblue.com', 'brevosend.com',
+    'convertkit-mail.com', 'convertkit-mail2.com', 'createsend.com', 'cmail19.com', 'cmail20.com', 'aweber.com', 'e2ma.net', 'emailoctopus.com'
+]);
+const PERSONAL_MAIL = new Set([
+    'gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com', 'aol.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com',
+    'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.net', 'mail.com', 'yandex.com'
+]);
+function throughMailingService(senderDomain, replyAddress) {
+    return MAILING_SERVICES.has(registrable(senderDomain)) && !PERSONAL_MAIL.has(registrable(domainOf(replyAddress)));
 }
 //# sourceMappingURL=cautions.js.map

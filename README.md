@@ -6,7 +6,7 @@ server in your own Google Cloud account. Your AI can search, read, organize
 and, when you allow it, send your email. You choose, per app and per account,
 what each may do.
 
-**Status:** version 2.4.2. Installed and in daily use: every tool tested live
+**Status:** version 2.4.3. Installed and in daily use: every tool tested live
 on Yahoo with Claude and with ChatGPT; Gmail connected live. 2.4 added reading
 attachments, scam warnings, a check before writing to someone new, send limits,
 and an activity log with undo; 2.4.1 added sending attachments, forwarding,
@@ -43,7 +43,7 @@ Then connect Claude and ChatGPT and choose their permissions: see the
 | [docs/DESIGN-PROVIDER-SIGNIN.md](docs/DESIGN-PROVIDER-SIGNIN.md) | proposed for 2.5: signing in with Microsoft and Google (for Outlook), for the owner's review |
 | [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md) | every test, by ID |
 | [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md) | every red-green cycle and live run |
-| [docs/LIVE-TEST-PROMPT.md](docs/LIVE-TEST-PROMPT.md) | prompts that exercise every tool on a real mailbox |
+| [docs/LIVE-TEST-PROMPT.md](docs/LIVE-TEST-PROMPT.md) | one prompt that tests everything on every account |
 | [docs/OPEN-QUESTIONS.md](docs/OPEN-QUESTIONS.md) | decisions for the owner, and what's still open |
 | [docs/PRODUCT-DESCRIPTION.md](docs/PRODUCT-DESCRIPTION.md) | market copy |
 | [docs/v1/](docs/v1/) | the first version's documents (Yahoo only, Auth0), kept for history |

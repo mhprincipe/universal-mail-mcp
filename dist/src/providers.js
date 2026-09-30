@@ -6,6 +6,13 @@ const RELEVANT_CAPABILITIES = ['MOVE', 'UIDPLUS', 'SPECIAL-USE'];
 // An app password as the person pasted it: providers show them in groups
 // (Gmail: "abcd efgh ijkl mnop"), and none contains a space, so spaces go.
 export const appPassword = (typed) => typed.replace(/\s+/g, '');
+// The provider an account is at, for saying so beside its name (ENG-29): by its
+// mail server, else its address's domain; undefined when neither is known.
+export function providerName(address, imapHost) {
+    const domain = (address ?? '').split('@').pop()?.toLowerCase() ?? '';
+    const host = (imapHost ?? '').toLowerCase();
+    return (profiles.find(p => p.imap.host === host) ?? profiles.find(p => p.domains.includes(domain)))?.name;
+}
 export const profiles = [
     {
         id: 'yahoo', name: 'Yahoo Mail',
