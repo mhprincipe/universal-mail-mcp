@@ -46,11 +46,30 @@ describe('the activity log', () => {
       action: 'flagged', undo: { kind: 'flag', flag: 'flagged', value: false }
     });
     expect(activityFor('send_email', { to: ['a@x.example', 'b@x.example'], cc: ['c@x.example'] }, success({ messageId: '<m>' }, 'ok', 'SENT'))).toEqual({ action: 'sent', count: 1, recipients: 3 });
+    // Sent to someone new because the AI said the owner confirmed: shown, so the owner sees it (security review).
+    expect(activityFor('reply_email', { mailbox: 'INBOX', uid: 1, newRecipientsConfirmed: true }, success({ messageId: '<m>' }, 'ok', 'SENT'))).toEqual({ action: 'replied', count: 1, newRecipients: true });
     expect(activityFor('create_folder', { path: 'Receipts' }, success({ path: 'Receipts', created: true }))).toMatchObject({ action: 'created folder', to: 'Receipts' });
     expect(activityFor('create_folder', { path: 'Receipts' }, success({ path: 'Receipts', created: false }))).toBeUndefined();
     expect(activityFor('move_email', { mailbox: 'INBOX', uid: 1 }, success({ sourceMailbox: 'INBOX' }, 'already', 'ALREADY_THERE'))).toBeUndefined();
     expect(activityFor('search_email', {}, success([]))).toBeUndefined();
     expect(activityFor('trash_email', { mailbox: 'INBOX', uid: 5 }, { ok: false, status: 'FAILED', code: 'X', message: 'no' } as never)).toBeUndefined();
+  });
+});
+
+describe('the activity log, safely', () => {
+  it('ACT-07 what it keeps (and saves with your settings) stays under 16 KB, oldest dropped first: the settings record Google keeps has a 64 KB limit (added: security review, 2.4)', async () => {
+    const now = Date.parse('2026-09-29T20:00:00Z');
+    let tick = 0;
+    const saves: unknown[] = [];
+    const log = createActivityLog({ clock: { now: () => now + tick++ }, save: entries => { saves.push(entries); } });
+    const uids = Array.from({ length: 100 }, (_, i) => 100_000 + i);
+    let newest = '';
+    for (let i = 0; i < 100; i++) newest = log.record({ app: 'Claude', account: 'me', action: 'marked read', count: 100, from: 'INBOX', undo: { kind: 'flag', mailbox: 'INBOX', uids, flag: 'read', value: false } }).id;
+    expect(JSON.stringify(log.list()).length).toBeLessThanOrEqual(16_384);
+    expect(log.list().length).toBeGreaterThan(5);
+    expect(log.list()[0]!.id).toBe(newest);
+    await log.flush();
+    expect(JSON.stringify(saves.at(-1)).length).toBeLessThanOrEqual(16_384);
   });
 });
 
@@ -117,7 +136,7 @@ describe('the activity log on your page', () => {
     await tool(grant.connection, 'list_folders', { account: 'me' });
     await p.signIn();
     const html = (await p.get()).html;
-    expect(html).toMatch(/Claude sent 1 message \(2 recipients\) from me/);
+    expect(html).toMatch(/Claude sent 1 message \(2 recipients, someone new\) from me/);
     expect(html.match(/Claude [a-z ]+ \d+ message/g)).toHaveLength(1);
     expect(html.slice(html.indexOf('Recent activity'))).not.toMatch(/name="id"/);
     expect(html).not.toContain('subject-');
@@ -131,5 +150,27 @@ describe('the activity log on your page', () => {
     await p.app.signin!.activity!.flush();
     const saved = JSON.parse(p.saves.state.at(-1)!);
     expect(saved.activity).toEqual([expect.objectContaining({ app: 'Claude', account: 'me', action: 'flagged', count: 1 })]);
+  });
+
+  it('ACT-08 undo finds the account by its address: after a rename it still works; if that address is gone (a new account took the name), it refuses (added: security review, 2.4)', async () => {
+    p = await startPage();
+    const grant = p.app.signin!.grants.connect(claude, 'Claude', { work: ['read', 'organize'] });
+    vi.spyOn(MailService.prototype, 'trashEmail').mockResolvedValue(success({ sourceMailbox: 'INBOX', sourceUid: 5, destination: 'Trash', destinationUid: 91 }) as never);
+    const moveBack = vi.spyOn(MailService.prototype, 'moveEmail').mockResolvedValue(success({ sourceMailbox: 'Trash', sourceUid: 91, destination: 'INBOX', destinationUid: 12 }) as never);
+    await tool(grant.connection, 'trash_email', { account: 'work', mailbox: 'INBOX', uid: 5 });
+    await tool(grant.connection, 'trash_email', { account: 'work', mailbox: 'INBOX', uid: 6 });
+    await p.signIn();
+    await p.act('/accounts/rename', { name: 'work', to: 'office' });
+    const html = (await p.get()).html;
+    const ids = [...html.matchAll(/name="id" value="([^"]+)"/g)].map(m => m[1]!);
+    expect(ids).toHaveLength(2);
+    expect((await p.act('/activity/undo', { id: ids[0]! })).html).toContain('Put back');
+    expect(moveBack).toHaveBeenCalledTimes(1);
+    // The address goes; another account takes the old name.
+    p.accepted['other@example.invalid'] = 'other-app-password';
+    await p.act('/accounts/remove', { name: 'office', confirm: 'office' });
+    await p.act('/accounts/add', { email: 'other@example.invalid', password: 'other-app-password', name: 'work' });
+    expect((await p.act('/activity/undo', { id: ids[1]! })).html).toContain('That account isn&#39;t here any more.');
+    expect(moveBack).toHaveBeenCalledTimes(1);
   });
 });

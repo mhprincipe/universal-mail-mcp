@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { createDeflate } from 'node:zlib';
 import { parseMessage } from '../src/parseCore.js';
 import { createSafeParser, type SafeParser } from '../src/safeParse.js';
 
@@ -197,5 +198,43 @@ describe('reading an attachment safely', () => {
     expect(Date.now() - started).toBeLessThan(500);
     // The email is not the attachment: it still opens.
     expect(await parser.parse(raw)).toMatchObject({ subject: 'STUCKATTACHMENT', attachments: [{ index: 0, filename: 'a.txt' }] });
+  });
+});
+
+describe('a PDF built to explode', () => {
+  // About 1 MB that pdf.js inflates to 1 GB: its memory is outside the
+  // worker's heap limit, so the sandbox watches it separately.
+  async function pdfBomb(inflatedMb: number): Promise<Buffer> {
+    const deflate = createDeflate({ level: 9 });
+    const chunks: Buffer[] = [];
+    deflate.on('data', (c: Buffer) => chunks.push(c));
+    const done = new Promise(resolve => deflate.on('end', resolve));
+    const block = Buffer.alloc(1024 * 1024, 0x20);
+    for (let i = 0; i < inflatedMb; i++) if (!deflate.write(block)) await new Promise(r => deflate.once('drain', r));
+    deflate.end();
+    await done;
+    const stream = Buffer.concat(chunks);
+    const head = Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length ${stream.length} /Filter /FlateDecode >>\nstream\n`, 'latin1');
+    const tail = Buffer.from('\nendstream\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n', 'latin1');
+    return Buffer.concat([head, stream, tail]);
+  }
+
+  it('ATT-08 is stopped once the memory it takes outside the heap passes the limit, and the email still opens (added: security review, 2.4)', { timeout: 60_000 }, async () => {
+    const pdf = await pdfBomb(1024);
+    const raw = Buffer.concat([Buffer.from([
+      'Message-ID: <bomb@example.invalid>', 'Subject: invoice', 'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="b"', '',
+      '--b', 'Content-Type: text/plain', '', 'see attached', '--b',
+      'Content-Type: application/pdf; name="invoice.pdf"', 'Content-Disposition: attachment; filename="invoice.pdf"', 'Content-Transfer-Encoding: base64', '', ''
+    ].join('\r\n')), Buffer.from(pdf.toString('base64').replace(/.{76}/g, '$&\r\n')), Buffer.from('\r\n--b--\r\n')]);
+    parser = createSafeParser({ maxExternalMb: 128 });
+    await expect(parser.attachment(raw, 0)).rejects.toMatchObject({ code: 'MAIL-PARSE-UNSAFE', details: { reason: 'memory limit' } });
+    expect(await parser.parse(raw)).toMatchObject({ subject: 'invoice' });
+  });
+});
+
+describe('an attachment inside a hostile structure', () => {
+  it('ATT-09 reading an attachment applies the same structure limits as opening the email (depth, parts, header size) (added: security review, 2.4)', { timeout: 20_000 }, async () => {
+    parser = createSafeParser({ timeoutMs: 5_000 });
+    await expect(parser.attachment(Buffer.from(nested(200), 'latin1'), 0)).rejects.toMatchObject({ code: 'MAIL-PARSE-UNSAFE', details: { reason: expect.stringMatching(/depth limit/) } });
   });
 });

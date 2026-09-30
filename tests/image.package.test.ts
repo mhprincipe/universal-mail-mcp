@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { pdfOf } from '../testkit/src/attachments.js';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -62,6 +63,16 @@ describe('the server image', () => {
     docker('stop', '--time', '8', id);
     expect(docker('inspect', '-f', '{{.State.ExitCode}}', id)).toBe('0');
     expect(Date.now() - started).toBeLessThan(6000);
+  }, 120_000);
+
+  it('ATT-10 in the built image, the sandbox reads a PDF attachment: the reader and its libraries ship with it (added: reading attachments)', async () => {
+    const { id } = await run(records());
+    const pdf = pdfOf('Invoice total 42.00 EUR').toString('base64');
+    const raw = ['Subject: x', 'MIME-Version: 1.0', 'Content-Type: multipart/mixed; boundary="b"', '', '--b', 'Content-Type: text/plain', '', 'hi', '--b',
+      'Content-Type: application/pdf; name="i.pdf"', 'Content-Disposition: attachment; filename="i.pdf"', 'Content-Transfer-Encoding: base64', '', pdf, '--b--', ''].join('\r\n');
+    const script = `import('/app/dist/src/safeParse.js').then(async m => { const p = m.createSafeParser(); const r = await p.attachment(Buffer.from(process.argv[1], 'base64'), 0); console.log(JSON.stringify(r)); await p.close(); })`;
+    const out = docker('exec', id, 'node', '-e', script, Buffer.from(raw).toString('base64'));
+    expect(JSON.parse(out)).toMatchObject({ filename: 'i.pdf', kind: 'text', text: expect.stringContaining('Invoice total 42.00 EUR') });
   }, 120_000);
 
   it('REL-03 damaged settings: unhealthy, with the setting named in its log, never a value', async () => {

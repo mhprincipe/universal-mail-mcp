@@ -87,12 +87,25 @@ function imitated(domain: string): string | undefined {
   return undefined;
 }
 
+// An address written into a display name ("service@paypal.com" <x@evil>).
+// Word by word, each checked by an anchored pattern with one @: linear in the
+// name's length, whatever a sender puts there (SCM-06: an unanchored pattern
+// took 60 s on 5,000 @s, on the main thread).
+const ADDRESS = /^[^@]{1,64}@[a-z0-9.-]{1,253}\.[a-z]{2,24}$/i;
+function addressIn(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  for (const word of name.split(/[\s<>"'()[\],;]+/)) {
+    if (word.length <= 320 && ADDRESS.test(word)) return word;
+  }
+  return undefined;
+}
+
 export function cautionsFor(message: { from?: Address[]; replyTo?: Address[] }): string[] {
   const sender = message.from?.[0];
   if (!sender?.address) return [];
   const cautions: string[] = [];
   const domain = domainOf(sender.address);
-  const shown = sender.name?.match(/[^\s<>"']+@[^\s<>"']+\.[a-z]{2,}/i)?.[0];
+  const shown = addressIn(sender.name);
   if (shown && shown.toLowerCase() !== sender.address.toLowerCase()) {
     cautions.push(`The sender's name shows ${shown}, but the mail comes from ${sender.address}.`);
   } else {

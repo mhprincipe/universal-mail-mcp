@@ -5,6 +5,8 @@
 // keeps the server running, and counted.
 export type SendLog = {
   record(address: string, at: number): void;
+  // A place given back: the provider refused the message outright.
+  release(address: string, at: number): void;
   since(address: string, from: number): number;
 };
 
@@ -19,6 +21,11 @@ export function createSendLog(): SendLog {
       const key = address.toLowerCase();
       // Only the last day matters; older entries go.
       sent.set(key, [...(sent.get(key) ?? []).filter(t => t > at - DAY_MS), at]);
+    },
+    release(address, at) {
+      const times = sent.get(address.toLowerCase()) ?? [];
+      const i = times.lastIndexOf(at);
+      if (i >= 0) times.splice(i, 1);
     },
     since(address, from) {
       return (sent.get(address.toLowerCase()) ?? []).filter(t => t > from).length;

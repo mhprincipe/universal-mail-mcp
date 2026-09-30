@@ -229,7 +229,7 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
         });
         accountActions(tools, { store, mailCheck: deps.mailCheck!, grants: auth.grants, status, notify: approval.notify });
         appActions(tools, { store, grants: auth.grants, disconnect: approval.disconnect, notify: approval.notify });
-        activityActions(tools, { activity, getMail: () => getMail() });
+        activityActions(tools, { activity, getMail: () => getMail(), accountFor: email => store.accounts().find(a => a.email.toLowerCase() === email.toLowerCase())?.name });
         // Check that everything works: the report, shown for copying.
         tools.post('/check', async (_req, res, session) => {
           const report = await serverCheck(VERSION);
@@ -274,7 +274,7 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
     lastUsed.set(who.appId, clock.now());
     const access = getMail().forGrant(grant.accounts);
     const appName = grant.appName ?? new URL(who.appId).host;
-    await toNodeHandler(createMcpHandler(() => buildMcpServer(access, { record: (account, described) => { activity.record({ ...described, app: appName, account }); } })))(req, res, req.body);
+    await toNodeHandler(createMcpHandler(() => buildMcpServer(access, { record: (account, described) => { const email = store?.accounts().find(a => a.name === account)?.email; activity.record({ ...described, app: appName, account, ...(email ? { email } : {}) }); } })))(req, res, req.body);
   });
   // The check (design §7): only setup's check token opens it. Setup says which
   // version it installed; the answer is the report, redacted by construction.

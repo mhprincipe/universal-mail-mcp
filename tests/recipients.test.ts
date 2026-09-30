@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { createSendLog } from '../src/sendLimits.js';
+import { ImapGateway } from '../src/yahoo/imap.js';
 import { MailService } from '../src/yahoo/mailService.js';
 
 // First-time recipients (added 2026-09-29, principles 1 and 3): a send or reply
@@ -23,6 +24,32 @@ function service(known: string[], options: { searchFails?: boolean; noSent?: boo
   return { s, send, asked };
 }
 afterEach(() => vi.restoreAllMocks());
+
+describe('who counts as written to before', () => {
+  // The server's search matches parts of addresses, and Sent can hold mail
+  // someone else wrote (an AI can move any message there). So a match only
+  // counts when the message is from this account and names the address exactly.
+  function gateway(rows: Array<{ uid: number; from: string; to?: string[]; cc?: string[] }>) {
+    const g = new ImapGateway(config);
+    const client = {
+      getMailboxLock: async () => ({ release: () => undefined }),
+      search: async () => rows.map(r => r.uid),
+      fetchAll: async () => rows.map(r => ({ uid: r.uid, envelope: { from: [{ address: r.from }], to: (r.to ?? []).map(address => ({ address })), cc: (r.cc ?? []).map(address => ({ address })) } }))
+    };
+    vi.spyOn(g, 'run').mockImplementation(fn => fn(client as never));
+    return g;
+  }
+
+  it('RCP-05 only this account\'s own sent mail counts, and only an exact address (added: security review, 2.4)', async () => {
+    // Planted: someone else's message, moved into Sent, copying the attacker.
+    expect(await gateway([{ uid: 1, from: 'attacker@evil.example', cc: ['attacker@evil.example'] }]).hasSentTo('Sent', 'attacker@evil.example')).toBe(false);
+    // A longer address that merely contains it.
+    expect(await gateway([{ uid: 2, from: 'me@example.invalid', to: ['john.smith@x.example'] }]).hasSentTo('Sent', 'smith@x.example')).toBe(false);
+    // The real thing, whatever the case.
+    expect(await gateway([{ uid: 3, from: 'ME@example.invalid', to: ['Friend@Example.invalid'] }]).hasSentTo('Sent', 'friend@example.invalid')).toBe(true);
+    expect(await gateway([{ uid: 4, from: 'me@example.invalid', cc: ['friend@example.invalid'] }]).hasSentTo('Sent', 'friend@example.invalid')).toBe(true);
+  });
+});
 
 describe('first-time recipients', () => {
   it('RCP-01 a send to someone never written to is held, nothing sent, naming them; confirmed, it goes (added: first-time recipients)', async () => {

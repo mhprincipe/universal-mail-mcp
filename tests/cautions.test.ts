@@ -61,6 +61,19 @@ describe('scam warnings', () => {
   });
 });
 
+describe('scam warnings, safely', () => {
+  it('SCM-06 a hostile sender name (thousands of @s, or a long run with no spaces) is checked in a moment, not seconds: it runs on the main thread (added: security review, 2.4)', () => {
+    const hostile = ['@'.repeat(5000), `${'a@'.repeat(2500)}x`, `${'x@'.repeat(1200)}.com`, `${'a'.repeat(3000)}@${'b'.repeat(3000)}.co`];
+    for (const name of hostile) {
+      const started = performance.now();
+      cautionsFor({ from: [{ name, address: 'someone@example.invalid' }] });
+      expect(performance.now() - started, name.slice(0, 20)).toBeLessThan(100);
+    }
+    // Still sees an address in an ordinary name.
+    expect(cautionsFor({ from: [{ name: 'Billing <service@paypal.com>', address: 'x@evil.example' }] })[0]).toMatch(/shows service@paypal\.com/);
+  });
+});
+
 describe('scam warnings in the tools', () => {
   let f: Awaited<ReturnType<typeof startToolFixture>> | undefined;
   afterEach(async () => { await f?.stop(); f = undefined; });

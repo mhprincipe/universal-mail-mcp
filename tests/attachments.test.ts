@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { DOCX, PNG_1X1, docxOf, messageWithAttachments, pdfOf } from '../testkit/src/attachments.js';
+import { readAttachment } from '../src/attachmentCore.js';
 import { startToolFixture } from '../testkit/src/toolFixture.js';
 
 // Reading attachments (added 2026-09-29, the owner: "review of attachments
@@ -108,5 +109,38 @@ describe('reading attachments', () => {
     expect(tool.annotations).toMatchObject({ readOnlyHint: true });
     expect(tool.description).toMatch(/untrusted/i);
     expect(tool.description).toMatch(/index/i);
+  });
+});
+
+// The reader itself, outside the sandbox: the same function the worker runs,
+// so every branch is exercised where coverage can see it.
+describe('the attachment reader, directly', () => {
+  it('ATT-11 each kind, read as the worker reads it: text (with its charset), HTML, PDF, Word, an image, a large image, another kind, damaged files, a missing position (added: reading attachments)', { timeout: 30_000 }, async () => {
+    const latin1 = Buffer.from('Café', 'latin1');
+    const raw = await messageWithAttachments([
+      { filename: 'menu.txt', contentType: 'text/plain; charset=iso-8859-1', content: latin1 },
+      { filename: 'page.html', contentType: 'text/html', content: '<h1>Title</h1><a href="https://evil.example">link</a><img src="x.png">' },
+      { filename: 'invoice.pdf', contentType: 'application/pdf', content: pdfOf('Total due') },
+      { filename: 'letter.docx', contentType: DOCX, content: await docxOf('Dear Sam') },
+      { filename: 'pixel.png', contentType: 'image/png', content: PNG_1X1 },
+      { filename: 'huge.jpg', contentType: 'image/jpeg', content: Buffer.alloc(3_100_000, 7) },
+      { filename: 'sheet.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', content: Buffer.from('PK') },
+      { filename: 'bad.pdf', contentType: 'application/pdf', content: Buffer.from('%PDF-1.4 nothing') },
+      { filename: 'data.json', contentType: 'application/json', content: '{"a":1}' }
+    ]);
+    const read = (i: number) => readAttachment(raw, i);
+    expect(await read(0)).toMatchObject({ kind: 'text', text: 'Café' });
+    const html = (await read(1))!.text!;
+    expect(html).toMatch(/TITLE|Title/);
+    expect(html).not.toContain('evil.example');
+    expect(html).not.toContain('x.png');
+    expect(await read(2)).toMatchObject({ kind: 'text', text: expect.stringContaining('Total due') });
+    expect(await read(3)).toMatchObject({ kind: 'text', text: expect.stringContaining('Dear Sam') });
+    expect(await read(4)).toMatchObject({ kind: 'image', contentType: 'image/png', image: PNG_1X1.toString('base64') });
+    expect(await read(5)).toMatchObject({ kind: 'unsupported', reason: 'too large to show' });
+    expect(await read(6)).toMatchObject({ kind: 'unsupported', filename: 'sheet.xlsx' });
+    expect(await read(7)).toMatchObject({ kind: 'unreadable', filename: 'bad.pdf' });
+    expect(await read(8)).toMatchObject({ kind: 'text', text: '{"a":1}' });
+    expect(await read(9)).toBeUndefined();
   });
 });

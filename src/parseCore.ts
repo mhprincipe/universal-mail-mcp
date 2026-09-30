@@ -42,7 +42,7 @@ export class ParseLimitExceeded extends Error {
 
 // A first pass with the same splitter mailparser uses. It enforces the three
 // limits while holding only the MIME structure, not the content.
-function checkStructure(raw: Buffer, limits: ParseLimits): Promise<void> {
+export function checkStructure(raw: Buffer, limits: ParseLimits): Promise<void> {
   return new Promise((resolve, reject) => {
     const splitter = new Splitter({ maxHeadSize: limits.maxHeaderBytes, maxChildNodes: limits.maxParts });
     splitter.on('data', (chunk: { type: string; parentNode?: unknown }) => {

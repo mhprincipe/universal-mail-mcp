@@ -349,11 +349,22 @@ export class ImapGateway {
   // Has this account ever written to this address (RCP-01)? Its Sent folder,
   // To or Cc, read-only.
   async hasSentTo(sent: string, address: string): Promise<boolean> {
+    const own = this.config.YAHOO_EMAIL.toLowerCase();
+    const wanted = address.toLowerCase();
     return this.read(async client => {
       const lock = await this.openToRead(client, sent);
       try {
+        // The server's search is a first pass: it matches parts of addresses,
+        // and Sent can hold mail someone else wrote (RCP-05, security review).
+        // A hit counts only when it's from this account and names the address
+        // exactly. The newest 50 are enough to find one.
         const hits = await client.search({ or: [{ to: address }, { cc: address }] }, { uid: true });
-        return Array.isArray(hits) && hits.length > 0;
+        if (!Array.isArray(hits) || !hits.length) return false;
+        const newest = [...hits].sort((x, y) => x - y).slice(-50);
+        const rows = await client.fetchAll(newest, { envelope: true }, { uid: true });
+        const names = (list: Array<{ address?: string }> | undefined) => (list ?? []).map(x => x.address?.toLowerCase());
+        return rows.some(row => names(row.envelope?.from).includes(own)
+          && [...names(row.envelope?.to), ...names(row.envelope?.cc)].includes(wanted));
       } finally { lock.release(); }
     });
   }

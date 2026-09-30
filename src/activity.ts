@@ -10,12 +10,16 @@ export type ActivityUndo =
   | { kind: 'move'; mailbox: string; uids: number[]; destination: string }
   | { kind: 'flag'; mailbox: string; uids: number[]; flag: 'read' | 'flagged'; value: boolean };
 export type ActivityEntry = {
-  id: string; at: number; app: string; account: string;
+  // email: the account's address, so undo finds it after a rename, and
+  // never acts on another account that later took the name (ACT-08).
+  id: string; at: number; app: string; account: string; email?: string;
   action: string; count: number; recipients?: number;
+  // Sent to someone new on the AI's word that the owner confirmed (RCP): shown.
+  newRecipients?: boolean;
   from?: string; to?: string;
   undo?: ActivityUndo; undone?: number;
 };
-type Described = Omit<ActivityEntry, 'id' | 'at' | 'app' | 'account' | 'undone'>;
+type Described = Omit<ActivityEntry, 'id' | 'at' | 'app' | 'account' | 'email' | 'undone'>;
 
 export type ActivityLog = {
   record(entry: Omit<ActivityEntry, 'id' | 'at'>): ActivityEntry;
@@ -28,6 +32,7 @@ export type ActivityLog = {
 
 const MAX_ENTRIES = 100;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_BYTES = 16_384;
 
 function valid(entry: unknown): entry is ActivityEntry {
   const e = entry as Partial<ActivityEntry> | null;
@@ -47,6 +52,10 @@ export function createActivityLog(options: {
   const prune = () => {
     const oldest = clock.now() - MAX_AGE_MS;
     entries = entries.filter(e => e.at > oldest).sort((a, b) => b.at - a.at).slice(0, MAX_ENTRIES);
+    // Saved inside the settings record, which Google caps at 64 KB: the log
+    // keeps to 16 KB of it, oldest dropped first (ACT-07, security review).
+    let size = JSON.stringify(entries).length;
+    while (size > MAX_BYTES && entries.length) size -= JSON.stringify(entries.pop()).length + 1;
   };
   prune();
   const flush = async () => {
@@ -106,7 +115,7 @@ export function activityFor(tool: string, args: Record<string, any>, envelope: T
   }
   if (tool === 'send_email' || tool === 'reply_email') {
     const recipients = tool === 'send_email' ? [...(args.to ?? []), ...(args.cc ?? []), ...(args.bcc ?? [])].length : undefined;
-    return { action: tool === 'send_email' ? 'sent' : 'replied', count: 1, ...(recipients !== undefined ? { recipients } : {}) };
+    return { action: tool === 'send_email' ? 'sent' : 'replied', count: 1, ...(recipients !== undefined ? { recipients } : {}), ...(args.newRecipientsConfirmed ? { newRecipients: true } : {}) };
   }
   if (tool === 'create_draft') return { action: 'drafted', count: 1 };
   if (tool === 'update_draft') return { action: 'updated a draft', count: 1 };

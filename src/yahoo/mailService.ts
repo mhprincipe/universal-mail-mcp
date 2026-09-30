@@ -224,12 +224,14 @@ export class MailService {
     if (this.sendLog.since(this.config.YAHOO_EMAIL, now - 24 * 60 * 60_000) >= perDay) {
       throw new MailError('MAIL-SEND-LIMIT', `This account has sent its limit of ${perDay} a day. Nothing was sent.`, 'FAILED');
     }
+    // Its place is taken before it goes, so sends fired together can't all
+    // pass the check (LIM-04); given back only when the provider refuses it.
+    this.sendLog.record(this.config.YAHOO_EMAIL, now);
     try {
       const info = await phase('smtp.send', () => this.smtp.sendMail({
         envelope: { from: this.config.YAHOO_EMAIL, to: recipients },
         raw: args.raw
       }));
-      this.sendLog.record(this.config.YAHOO_EMAIL, now);
       const warnings: string[] = [];
       if (this.config.SENT_COPY_MODE === 'yahoo') {
         // The provider files its own copy, a minute or so later (seen in every
@@ -251,16 +253,17 @@ export class MailService {
       const responseCode = Number(error?.responseCode ?? 0);
       // Refused before anything was sent: the server won't encrypt, and we won't send in the clear.
       if (command === 'STARTTLS' || error?.code === 'ETLS') {
+        this.sendLog.release(this.config.YAHOO_EMAIL, now);
         throw new MailError('SMTP_ENCRYPTION_UNAVAILABLE', "The mail server wouldn't encrypt the connection, so nothing was sent.", 'FAILED', false, { command, responseCode });
       }
       if (responseCode >= 400 && responseCode < 600) {
+        this.sendLog.release(this.config.YAHOO_EMAIL, now);
         throw new MailError('SMTP_REJECTED', `The mail provider rejected the message (${responseCode}).`, 'FAILED', false, { command, responseCode });
       }
       // Nodemailer also reports CONN when the socket closes after DATA. The
       // command label alone therefore cannot prove that delivery never began.
-      if (error?.code === 'EAUTH') throw classify(error);
-      // It may have gone: counted.
-      this.sendLog.record(this.config.YAHOO_EMAIL, now);
+      if (error?.code === 'EAUTH') { this.sendLog.release(this.config.YAHOO_EMAIL, now); throw classify(error); }
+      // It may have gone: it keeps its place.
       throw new MailError('SEND_STATUS_UNKNOWN', 'The SMTP connection failed after delivery may have begun. The message was not retried.', 'UNKNOWN', false, { messageId: args.messageId, operationId: args.operationId, command });
     }
   }

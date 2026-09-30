@@ -63,6 +63,14 @@ describe('send limits', () => {
     await expect(s.sendEmail(mail)).rejects.toMatchObject({ code: 'MAIL-SEND-LIMIT' });
   });
 
+  it('LIM-04 sends fired together can\'t get past the limit: each takes its place before it goes, and gives it back only if the provider refused it (added: security review, 2.4)', async () => {
+    const { s, send } = service({ perHour: '2' });
+    send.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ accepted: ['friend@example.invalid'], rejected: [] }), 30)) as never);
+    const outcomes = await Promise.allSettled(Array.from({ length: 5 }, () => s.sendEmail(mail)));
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(outcomes.filter(o => o.status === 'rejected').map(o => (o as PromiseRejectedResult).reason.code)).toEqual(['MAIL-SEND-LIMIT', 'MAIL-SEND-LIMIT', 'MAIL-SEND-LIMIT']);
+  });
+
   it('LIM-03 an account\'s saved limits reach its mail service; accounts saved before limits existed get the defaults', () => {
     const accounts = loadAccounts({
       AUTH_MODE: 'builtin',

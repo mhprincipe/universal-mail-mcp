@@ -120,19 +120,35 @@ describe('ChatGPT signs in', () => {
     expect((await exchange({ client_assertion_type: ASSERTION, client_assertion: once })).status).toBe(200);
     expect(await exchange({ client_assertion_type: ASSERTION, client_assertion: once })).toMatchObject({ status: 401, body: { error: 'invalid_client' } });
     // A document naming keys elsewhere, or none, can't be used to prove anything.
+    clock.advance(6 * 60_000); // past the five-minute cache (SIG-87)
     (served[chatgpt] as Record<string, unknown>).jwks_uri = 'https://attacker.example/jwks.json';
     expect(await exchange({ client_assertion_type: ASSERTION, client_assertion: await assertion() })).toMatchObject({ status: 401, body: { error: 'invalid_client' } });
     expect(fetched).not.toContain('https://attacker.example/jwks.json');
     // Not even another trusted app's origin, though its keys would verify.
+    clock.advance(6 * 60_000); // past the five-minute cache (SIG-87)
     (served[chatgpt] as Record<string, unknown>).jwks_uri = 'https://claude.ai/jwks.json';
     served['https://claude.ai/jwks.json'] = served[jwksUri];
     expect(await exchange({ client_assertion_type: ASSERTION, client_assertion: await assertion() })).toMatchObject({ status: 401, body: { error: 'invalid_client' } });
     expect(fetched).not.toContain('https://claude.ai/jwks.json');
+    clock.advance(6 * 60_000); // past the five-minute cache (SIG-87)
     delete (served[chatgpt] as Record<string, unknown>).jwks_uri;
     expect(await exchange({ client_assertion_type: ASSERTION, client_assertion: await assertion() })).toMatchObject({ status: 401, body: { error: 'invalid_client' } });
     // Its keys unreachable: refused, not waved through.
+    clock.advance(6 * 60_000); // past the five-minute cache (SIG-87)
     (served[chatgpt] as Record<string, unknown>).jwks_uri = jwksUri;
     delete served[jwksUri];
     expect(await exchange({ client_assertion_type: ASSERTION, client_assertion: await assertion() })).toMatchObject({ status: 401, body: { error: 'invalid_client' } });
+  });
+});
+
+describe('fetching an app\'s documents', () => {
+  it('SIG-87 its identity document and keys are fetched once per five minutes, not once per request: the token step is public (added: security review, 2.4)', async () => {
+    for (let i = 0; i < 3; i++) expect((await exchange({ client_assertion_type: ASSERTION, client_assertion: await assertion() })).status).toBe(200);
+    expect(fetched.filter(u => u === chatgpt)).toHaveLength(1);
+    expect(fetched.filter(u => u === jwksUri)).toHaveLength(1);
+    clock.advance(6 * 60_000);
+    expect((await exchange({ client_assertion_type: ASSERTION, client_assertion: await assertion() })).status).toBe(200);
+    expect(fetched.filter(u => u === chatgpt)).toHaveLength(2);
+    expect(fetched.filter(u => u === jwksUri)).toHaveLength(2);
   });
 });

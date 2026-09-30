@@ -71,6 +71,20 @@ export function createAuthorizationServer(options: {
   const usedCodes = new Map<string, number>();
   const usedChecks = new Map<string, number>();
   const usedAssertions = new Map<string, number>();
+  // An app's identity document and keys, kept five minutes: the token step
+  // is public, and must not fetch for every request that names an app (SIG-87).
+  const DOCUMENT_TTL_MS = 5 * 60_000;
+  const fetchedDocuments = new Map<string, { at: number; value: Promise<unknown> }>();
+  const cached = <T>(key: string, fetch: () => Promise<T>): Promise<T> => {
+    const hit = fetchedDocuments.get(key);
+    if (hit && clock.now() - hit.at < DOCUMENT_TTL_MS) return hit.value as Promise<T>;
+    const value = fetch();
+    fetchedDocuments.set(key, { at: clock.now(), value });
+    // A failed fetch isn't kept: the next request tries again.
+    value.catch(() => { if (fetchedDocuments.get(key)?.value === value) fetchedDocuments.delete(key); });
+    return value;
+  };
+  const clientDocument = (clientId: string) => cached(`doc ${clientId}`, () => fetchClientDocument(clientId, options.trustedOrigins, options.documents));
   const checkAudience = options.checkAudience ?? resource.replace(/\/mcp$/, '/check');
 
   const seal = async (claims: JWTPayload, lifetime: number) => new EncryptJWT(claims)
@@ -103,8 +117,8 @@ export function createAuthorizationServer(options: {
     const clientId = form.client_id ?? claimed;
     if (!clientId || claimed !== clientId) return undefined;
     try {
-      const doc = await fetchClientDocument(clientId, options.trustedOrigins, options.documents);
-      const keySet = createLocalJWKSet(await fetchClientKeys(doc, options.trustedOrigins, options.documents) as JSONWebKeySet);
+      const doc = await clientDocument(clientId);
+      const keySet = createLocalJWKSet(await cached(`keys ${clientId} ${doc.jwks_uri}`, () => fetchClientKeys(doc, options.trustedOrigins, options.documents)) as JSONWebKeySet);
       const { payload } = await jwtVerify(form.client_assertion, keySet, {
         issuer: clientId, subject: clientId, audience: [issuer, `${issuer}/token`],
         algorithms: ['RS256', 'PS256', 'ES256'], currentDate: new Date(clock.now()), requiredClaims: ['exp', 'jti']
@@ -148,7 +162,7 @@ export function createAuthorizationServer(options: {
       const { client_id: clientId, redirect_uri: redirectUri, state } = params;
       if (!clientId || !redirectUri) return { ok: false, error: 'invalid_request' };
       let doc;
-      try { doc = await fetchClientDocument(clientId, options.trustedOrigins, options.documents); }
+      try { doc = await clientDocument(clientId); }
       catch (error) { return { ok: false, error: error instanceof SigninRefusal ? error.reason : 'client_invalid' }; }
       // An address the document doesn't list is never redirected to, not even with an error.
       if (!redirectAllowed(doc, redirectUri)) return { ok: false, error: 'redirect_mismatch' };

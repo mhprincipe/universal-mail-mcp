@@ -2,10 +2,12 @@ import { convert } from 'html-to-text';
 import mammoth from 'mammoth';
 import { simpleParser } from 'mailparser';
 import { extractText, getDocumentProxy } from 'unpdf';
+import { checkStructure, defaultLimits } from './parseCore.ts';
 
 // Runs inside the parse worker (with the same time and memory limits as
 // reading an email), which Node loads without compiling it, so this file uses
-// only syntax that type-stripping can erase and imports only packages.
+// only syntax that type-stripping can erase, and imports packages and the
+// parse worker's own parseCore.ts.
 //
 // One attachment, by its position in the email: text-like files, PDFs and
 // Word documents as text; small images as they are, for the AI to look at;
@@ -31,6 +33,8 @@ function decode(content: Buffer, charset: string | undefined): string {
 }
 
 export async function readAttachment(raw: Buffer, index: number): Promise<AttachmentRead | undefined> {
+  // The email's structure limits first, as when it's opened (ATT-09).
+  await checkStructure(raw, defaultLimits);
   const parsed = await simpleParser(raw, { skipHtmlToText: true, skipTextToHtml: true, skipImageLinks: true });
   const attachment = (parsed.attachments ?? [])[index];
   if (!attachment) return undefined;

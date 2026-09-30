@@ -9,14 +9,18 @@ export type { AttachmentRead } from './attachmentCore.js';
 // attachment: one attachment by its position (undefined: there's none there),
 // read in the same sandbox as the email.
 export type SafeParser = { parse(raw: Buffer): Promise<ParsedMessage>; attachment(raw: Buffer, index: number): Promise<AttachmentRead | undefined>; close(): Promise<void> };
-export type SafeParserOptions = { timeoutMs?: number; startupTimeoutMs?: number; memoryMb?: number; workerFile?: URL };
+// maxExternalMb: how much the process's memory may grow during one job. The
+// worker's heap limit doesn't cover the buffers a PDF inflates into (ATT-08,
+// security review), and those belong to the worker's thread, so it's the
+// process's resident memory that shows them.
+export type SafeParserOptions = { timeoutMs?: number; startupTimeoutMs?: number; memoryMb?: number; maxExternalMb?: number; workerFile?: URL };
 
 // Under tests Node runs the TypeScript source directly; built, it runs the .js.
 const defaultWorkerFile = new URL(import.meta.url.endsWith('.ts') ? './parseWorker.ts' : './parseWorker.js', import.meta.url);
 
 type Reply = { ready: true } | { id: number; ok: true; message?: ParsedMessage; attachment?: AttachmentRead | null } | { id: number; ok: false; reason: string };
 type Job = { raw: Buffer; attachment?: number; fingerprint: string; resolve(result: unknown): void; reject(error: MailError): void };
-type Running = { id: number; job: Job; worker: Worker; timer?: NodeJS.Timeout };
+type Running = { id: number; job: Job; worker: Worker; timer?: NodeJS.Timeout; watch?: NodeJS.Timeout };
 type Outcome = { result: unknown } | { reason: string } | { unavailable: string };
 
 // The reason goes to the diagnostics log only; the person sees one plain sentence.
@@ -35,6 +39,8 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
   const timeoutMs = options.timeoutMs ?? 10_000;
   const startupTimeoutMs = options.startupTimeoutMs ?? 30_000;
   const memoryMb = options.memoryMb ?? 256;
+  // The server has 512 MB in all (Cloud Run's default).
+  const maxGrowthBytes = (options.maxExternalMb ?? 160) * 1024 * 1024;
   const workerFile = options.workerFile ?? defaultWorkerFile;
   const queue: Job[] = [];
   // Fingerprints of emails that failed, so they are refused at once next time.
@@ -49,6 +55,7 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
     const done = running!;
     running = undefined;
     clearTimeout(done.timer);
+    clearInterval(done.watch);
     if ('result' in outcome) {
       done.job.resolve(outcome.result);
     } else if ('unavailable' in outcome) {
@@ -69,6 +76,13 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
   };
 
   const startClock = (run: Running) => {
+    // Checked often while a job runs: growth since it started.
+    const before = process.memoryUsage.rss();
+    run.watch = setInterval(() => {
+      if (process.memoryUsage.rss() - before <= maxGrowthBytes) return;
+      retire(run.worker, 'memory limit');
+      void run.worker.terminate();
+    }, 25);
     run.timer = setTimeout(() => {
       retire(run.worker, 'time limit');
       void run.worker.terminate();
