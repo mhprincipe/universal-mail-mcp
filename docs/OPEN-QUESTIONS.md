@@ -1,20 +1,26 @@
 # Open questions, decisions made for you, and the live-install checklist
 
-## Where things stand (2026-09-29, version 2.3.0)
+## Where things stand (2026-09-30, version 2.4.0)
 
 The live install passed (2026-09-28). Every tool works live on Yahoo with Claude
 and with ChatGPT; Gmail is connected; timings are measured and tuned; v1 is
-switched off. What's still open:
+switched off. 2.4 (attachments, scam warnings, first-time recipients, send
+limits, activity with undo) is tested automatically, not yet live. What's still
+open:
 
 | Open | Whose | Notes |
 |---|---|---|
+| Updating the installation to 2.4.0, then the 2.4 live prompt | owner | USER-GUIDE §6, then the "What's new in 2.4" prompt in LIVE-TEST-PROMPT.md |
+| **The 2.5 design: signing in with Microsoft and Google** | owner's decision | [DESIGN-PROVIDER-SIGNIN.md](DESIGN-PROVIDER-SIGNIN.md) ends with the questions only you can answer |
+| The security review's accepted items | owner's decision | [SECURITY-REVIEW.md](SECURITY-REVIEW.md), "Known and accepted": chiefly whether confirming a new recipient should move from the chat to your page |
+| A screen-reader and phone check of the page | owner | the automated rules pass (A11Y-01); a person hasn't tried it |
 | A full live run on Gmail | owner | the Gmail prompt in LIVE-TEST-PROMPT.md |
 | Deleting v1 for good | owner | about a week after it was switched off: its project, its Auth0 tenant, and only v1's Yahoo app password |
 | Selling | owner | the steps under "Selling it" below |
 | Free-trial detection | owner's decision | decision 10 |
 | The phone test | owner | checklist step 6 |
 | Other providers live (iCloud, Fastmail, AOL, Zoho) | whoever uses them first | tested against simulated servers only |
-| Outlook.com and Microsoft 365 | future | needs Microsoft sign-in (OAuth): no app passwords there |
+| Outlook.com and Microsoft 365 | 2.5, if approved | needs Microsoft sign-in (OAuth): no app passwords there; the design is written |
 | Gemini, Meta's Muse | parked | no way yet to add a custom connector with a proper sign-in |
 
 The sections below are the record as written at the end of development

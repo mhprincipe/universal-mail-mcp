@@ -4,6 +4,42 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.4.0 (2026-09-30): serving people
+
+Built around the principles now in the design (DESIGN-V2 §1): the owner stays
+in charge, mistakes can be undone, and the AI is told what a careful person
+would notice.
+
+- **Reading attachments** (ATT-01..11): a new read tool, `get_attachment`.
+  Text, CSV, HTML, PDF and Word files come back as text; pictures up to 3 MB as
+  images the AI can look at; other kinds are described. Read in the parsing
+  sandbox with time, memory and structure limits; the email stays unread.
+- **Scam warnings** (SCM-01..06): search results and opened emails carry
+  `cautions` when a name claims a well-known company from someone else's
+  address, shows an address that isn't the sender's, or the domain is a
+  look-alike or disguised, or replies would go elsewhere. Quiet on ordinary mail.
+- **Someone new** (RCP-01..05): a send or reply to someone the account has
+  never written to is held until you confirm (`MAIL-NEW-RECIPIENT`).
+- **Send limits** (LIM-01..04): 30 an hour and 200 a day per account by
+  default, changed on your page (`MAIL-SEND-LIMIT`).
+- **Recent activity with undo** (ACT-01..08): your page lists what each app
+  changed in the last 30 days, never the mail itself; put back a move, archive
+  or trash, or undo a mark or flag. Saved with your settings, and when Cloud Run
+  stops the server.
+- **Accessibility** (A11Y-01): every page passes axe's automated rules; each
+  has a main landmark, and the report box a label.
+- **Safer defaults**: the shared-secret test mode is never a default (SIG-86);
+  CI and `npm run test:all` stop on a known high-severity dependency problem
+  (REL-08); `ip-address` 10.7.2.
+- **A security review** of all of the above, with nine fixes, each tested
+  first: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+- **No provider's name in the engine** (ENG-28): `src/mail/`, and the settings
+  `MAIL_ADDRESS` and `MAIL_APP_PASSWORD` (the old `YAHOO_` names still work).
+  Installations are unaffected.
+- **Proposed for 2.5**, not built: signing in with Microsoft and Google, so
+  Outlook.com and Microsoft 365 can be added
+  ([docs/DESIGN-PROVIDER-SIGNIN.md](docs/DESIGN-PROVIDER-SIGNIN.md)).
+
 ## 2.3.1 (2026-09-29): a clean test suite
 
 - v1's Auth0 sign-in modes are gone from the code; a setting naming one now

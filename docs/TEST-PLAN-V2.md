@@ -156,6 +156,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | ENG-25 | a message that arrives while its folder is open on the kept connection can be read and replied to at once: not found → NOOP → asked once more *(added: found while tuning)* | U+P |
 | ENG-26 | a pause of up to two minutes costs no check of the kept connection (the check took Yahoo about a second); longer, it's checked as before *(added: measured live, DIA-13)* | U |
 | ENG-27 | a folder already open for changes serves the reads that follow without opening it again (reads only peek, and nothing is marked read); another folder, or one open read-only, is read read-only *(added: measured live, DIA-13: 0.4-1 s per reopen)* | U+P |
+| ENG-28 | no provider's name in the engine: it lives in `src/mail/`; the settings are `MAIL_ADDRESS` and `MAIL_APP_PASSWORD`, the old `YAHOO_` names still work and the new ones win *(added: 2.4)* | U |
 | ENG-14 | an unencrypted mail connection is allowed only to this machine; each transport setting maps to the right connection options *(added during build: the protocol tier's local test server is unencrypted, and the product must never allow that anywhere else)* | U |
 | ENG-15 | sending always requires encryption, on any port; a server that won't encrypt gets nothing, with a plain answer *(added during build: v1 only required it on port 587, so a custom port would have sent in whatever mode the server chose)* | U |
 | ENG-16 | several accounts load from the stored account list and a separate password list; v1's single-account settings become one account called `main`; a bad account is named in the error and its password never appears *(added during build: the accounts had no way in)* | U |
@@ -203,9 +204,9 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 
 | ID | Behavior | Tier |
 |---|---|---|
-| PRO-01 | the 16-tool workflow passes on `yahoo-like` | P |
-| PRO-02 | the 16-tool workflow passes on `gmail-like` | P |
-| PRO-03 | the 16-tool workflow passes on `minimal` (the UIDPLUS move path) | P |
+| PRO-01 | the whole-tool workflow (17 tools since 2.4) passes on `yahoo-like` | P |
+| PRO-02 | the whole-tool workflow passes on `gmail-like` | P |
+| PRO-03 | the whole-tool workflow passes on `minimal` (the UIDPLUS move path) | P |
 | PRO-04 | `hostile`: every move refuses with `SAFE_MOVE_UNAVAILABLE`, and the mailbox is unchanged | P |
 | PRO-05 | `server-sent`: the server saves exactly one Sent copy | P |
 | PRO-06 | five accounts across profiles: accounts stay isolated, and one broken account doesn't affect the others | P |
@@ -334,6 +335,8 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | SIG-83 | ChatGPT signs in with its real published document (extra fields, `private_key_jwt`, `jwks_uri`): as a public client like Claude, or with a signed assertion, with or without `client_id`, for the code and for refresh *(added: connecting ChatGPT)* | U |
 | SIG-84 | an assertion that doesn't prove the app is `invalid_client` (401), never ignored: another key, issuer, subject or audience; expired or hours-long; no or reused one-time id; unknown type; a different `client_id`; keys named off the app's own origin (another trusted app's included) or unreachable *(added: connecting ChatGPT)* | U |
 | SIG-85 | v1's retired Auth0 sign-in modes are refused at start, never quietly replaced by another way in *(added: the clean-up, 2.3.1)* | U |
+| SIG-86 | a server whose sign-in mode wasn't chosen refuses to start: the shared-secret test mode is never a default *(added: 2.4)* | U |
+| SIG-87 | an app's identity document and keys are fetched at most once per five minutes, not once per token request (the token step is public) *(added: security review, 2.4)* | U |
 
 **Exit:** a scripted Claude-like client connects to two accounts with Auth0 absent, and the whole Phase 2 suite is green.
 
@@ -404,6 +407,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | REL-05 | `scripts/release-setup.sh` creates the release project, public image store and keyless publishing for this repository only; safe to rerun; stops plainly without billing; waits and retries while a just-enabled service still refuses *(added; retry found live)* | K (package) |
 | REL-06 | one image store, named once: the setup script, the workflow and setup's trusted image agree; the workflow publishes through `publish-setup.mjs` *(added)* | U |
 | REL-07 | each release is one commit on top of the last on the release branch, so a clone takes it with a plain `git pull`; the workflow never force-pushes *(added: found live)* | K (package) |
+| REL-08 | every change, and so every release, stops on a known high-severity problem in a production dependency, before any test runs *(added: 2.4)* | U |
 
 **Failure matrix.** Each test asserts the exact message, the code, and that
 what it says about the person's position is true.
@@ -513,6 +517,75 @@ what it says about the person's position is true.
 | SUB-13 | the service image and `scripts/license-setup.sh` (the key, the secret, the deploy), against the scripted gcloud | K |
 | SUB-14 | the whole loop: webhook → code → activate on the page → active → renew → cancel → grace → read-only → renew again → active | U |
 
+### Phase 7 — Serving people *(added 2026-09-30: 2.4, design §1)*
+
+**Attachments**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| ATT-01 | text, CSV, HTML, PDF and Word attachments come back as text, marked untrusted, and the email stays unread; one sent as `application/octet-stream` is read by its file name | U |
+| ATT-02 | an image comes back as a picture the AI can look at, and the answer's JSON stays small; one over 3 MB is described instead | U |
+| ATT-03 | other kinds are described, not read; a position that doesn't exist is `ATTACHMENT_NOT_FOUND`; a long text is clipped and says so | U |
+| ATT-04 | a damaged PDF or Word file says it couldn't be read, and the email still opens | U |
+| ATT-05 | `get_attachment` is a read: marked read-only for the apps, described as untrusted | U |
+| ATT-06 | a PDF's text and an image come back from the message a real server holds, and the email stays unread | P |
+| ATT-07 | an attachment that never finishes is stopped at the time limit and remembered; the email itself still opens | U |
+| ATT-08 | an attachment that takes too much memory outside the heap (a PDF bomb) is stopped, and the email still opens *(added: security review)* | U |
+| ATT-09 | reading an attachment applies the same structure limits as opening the email (depth, parts, header size) *(added: security review)* | U |
+| ATT-10 | in the built image, the sandbox reads a PDF attachment: the reader and its libraries ship with it | K (package) |
+| ATT-11 | each kind, read as the worker reads it: text with its charset, HTML, PDF, Word, an image, a large image, another kind, damaged files, a missing position *(added: coverage: the worker's code wasn't counted)* | U |
+
+**Send limits**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| LIM-01 | 30 an hour and 200 a day by default; at a cap the send is refused before anything leaves (`MAIL-SEND-LIMIT`), allowed again once the hour or day has passed; a reply counts; a send the provider refused doesn't | U |
+| LIM-02 | each account shows its limits on the page and they can be changed; nonsense is refused; the owner is emailed | U |
+| LIM-03 | an account's saved limits reach its mail service; accounts saved before limits existed get the defaults | U |
+| LIM-04 | sends fired together can't get past the limit: each takes its place before it goes, and gives it back only if the provider refused it *(added: security review)* | U |
+
+**Scam warnings**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| SCM-01 | a name that claims a well-known company from an address that isn't theirs; a name that shows one email address while the mail comes from another | U |
+| SCM-02 | look-alike domains: one character off a well-known one, or disguised letters (punycode) | U |
+| SCM-03 | replies that would go somewhere other than the sender's own domain | U |
+| SCM-04 | no false alarm on ordinary mail: the real companies, their mail services' subdomains, friends, newsletters replying on their own domain | U |
+| SCM-05 | search results and an opened email carry the cautions, and the tools say to pass them on | U |
+| SCM-06 | a hostile sender name (thousands of @s, or a long run with no spaces) is checked in a moment, not seconds: it runs on the main thread *(added: security review)* | U |
+
+**First-time recipients**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| RCP-01 | a send to someone never written to is held, nothing sent, naming them (`MAIL-NEW-RECIPIENT`); confirmed, it goes; people already written to, and the account itself, go straight through (bcc checked too) | U |
+| RCP-02 | a reply to a sender never written to is held too (a scam's first reply) | U |
+| RCP-03 | when the check can't be made (no Sent folder, a failed search), it asks rather than guessing | U |
+| RCP-04 | on a real server: someone in Sent (To or Cc) is known; a stranger is held until confirmed | P |
+| RCP-05 | only this account's own sent mail counts (a message planted in Sent doesn't), and only an exact address *(added: security review)* | U |
+
+**Activity and undo**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| ACT-01 | what each organize or send tool did, in plain words, with what undo needs; reads, no-ops and failures leave nothing; newest first, at most 100, nothing older than 30 days, saved in one go | U |
+| ACT-02 | what an app did shows on the page (app, action, account, count, folders; never content), and a move can be put back | U |
+| ACT-03 | a message that has moved since can't be put back: the page says so and marks nothing undone | U |
+| ACT-04 | sends are listed, not undoable | U |
+| ACT-05 | the log is saved with the settings, so it outlasts a restart | U |
+| ACT-06 | asked to stop (SIGTERM, as Cloud Run does), the server saves what is waiting and exits cleanly at once | K (package) |
+| ACT-07 | what it keeps stays under 16 KB, oldest dropped first (the settings record has a 64 KB limit) *(added: security review)* | U |
+| ACT-08 | undo finds the account by its address: after a rename it still works; if that address is gone, it refuses *(added: security review)* | U |
+
+**Accessibility**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| A11Y-01 | every page the server renders passes axe's automated rules: sign-in, code, approval, and your page with accounts, apps and activity | U |
+
+**Exit:** all of the above green; then tried live (not yet).
+
 ### Diagnostics — across phases
 
 | ID | Behavior | Tier |
@@ -596,17 +669,18 @@ also where a later reader finds out why a line of code exists.
 |---|---|
 | v1 baseline | 155 |
 | Test kit | 13 |
-| Engine | 83 |
-| Sign-in | 65 |
+| Engine | 84 |
+| Sign-in | 67 |
 | Setup | 71 |
 | Installed server | 6 |
-| Release | 10 |
+| Release | 11 |
 | Page and emails | 19 |
 | Everyday polish | 15 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| **New** | **330** |
-| **Total** | **485** |
+| Serving people (2.4) | 35 |
+| **New** | **369** |
+| **Total** | **524** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

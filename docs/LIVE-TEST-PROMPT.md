@@ -76,6 +76,37 @@ Good to know, so you don't count them as problems: Gmail folders are labels, so 
 
 ---
 
+## What's new in 2.4
+
+Attachments, scam warnings, the check before writing to someone new, and the
+activity log. It reads only mail that's already there, sends only to your own
+address, and makes one send attempt that is held on purpose (to an address that
+can't exist, so nothing could leave even if it weren't). Replace `yahoo` with
+the account's name.
+
+```text
+Please test the new Universal Mail features on my account "yahoo" (pass account "yahoo" on every call), in this order. Use only the Universal Mail tools. Never send to anyone but my own address, and never confirm a new recipient. Don't change any message. If a step fails, say so and go on.
+
+Keep a table: step, tool, worked (yes/no), what you saw, anything odd. Show it at the end.
+
+1. Find a message with an attachment: search my Inbox with text "pdf" (limit 10) and open the results one at a time with get_email (at most 10) until one has a non-empty attachments list. If none, try Archive the same way. Tell me its subject, whether it was read before you opened it, and its attachments (name, type, size, index).
+2. Read its first attachment with get_attachment. Tell me what kind it came back as (text, image, unsupported or unreadable) and, for text, what it's about in one sentence of your own. If it has a PDF, Word file or picture you haven't read, read one of those too. Then re-find the message by messageId and tell me whether its read state is unchanged.
+3. Search my Inbox for the 50 newest messages. List every one that carries cautions, with the caution in full, and say whether each looks right to you. If none, say so.
+4. Send an email to nobody@example.invalid with the subject "Universal Mail new-recipient test" and one line of body. It should be held with MAIL-NEW-RECIPIENT and nothing sent. Tell me exactly what the answer said. Do not confirm or retry.
+5. Send me an email at my own address with the subject "Universal Mail 2.4 test" and one line of body. It should go straight through, since it's my own address.
+6. Search the Inbox for "Universal Mail 2.4 test" (at most 5 searches). Flag it, then move it to Archive.
+7. Show the table and your notes. Then tell me: open my Universal Mail page, look at Recent activity, and press "Put back" on the archive and "Unflag again" on the flag.
+```
+
+Afterwards, on your page: **Recent activity** should list the send (1
+recipient), the flag and the move to Archive. **Put back** on the move returns
+the message to the Inbox. **Unflag again** should then say the message has
+moved since and change nothing: undo never acts on a message that isn't where
+it was left. The held send isn't listed, because nothing was sent. Unflag and
+trash the test message in your mail app when you're done.
+
+---
+
 The timings, one line per tool call, from the server's log (Cloud Shell,
 after the test; replace the project id with yours). Since 2.2.4 each line
 ends with where the time went: `imap.connect` is a login, `imap.search`,

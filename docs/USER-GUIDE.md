@@ -110,6 +110,7 @@ Talk to your AI normally. Some examples:
 - *"Star the emails from my accountant for review."* (a flag in Yahoo, a star in Gmail)
 - *"Show everything I've flagged."*
 - *"Archive every LinkedIn job alert in yahoo from this week."*
+- *"What does the PDF my landlord sent say?"* (reads attachments: text, PDF, Word, pictures)
 - *"Draft a reply to Sam saying Thursday works."* (a draft; nothing is sent)
 - *"Send it."* (only if the app has **Send** for that account)
 
@@ -117,6 +118,15 @@ Good to know:
 
 - **Email content is treated as untrusted.** The AI is told never to follow
   instructions found inside an email.
+- **Scam warnings.** When an email shows signs of a scam (a name claiming a
+  well-known company from an address that isn't theirs, a look-alike domain
+  such as `paypa1.com`, replies that would go somewhere else), your AI is told
+  and should tell you before you reply, click or pay. Ordinary mail carries none.
+- **Someone new.** Before your AI sends or replies to someone this account has
+  never written to, it stops and asks you to confirm the address. That catches a
+  mistyped address and a scammer's first "reply to this".
+- **Send limits.** Each account sends at most 30 emails an hour and 200 a day,
+  so a confused AI can't flood anyone. Change them on your page.
 - **Nothing is deleted permanently.** "Delete" means Trash, and anything in
   Trash can be restored until your provider empties it.
 - **Your own Sent copy can take a minute.** Some providers (Yahoo, Gmail) file
@@ -136,7 +146,9 @@ idle, and every change is emailed to you.
 | Section | What you can do |
 |---|---|
 | **Your accounts** | see each account's status and when it was last used; **Fix it** or change its app password; turn **sending** on or off; **Rename** it (what your AI calls it; its password and every app's permissions carry over); **Remove** it (type its name to confirm); **Add an email account** |
+| **Your accounts: Sending limits** | how many emails an hour and a day this account may send (30 and 200 to start) |
 | **Connected apps** | see each app and when it last used your mail; change its **Permissions**; **Disconnect** it; step-by-step **Connect an AI app** |
+| **Recent activity** | what each app did in the last 30 days: moves, archives, trash, marks, flags, drafts, folders and sends (who did it, which account, how many; never the mail itself). **Put back** a move, archive or trash; undo a mark or a flag. A send can't be undone; one to someone new says so. |
 | **Health** | **Check that everything works**: runs the server's checks and shows a report you can paste into your AI (no mail, no secrets) |
 | **Sign-in** | set up your fingerprint |
 | **Subscription** | where your trial or plan stands; enter a license code |
@@ -168,6 +180,9 @@ When a new version is out you get an email. To install it:
 | The AI says an account is **not available to this app** | Your page → Connected apps → that app → Permissions: tick the account, **Save permissions**. Check the account's name (Your accounts): it's the name your AI must use. |
 | The AI says it **isn't allowed** to organize or send | Same place: tick **Organize** or **Send** for that account, and save. |
 | **Sending is off** for an account | Your accounts → **Turn sending on**. |
+| The AI says an account **reached its sending limit** | Wait, or your page → Your accounts → **Sending limits** to raise it. |
+| The AI asks you to **confirm a recipient** | Normal for someone this account has never written to. Check the address is really who you mean, then say yes. |
+| An app **did something you didn't want** | Your page → **Recent activity** → **Put back** (or undo the mark or flag). |
 | **Password not accepted** on your page | Make a new app password at your provider; your page → **Fix it**. |
 | The AI can't connect at all | Your page → **Check that everything works**. If the page won't load: Cloud Shell → `node setup.js` → **1 Check and fix**. |
 | Anything else | Your page → **Check that everything works** → paste the report into your AI, or run `node setup.js report` in Cloud Shell. |
@@ -176,8 +191,10 @@ When a new version is out you get an email. To install it:
 
 ## 8. Known limits
 
-- No attachments: the AI sees that a message has them, but can't open or send
-  them.
+- Attachments can be read (text, CSV, HTML, PDF, Word and pictures up to 3 MB)
+  but not sent, saved or forwarded. Other kinds (spreadsheets, zip files, older
+  .doc files) are described, not opened.
+- A sent email can't be taken back: the activity log lists it but can't undo it.
 - Folders can be created but not renamed or deleted (do that in your mail app).
 - Nothing is ever permanently deleted by Universal Mail.
 - Threads are found in your Inbox, Sent, Archive and the message's own folder

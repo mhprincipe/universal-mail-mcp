@@ -8,8 +8,8 @@ every live run, every mutation check).
 
 ## Tiers
 
-**Everything automated, in one command:** `npm run test:all` (typecheck, the
-unit tier with its coverage floor, then the slow tier).
+**Everything automated, in one command:** `npm run test:all` (a dependency
+audit, the typecheck, the unit tier with its coverage floor, then the slow tier).
 
 | Tier | Command | What it proves | Needs |
 |---|---|---|---|
@@ -17,17 +17,19 @@ unit tier with its coverage floor, then the slow tier).
 | **Slow** (protocol and package) | `npm run test:protocol` | real behaviour: every tool against real IMAP servers (Dovecot in Docker) in each provider's layout, through a fault proxy that records every command and can break the connection; the built `setup.js` in a real terminal; the server image | Docker Desktop running |
 | **Live** | [LIVE-TEST-PROMPT.md](LIVE-TEST-PROMPT.md), run by the owner | a real mailbox, a real AI app, real timings from the tool log | an installation |
 
-`npm run typecheck` runs in CI too. CI runs both automated tiers on every push;
+`npm run typecheck` and the audit (`npm audit --omit=dev --audit-level=high`) run in CI too. CI runs both automated tiers on every push;
 a release runs them again before building.
 
 ## What's proven where
 
 | What | Automated tiers | Live |
 |---|---|---|
-| The 16 tools, their rules and answers | unit (faked mail) and slow (real IMAP/SMTP servers in Yahoo, Gmail and minimal layouts, with broken connections) | the live-test prompt on Yahoo (every tool, with Claude and with ChatGPT); Gmail connected, its full prompt not yet run |
+| The 17 tools, their rules and answers | unit (faked mail) and slow (real IMAP/SMTP servers in Yahoo, Gmail and minimal layouts, with broken connections) | the live-test prompt on Yahoo (every tool, with Claude and with ChatGPT); Gmail connected, its full prompt not yet run |
 | Provider quirks | slow tier, with the fault proxy imitating each (for example Yahoo's missing header search) | found on Yahoo, then turned into tests |
 | Sign-in (identity documents, PKCE, tokens, approval, passkeys, grants) | unit, with Claude's and ChatGPT's real published documents and a software passkey | Claude and ChatGPT connected and approved |
-| Your page | unit, over real HTTP with a session, forms and a software passkey | used on a desktop browser; the phone test is open |
+| Your page | unit, over real HTTP with a session, forms and a software passkey; every page checked with axe's accessibility rules (A11Y-01) | used on a desktop browser; the phone test is open; not yet with a screen reader |
+| Attachments (2.4) | unit (each kind through the worker, damaged and hostile files, the limits) and slow (a PDF and an image from a real IMAP server; the built image reads a PDF) | not yet |
+| Scam warnings, first-time recipients, send limits, activity and undo (2.4) | unit, and recipients against a real Sent folder (slow) | not yet |
 | Setup | unit against a simulated Google; the built `setup.js` in a real terminal (slow tier) | the owner's install (2026-09-28) |
 | The server image and the release pipeline | slow tier (image, publishing scripts); CI and the release workflow | every release, verified afterwards (OPERATIONS.md) |
 | Subscription and the license service | unit | not yet: Paddle's sandbox |
@@ -50,7 +52,7 @@ a release runs them again before building.
   code it protects and see it fail. Mutants that survive mean a missing case,
   and the case is added. The journal records each check (for example 12 of 12).
 - **The coverage floor only rises** (`vitest.config.ts` thresholds; raised to
-  93/83/94/96 on 2.3.1, the levels the suite reaches).
+  93/83/94/96 on 2.3.1 and to 93/84/94/96 on 2.4.0, the levels the suite reaches).
 - **Nothing reaches a real mailbox from the automated tiers.** Live checks on
   the owner's mailbox are read-only unless the owner asks for more.
 - **Write test code with an editor, not through shell-quoted scripts**: twice a
@@ -67,6 +69,7 @@ a release runs them again before building.
 | `smtpCapture.ts` | a real SMTP server that keeps what was sent |
 | `product.ts` | the whole product in-process against those servers, driven over MCP |
 | `toolFixture.ts` | the tool layer over real HTTP/MCP with an in-memory mailbox (unit speed) |
+| `attachments.ts` | real PDF, Word and PNG files, and messages carrying them |
 | `fakeGoogle.ts`, `fakeGcloud*.{ts,mjs}`, `setup.ts` | setup's world: Google Cloud faked, answers scripted |
 | `softwareAuthenticator.ts` | a passkey, for the fingerprint approval |
 | `canary.ts` | values that must never appear in logs, pages or answers |

@@ -25,15 +25,16 @@ tool log never contains arguments or answers.
 
 ## Releasing a version
 
-1. **Everything green** on your machine: `npm run test:all` (typecheck, the unit
-   tier and its coverage floor, then the slow tier: real mail servers in Docker,
-   the built setup and the server image).
+1. **Everything green** on your machine: `npm run test:all` (a dependency audit
+   that stops on a known high-severity problem, the typecheck, the unit tier and
+   its coverage floor, then the slow tier: real mail servers in Docker, the built
+   setup and the server image).
 2. **Version** in three places: `package.json`, the top two `version` lines of
    `package-lock.json` (only those), and `src/version.ts`.
 3. **Record it**: the journal row(s) in `docs/TDD-JOURNAL.md`, the plan rows
    and totals in `docs/TEST-PLAN-V2.md`, and `CHANGELOG.md`.
 4. **Commit and push `main`.** CI (`.github/workflows/ci.yml`) runs the
-   typecheck, the unit tier with its coverage floor, and the slow tier. Wait for
+   dependency audit (REL-08), the typecheck, the unit tier with its coverage floor, and the slow tier. Wait for
    it to pass. Without the `gh` CLI:
    `curl -s "https://api.github.com/repos/mhprincipe/universal-mail-mcp/actions/runs?head_sha=$(git rev-parse HEAD)"`.
 5. **Tag the commit** `vX.Y.Z` (an annotated tag; put "security" in its first
@@ -107,6 +108,22 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 Normal entries: `401` on `/…/mcp` (an app asked before signing in) and `404` on
 `/.well-known/openid-configuration` (ChatGPT probing before it finds the OAuth
 metadata).
+
+### What the apps did
+
+Your page's **Recent activity** lists what each app changed in the last 30 days
+(never content), with undo for moves, marks and flags. It is kept in memory and
+saved with the settings (`universal-mail-state`) about 30 seconds after a change,
+and at once when Cloud Run stops the server (SIGTERM); it's capped at 100
+entries and 16 KB so the settings record stays under Secret Manager's 64 KB.
+
+### Messages and attachments that couldn't be read
+
+Messages and attachments are read in a separate worker with a 10-second limit,
+a 256 MB heap and a watch on the memory it takes outside the heap (160 MB).
+One that passes a limit is stopped, remembered (so it isn't tried again), and
+answered `MAIL-PARSE-UNSAFE`; the email itself still opens when only an
+attachment failed. The server log line names the limit, never the content.
 
 ### Everything, for help
 
