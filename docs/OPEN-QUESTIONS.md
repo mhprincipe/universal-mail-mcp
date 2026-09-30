@@ -11,7 +11,7 @@ open:
 
 | Open | Whose | Notes |
 |---|---|---|
-| The one live-test prompt on 2.4.2, on Yahoo and on Gmail | owner | LIVE-TEST-PROMPT.md: it now uses all 21 tools in one run |
+| The live-test prompt on 2.4.2 | owner | LIVE-TEST-PROMPT.md: one prompt, every account, all 21 tools and the refusals |
 | Attaching files from your computer or the chat | owner's decision | not built: would need an upload box on your page (the AI apps don't pass uploaded files to connectors reliably) |
 | **Confirming new recipients on your page** | owner's decision | [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md) ends with four questions |
 | **The 2.5 design: signing in with Microsoft and Google** | owner's decision | [DESIGN-PROVIDER-SIGNIN.md](DESIGN-PROVIDER-SIGNIN.md) ends with the questions only you can answer |
