@@ -7,6 +7,8 @@ export type MessageSummary = {
   mailbox: string; uid: number; messageId?: string; subject?: string; date?: string;
   from: Address[]; to: Address[]; read: boolean; flagged: boolean; size?: number;
   untrustedContent: true;
+  // Scam warnings about the sender (SCM-05), in plain words; absent when none.
+  cautions?: string[];
 };
 export type MessageDetail = MessageSummary & {
   cc: Address[]; bcc: Address[]; replyTo: Address[]; text?: string; html?: string;

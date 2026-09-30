@@ -1,4 +1,5 @@
 import { phase } from '../timing.js';
+import { cautionsFor } from '../cautions.js';
 import { sharedSendLog, type SendLog } from '../sendLimits.js';
 import { randomUUID } from 'node:crypto';
 import nodemailer from 'nodemailer';
@@ -69,9 +70,11 @@ export class MailService {
     const { text, html } = parsed;
     const truncated = (text?.length ?? 0) > cap || (html?.length ?? 0) > cap;
     const clip = (value?: string) => value && value.length > cap ? value.slice(0, cap) : value;
+    const cautions = cautionsFor(parsed);
     const detail: MessageDetail = {
       ...summary,
       ...parsed,
+      ...(cautions.length ? { cautions } : {}),
       messageId: parsed.messageId || summary.messageId,
       subject: parsed.subject || summary.subject,
       text: clip(text),

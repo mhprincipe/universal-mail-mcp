@@ -1,4 +1,5 @@
 import { phase, timedClient } from '../timing.js';
+import { cautionsFor } from '../cautions.js';
 import { ImapFlow } from 'imapflow';
 import { imapTransport, type AppConfig } from '../config.js';
 import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
@@ -52,6 +53,11 @@ const NOOP_TIMEOUT_MS = 5_000;
 const person = (x: { name?: string; address: string }): Address => {
   const name = x.name?.trim();
   return name && name.toLowerCase() !== x.address.toLowerCase() ? { name, address: x.address } : { address: x.address };
+};
+
+const withCautions = (from: Address[], replyTo: Address[]) => {
+  const cautions = cautionsFor({ from, replyTo });
+  return cautions.length ? { cautions } : {};
 };
 
 export class ImapGateway {
@@ -273,7 +279,8 @@ export class ImapGateway {
       read: Boolean(m.flags?.has('\\Seen')),
       flagged: Boolean(m.flags?.has('\\Flagged')),
       size: m.size || undefined,
-      untrustedContent: true
+      untrustedContent: true,
+      ...withCautions(map(m.envelope?.from), map(m.envelope?.replyTo))
     };
   }
 

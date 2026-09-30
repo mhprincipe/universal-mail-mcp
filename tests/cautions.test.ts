@@ -1,0 +1,93 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cautionsFor } from '../src/cautions.js';
+import { startToolFixture } from '../testkit/src/toolFixture.js';
+import { loadConfig } from '../src/config.js';
+import { ImapGateway } from '../src/yahoo/imap.js';
+
+// Scam warnings (added 2026-09-29, principle 3: it protects people from the
+// mail itself). A message whose sender looks like someone it isn't carries
+// plain-language cautions the AI is told to pass on before acting on it.
+const from = (address: string, name?: string) => [{ ...(name ? { name } : {}), address }];
+
+describe('scam warnings', () => {
+  it('SCM-01 a name that claims a well-known company, from an address that isn\'t theirs (added: scam warnings)', () => {
+    expect(cautionsFor({ from: from('security@paypal-verify.net', 'PayPal') })).toEqual([
+      expect.stringMatching(/name says PayPal.*paypal-verify\.net/)
+    ]);
+    expect(cautionsFor({ from: from('help@gmail.com', 'Chase Bank Alerts') })[0]).toMatch(/Chase/);
+    expect(cautionsFor({ from: from('noreply@irs-refunds.org', 'IRS') })[0]).toMatch(/IRS/);
+  });
+
+  it('SCM-01 a name that shows one email address while the mail comes from another', () => {
+    expect(cautionsFor({ from: from('attacker@evil.example', 'service@paypal.com') })).toEqual([
+      expect.stringMatching(/shows service@paypal\.com.*attacker@evil\.example/)
+    ]);
+  });
+
+  it('SCM-02 look-alike domains: one character off a well-known one, or disguised letters (punycode)', () => {
+    expect(cautionsFor({ from: from('billing@paypa1.com') })[0]).toMatch(/paypa1\.com.*looks like paypal\.com/);
+    expect(cautionsFor({ from: from('orders@arnazon.com') })[0]).toMatch(/looks like amazon\.com/);
+    expect(cautionsFor({ from: from('it@micros0ft.com') })[0]).toMatch(/looks like microsoft\.com/);
+    expect(cautionsFor({ from: from('support@xn--pple-43d.com') })[0]).toMatch(/disguised|unusual characters/i);
+  });
+
+  it('SCM-03 replies that would go somewhere other than the sender\'s own domain', () => {
+    expect(cautionsFor({ from: from('ceo@mycompany.example', 'The CEO'), replyTo: from('ceo.private@gmail.com') })).toEqual([
+      expect.stringMatching(/Replies would go to ceo\.private@gmail\.com/)
+    ]);
+  });
+
+  it('SCM-04 no false alarm on ordinary mail: the real companies, their mail services\' subdomains, friends, newsletters replying on their own domain', () => {
+    const ordinary = [
+      { from: from('service@paypal.com', 'PayPal') },
+      { from: from('no.reply.alerts@chase.com', 'Chase') },
+      { from: from('alerts@alertsp.chase.com', 'Chase Bank Alerts') },
+      { from: from('shipment-tracking@amazon.com', 'Amazon.com') },
+      { from: from('order-update@amazon.co.uk', 'Amazon') },
+      { from: from('no-reply@accounts.google.com', 'Google') },
+      { from: from('noreply@email.apple.com', 'Apple') },
+      { from: from('info@account.netflix.com', 'Netflix') },
+      { from: from('dse@docusign.net', 'DocuSign') },
+      { from: from('friend@example.invalid', 'Sam Smith') },
+      { from: from('news@brand.example', 'Brand News'), replyTo: from('support@brand.example') },
+      { from: from('alerts@mail.bank.example', 'My Bank'), replyTo: from('help@bank.example') },
+      { from: from('someone@example.invalid', 'someone@example.invalid') },
+      { from: from('jane@yahoo.com', 'Jane (Apple Hill Farm)') },
+      // Honest neighbours of short company names.
+      { from: from('hello@ample.com', 'Ample') },
+      { from: from('jobs@apply.com') }
+    ];
+    for (const message of ordinary) expect(cautionsFor(message), JSON.stringify(message)).toEqual([]);
+  });
+});
+
+describe('scam warnings in the tools', () => {
+  let f: Awaited<ReturnType<typeof startToolFixture>> | undefined;
+  afterEach(async () => { await f?.stop(); f = undefined; });
+
+  it('SCM-05 search results and an opened email carry the cautions, and the tools say to pass them on (added: scam warnings)', async () => {
+    f = await startToolFixture();
+    const raw = Buffer.from([
+      'From: "PayPal" <security@paypal-verify.net>', 'To: self@example.invalid', 'Subject: Your account is limited',
+      'Message-ID: <scam@fixture.invalid>', 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=utf-8', '', 'Click here.'
+    ].join('\r\n'));
+    const { uid } = await f.seedRaw('INBOX', raw);
+    const email = (await f.call('get_email', { mailbox: 'INBOX', uid })).result.data;
+    expect(email.cautions).toEqual([expect.stringMatching(/PayPal/)]);
+    const tools = await f.tools();
+    for (const name of ['get_email', 'search_email']) expect(tools.find(t => t.name === name)!.description).toMatch(/cautions/i);
+  });
+
+  it('SCM-05 a search result carries them too, from the envelope the server sends', async () => {
+    const gateway = new ImapGateway(loadConfig({ AUTH_MODE: 'builtin', YAHOO_EMAIL: 'me@example.invalid', YAHOO_APP_PASSWORD: 'dummy-password', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' }));
+    const client = {
+      getMailboxLock: async () => ({ release: () => undefined }),
+      fetchOne: async () => ({ uid: 3, flags: new Set(), size: 10, envelope: { messageId: '<m@x>', from: [{ name: 'Netflix', address: 'billing@netfIix-support.example' }], replyTo: [] } })
+    };
+    vi.spyOn(gateway, 'run').mockImplementation(fn => fn(client as never));
+    expect((await gateway.fetchSummary('INBOX', 3)).cautions).toEqual([expect.stringMatching(/name says Netflix/)]);
+    const clean = { ...client, fetchOne: async () => ({ uid: 4, flags: new Set(), size: 10, envelope: { messageId: '<n@x>', from: [{ name: 'Netflix', address: 'info@account.netflix.com' }] } }) };
+    vi.spyOn(gateway, 'run').mockImplementation(fn => fn(clean as never));
+    expect(await gateway.fetchSummary('INBOX', 4)).not.toHaveProperty('cautions');
+  });
+});
