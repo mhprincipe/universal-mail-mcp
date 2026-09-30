@@ -21,6 +21,15 @@ export function oneClickTarget(listUnsubscribe, listUnsubscribePost) {
     }
     return undefined;
 }
+export const UNSUBSCRIBE_RANK = { 'one-click': 3, link: 2, email: 1, none: 0 };
+export function unsubscribeKind(listUnsubscribe, listUnsubscribePost) {
+    if (oneClickTarget(listUnsubscribe, listUnsubscribePost))
+        return 'one-click';
+    const targets = [...(listUnsubscribe ?? '').matchAll(/<([^>]*)>/g)].map(match => match[1].trim().toLowerCase());
+    if (targets.some(target => /^https?:\/\//.test(target)))
+        return 'link';
+    return targets.some(target => target.startsWith('mailto:')) ? 'email' : 'none';
+}
 const unsafe = () => new MailError('MAIL-UNSUBSCRIBE-FAILED', "This sender's unsubscribe address isn't one Universal Mail will contact, so nothing was sent.", 'FAILED', false, { reason: 'unsafe address' });
 export async function unsubscribeOneClick(url, deps) {
     const host = url.hostname.replace(/^\[|\]$/g, '');

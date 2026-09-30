@@ -80,12 +80,17 @@ export function activityFor(tool, args, envelope) {
             ...(uids.length && data.destination ? { undo: { kind: 'move', mailbox: data.destination, uids, destination: args.mailbox } } : {})
         };
     }
+    // Only what really changed (ACT-10): undo then puts back just those; an
+    // answer that doesn't say means all of them.
+    const changed = Array.isArray(data.changed) ? data.changed : targets(args);
+    if ((tool === 'mark_read' || tool === 'mark_unread' || tool === 'flag_email') && !changed.length)
+        return undefined;
     if (tool === 'mark_read' || tool === 'mark_unread') {
         const read = tool === 'mark_read';
-        return { action: read ? 'marked read' : 'marked unread', count: targets(args).length, from: args.mailbox, undo: { kind: 'flag', mailbox: args.mailbox, uids: targets(args), flag: 'read', value: !read } };
+        return { action: read ? 'marked read' : 'marked unread', count: changed.length, from: args.mailbox, undo: { kind: 'flag', mailbox: args.mailbox, uids: changed, flag: 'read', value: !read } };
     }
     if (tool === 'flag_email') {
-        return { action: args.flagged ? 'flagged' : 'unflagged', count: targets(args).length, from: args.mailbox, undo: { kind: 'flag', mailbox: args.mailbox, uids: targets(args), flag: 'flagged', value: !args.flagged } };
+        return { action: args.flagged ? 'flagged' : 'unflagged', count: changed.length, from: args.mailbox, undo: { kind: 'flag', mailbox: args.mailbox, uids: changed, flag: 'flagged', value: !args.flagged } };
     }
     const attachments = Array.isArray(data.attachments) && data.attachments.length ? { attachments: data.attachments.length } : {};
     if (SENDS[tool]) {

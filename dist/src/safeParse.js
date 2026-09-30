@@ -6,6 +6,7 @@ const defaultWorkerFile = new URL(import.meta.url.endsWith('.ts') ? './parseWork
 // The reason goes to the diagnostics log only; the person sees one plain sentence.
 const unsafe = (reason) => new MailError('MAIL-PARSE-UNSAFE', "This email couldn't be opened safely.", 'FAILED', false, { reason });
 const unavailable = (reason) => new MailError('MAIL-PARSER-UNAVAILABLE', "Emails can't be opened right now. Try again in a minute.", 'FAILED', true, { reason });
+const busy = () => new MailError('MAIL-PARSER-BUSY', 'Universal Mail is opening many emails at once. Try again in a moment.', 'FAILED', true, { reason: 'queue full' });
 // The worker takes one email at a time; the rest wait in a queue. So when a
 // worker is killed or crashes, the email it held is the culprit, and the
 // queued ones go to a fresh worker untouched.
@@ -19,6 +20,9 @@ export function createSafeParser(options = {}) {
     // The server has 512 MB in all (Cloud Run's default).
     const maxGrowthBytes = (options.maxExternalMb ?? 160) * 1024 * 1024;
     const workerFile = options.workerFile ?? defaultWorkerFile;
+    // Emails wait in memory, whole: past this many, one is turned away at once
+    // rather than held (PAR-09, security review: the queue had no limit).
+    const maxWaiting = options.maxWaiting ?? 20;
     const queue = [];
     // Fingerprints of emails that failed, so they are refused at once next time.
     // Not Message-IDs: any sender can copy one, and so block a genuine email.
@@ -54,10 +58,15 @@ export function createSafeParser(options = {}) {
         finish(ready.has(retired) ? { reason } : { unavailable: reason });
     };
     const startClock = (run) => {
-        // Checked often while a job runs: growth since it started.
-        const before = process.memoryUsage.rss();
+        // Checked often while a job runs: the process's growth since it started,
+        // less what the server's own thread took meanwhile (its heap and its
+        // buffers, which Node counts per thread), so a busy server doesn't stop a
+        // read that isn't to blame (ATT-12). What's left is the reader's.
+        const own = () => { const m = process.memoryUsage(); return m.heapUsed + m.external; };
+        const before = { rss: process.memoryUsage.rss(), own: own() };
         run.watch = setInterval(() => {
-            if (process.memoryUsage.rss() - before <= maxGrowthBytes)
+            const growth = process.memoryUsage.rss() - before.rss - Math.max(0, own() - before.own);
+            if (growth <= maxGrowthBytes)
                 return;
             retire(run.worker, 'memory limit');
             void run.worker.terminate();
@@ -115,6 +124,8 @@ export function createSafeParser(options = {}) {
         const fingerprint = createHash('sha256').update(raw).digest('hex') + (attachment === undefined ? '' : `#${attachment}`);
         if (failed.has(fingerprint))
             return Promise.reject(unsafe('failed before'));
+        if (queue.length >= maxWaiting)
+            return Promise.reject(busy());
         return new Promise((resolve, reject) => {
             queue.push({ raw, ...(attachment === undefined ? {} : { attachment }), fingerprint, resolve: resolve, reject });
             pump();

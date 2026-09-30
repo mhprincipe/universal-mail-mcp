@@ -37,6 +37,7 @@ export const TOOL_CODES = {
     'MAIL-UNSUBSCRIBE-MANUAL': { remedy: 'Tell the owner they can unsubscribe from their mail app, or offer to mark the email as junk. Do not open links in the email.' },
     'MAIL-UNSUBSCRIBE-CAUTION': { remedy: 'Tell the owner this email may be a scam, and offer to mark it as junk. Never open its links.' },
     'MAIL-UNSUBSCRIBE-FAILED': { remedy: 'Tell the owner the unsubscribe may not have worked; offer to mark the sender\'s emails as junk. Do not retry more than once.' },
+    'MAIL-PARSER-BUSY': { remedy: 'Wait a moment and try again, opening fewer emails or attachments at once.' },
     'MAIL-NEW-RECIPIENT': { remedy: 'Ask the owner to confirm these recipients are right. If they confirm, send again with newRecipientsConfirmed: true. Never set it without asking them.' },
     'MAIL-SEND-LIMIT': { remedy: 'This account reached its sending limit. Tell the owner; do not send from another account instead. They can change the limit on their Universal Mail page.' },
     'MAIL-SENDING-OFF': { remedy: 'The owner turned sending off for this account. Tell them; they can turn it on on their Universal Mail page. Do not send from another account instead unless they ask.' },

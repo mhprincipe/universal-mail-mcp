@@ -84,13 +84,15 @@ export function createMultiMail(services) {
         async search(input, reachable) {
             const settled = await Promise.allSettled(reachable.map(async (account) => {
                 const result = await services.get(account).searchEmail(input);
-                return (result.data ?? []).map(summary => ({ ...summary, account }));
+                return { rows: (result.data ?? []).map(summary => ({ ...summary, account })), warnings: (result.warnings ?? []).map(w => `${account}: ${w}`) };
             }));
             const found = [];
             const warnings = [];
             settled.forEach((outcome, index) => {
-                if (outcome.status === 'fulfilled')
-                    found.push(...outcome.value);
+                if (outcome.status === 'fulfilled') {
+                    found.push(...outcome.value.rows);
+                    warnings.push(...outcome.value.warnings);
+                }
                 else
                     warnings.push(`Couldn't search ${reachable[index]}: ${classify(outcome.reason).message}`);
             });
