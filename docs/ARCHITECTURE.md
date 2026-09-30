@@ -12,7 +12,7 @@ in [DESIGN-V2.md](DESIGN-V2.md) §6; this page is where to find things.
                               ├─ /authorize, /token  sign-in server: CIMD apps, PKCE,
                               │                      approval by fingerprint or emailed code
                               ├─ /{key}/             your Universal Mail page
-                              ├─ /{key}/mcp          MCP (streamable HTTP) ─▶ 17 tools
+                              ├─ /{key}/mcp          MCP (streamable HTTP) ─▶ 21 tools
                               └─ /{key}/check        setup's check (signed, minutes-long)
                                                              │
                                           per account, per app's grant (MailRouter)
@@ -30,15 +30,16 @@ versions when your page changes something. The server keeps no mail.
 | Path | What |
 |---|---|
 | `src/index.ts`, `src/app.ts` | start-up: an installation (setup's saved settings), the built-in sign-in, or direct mode (one shared secret, for the test kit and local development only) |
-| `src/tools.ts` | the 17 MCP tools: schemas, descriptions, answer shaping, the per-call log line, and the hook that records organize and send calls in the activity log |
+| `src/tools.ts` | the 21 MCP tools: schemas, descriptions, answer shaping, the per-call log line, and the hook that records organize and send calls in the activity log |
 | `src/timing.ts` | where a call's time goes (`phases`): per-call context, timed IMAP commands |
 | `src/multiMail.ts` | the router: which accounts and permissions a caller has; read-only when a subscription lapses |
 | `src/accounts.ts`, `src/accountsConfig.ts` | account names, resolving one, its configuration |
-| `src/mail/mailService.ts` | the mail rules: search, threads, attachments, drafts, send (limits, first-time recipients) and Sent copies, moves, flags |
+| `src/mail/mailService.ts` | the mail rules: search, threads, attachments (reading, and sending on), drafts, send, reply and forward (limits, first-time recipients) and Sent copies, moves, junk, flags, sender summaries, unsubscribing |
 | `src/mail/imap.ts` | the IMAP engine: one kept connection per account, calls in turn, recovery, provider workarounds; whether this account has written to an address |
 | `src/mail/mime.ts` | composing messages (Message-ID from the sender's domain, no References of its own) |
 | `src/safeParse.ts`, `src/parseWorker.ts`, `src/parseCore.ts` | reading messages in a sandboxed worker with structure, time and memory limits |
-| `src/attachmentCore.ts` | reading one attachment, inside that worker: text, HTML, PDF (unpdf), Word (mammoth), images |
+| `src/attachmentCore.ts` | inside that worker: reading one attachment (text, HTML, PDF with unpdf, Word with mammoth, images), and handing over all of them as they are, to send on |
+| `src/unsubscribe.ts` | one-click unsubscribe: which address, whether it's safe to contact, the pinned request |
 | `src/cautions.ts` | scam warnings from a message's From and Reply-To: brand names, addresses in names, look-alike and disguised domains |
 | `src/sendLimits.ts` | per-account send counts for the hour and the day, shared by every app |
 | `src/activity.ts`, `src/page/activity.ts` | the activity log (what each app changed, never content) and undo on your page |

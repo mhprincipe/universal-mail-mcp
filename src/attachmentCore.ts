@@ -73,3 +73,16 @@ export async function readAttachment(raw: Buffer, index: number): Promise<Attach
     return { ...base, kind: 'unreadable' };
   }
 }
+
+// Every attachment of the email as it is, to send on (OUT-01, FWD-01): its
+// name, its type and its bytes. The structure limits apply first, as always.
+export type AttachmentFile = { filename?: string; contentType: string; content: Uint8Array };
+export async function attachmentFiles(raw: Buffer): Promise<AttachmentFile[]> {
+  await checkStructure(raw, defaultLimits);
+  const parsed = await simpleParser(raw, { skipHtmlToText: true, skipTextToHtml: true, skipImageLinks: true });
+  return (parsed.attachments ?? []).map(a => ({
+    ...(a.filename ? { filename: a.filename } : {}),
+    contentType: a.contentType.toLowerCase().split(';')[0]!.trim(),
+    content: a.content
+  }));
+}

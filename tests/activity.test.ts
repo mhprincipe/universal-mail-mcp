@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { activityFor, createActivityLog } from '../src/activity.js';
+import { activityLine } from '../src/page/activity.js';
 import { success, MailError } from '../src/errors.js';
 import { MailService } from '../src/mail/mailService.js';
 import { createCanary } from '../testkit/src/canary.js';
@@ -172,5 +173,34 @@ describe('the activity log on your page', () => {
     await p.act('/accounts/add', { email: 'other@example.invalid', password: 'other-app-password', name: 'work' });
     expect((await p.act('/activity/undo', { id: ids[1]! })).html).toContain('That account isn&#39;t here any more.');
     expect(moveBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the 2.4.1 actions in the activity log', () => {
+  const two = [{ filename: 'invoice.pdf', contentType: 'application/pdf', size: 10 }, { filename: 'costs.csv', contentType: 'text/csv', size: 3 }];
+  const entry = (fields: Record<string, unknown>) => ({ id: 'e', at: 0, app: 'Claude', account: 'me', count: 1, ...fields }) as never;
+
+  it('ACT-09 forwards, unsubscribes and junk are listed; junk can be put back; attachments are counted, never named (added: 2.4.1)', () => {
+    const sent = success({ messageId: '<m>', attachments: two }, 'ok', 'SENT');
+    expect(activityFor('send_email', { to: ['a@x.example'] }, sent)).toEqual({ action: 'sent', count: 1, recipients: 1, attachments: 2 });
+    expect(activityFor('forward_email', { mailbox: 'INBOX', uid: 4, to: ['a@x.example'], cc: ['b@x.example'], newRecipientsConfirmed: true }, sent))
+      .toEqual({ action: 'forwarded', count: 1, recipients: 2, attachments: 2, newRecipients: true });
+    expect(activityFor('reply_email', { mailbox: 'INBOX', uid: 4 }, sent)).toEqual({ action: 'replied', count: 1, attachments: 2 });
+    expect(activityFor('create_draft', { to: ['a@x.example'] }, success({ uid: 3, attachments: two.slice(0, 1) }))).toEqual({ action: 'drafted', count: 1, attachments: 1 });
+    expect(activityFor('junk_email', { mailbox: 'INBOX', uids: [1, 2] }, success({ sourceMailbox: 'INBOX', destination: 'Junk', moved: [{ sourceUid: 1, destinationUid: 8 }, { sourceUid: 2, destinationUid: 9 }] })))
+      .toMatchObject({ action: 'moved to junk', count: 2, from: 'INBOX', to: 'Junk', undo: { kind: 'move', mailbox: 'Junk', uids: [8, 9], destination: 'INBOX' } });
+    expect(activityFor('unsubscribe', { mailbox: 'INBOX', uid: 4 }, success({ mailbox: 'INBOX', uid: 4, unsubscribed: true, sender: 'news.example.com' }))).toEqual({ action: 'unsubscribed', count: 1 });
+    expect(activityFor('summarize_senders', { mailbox: 'INBOX' }, success({ senders: [] }))).toBeUndefined();
+    expect(JSON.stringify(activityFor('send_email', { to: ['a@x.example'] }, sent))).not.toContain('invoice');
+  });
+
+  it('ACT-09 in plain words on the page', () => {
+    expect(activityLine(entry({ action: 'forwarded', recipients: 2, attachments: 2 }))).toBe('Claude forwarded 1 message (2 recipients, 2 attachments) from me');
+    expect(activityLine(entry({ action: 'sent', recipients: 1, attachments: 1, newRecipients: true }))).toBe('Claude sent 1 message (1 recipient, 1 attachment, someone new) from me');
+    expect(activityLine(entry({ action: 'replied', attachments: 1 }))).toBe('Claude replied to 1 message (1 attachment) from me');
+    expect(activityLine(entry({ action: 'drafted', attachments: 3 }))).toBe('Claude drafted 1 message (3 attachments) in me');
+    expect(activityLine(entry({ action: 'moved to junk', count: 2 }))).toBe('Claude moved 2 messages to junk in me');
+    expect(activityLine(entry({ action: 'unsubscribed' }))).toBe('Claude unsubscribed from a mailing list in me');
+    expect(activityLine(entry({ action: 'trashed', count: 1 }))).toBe('Claude trashed 1 message in me');
   });
 });

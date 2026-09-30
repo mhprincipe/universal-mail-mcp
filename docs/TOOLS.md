@@ -1,6 +1,6 @@
 # Tool reference
 
-The 17 tools an AI app sees, what they take, what they return and how they
+The 21 tools an AI app sees, what they take, what they return and how they
 fail. The source of truth is `src/tools.ts`: descriptions, schemas, and each tool's
 permission (its `mail.service(account, 'read' | 'organize' | 'send')` call).
 This page summarizes them.
@@ -15,11 +15,11 @@ with the names it can use.
 
 | Permission | Tools |
 |---|---|
-| **Read** | `list_folders`, `search_email`, `get_email`, `get_attachment`, `get_thread` |
-| **Organize** | `create_draft`, `update_draft`, `move_email`, `archive_email`, `mark_read`, `mark_unread`, `flag_email`, `trash_email`, `restore_email`, `create_folder` |
-| **Send** | `send_email`, `reply_email` (also needs sending turned on for the account) |
+| **Read** | `list_folders`, `search_email`, `get_email`, `get_attachment`, `get_thread`, `summarize_senders` |
+| **Organize** | `create_draft`, `update_draft`, `move_email`, `archive_email`, `mark_read`, `mark_unread`, `flag_email`, `trash_email`, `junk_email`, `restore_email`, `create_folder`, `unsubscribe` |
+| **Send** | `send_email`, `reply_email`, `forward_email` (also needs sending turned on for the account) |
 
-The five Read tools are marked `readOnlyHint`, so apps that ask before changes
+The six Read tools are marked `readOnlyHint`, so apps that ask before changes
 (ChatGPT) run them without asking.
 
 ## The answer envelope
@@ -67,18 +67,37 @@ Every tool answers with the same shape, as `structuredContent` and as JSON text:
 | `search_email` | `mailbox` (default INBOX), `messageId`, `text`, `from`, `to`, `subject`, `since`, `before` (ISO times, exact to the second), `read`, `flagged`, `limit` (1-100, default 25), `cursor` | One folder, newest first. More than `limit`: a `cursor` for the next page. Without `account`: every account the app can read, each result naming its account (no cursor then). A subject search returns only subjects that really contain what was asked. |
 | `get_email` | `mailbox`, `uid`, `format` (`text` default, or `full` with the HTML) | One message, never marked read by opening it. |
 | `get_attachment` | `mailbox`, `uid`, `index` (from `get_email`'s `attachments` list) | One attachment's content, never marking the email read: text, CSV, JSON, HTML, PDF and Word (.docx) as text, marked untrusted and clipped at 100,000 characters; PNG, JPEG, GIF and WebP images up to 3 MB as a picture the AI can look at; anything else described, not read. Read in the same sandbox as messages, with time, memory and structure limits. |
+| `summarize_senders` | `mailbox` (default INBOX), `messages` (how many of the newest to look at, 1-2,000, default 500), `top` (1-100, default 25) | Who sends the most mail there: counted by sender, most first, with how many are unread, the newest date, whether one-click unsubscribe is offered, and cautions when a sender looks like a scam. For planning a clean-up without opening each message. |
 | `get_thread` | `mailbox`, `uid`, `allFolders` (default false), `format` | The conversation, from Message-ID, References and In-Reply-To (Gmail: its own conversation id). Looks in Inbox, Sent, Archive and the message's folder; `allFolders` looks everywhere, more slowly. |
-| `create_draft` | `to`, `cc`, `bcc`, `subject`, `text`/`html`, `inReplyTo`, `references` | A draft in the Drafts folder. Sends nothing. |
-| `update_draft` | `mailbox`, `uid`, and any of `to`, `cc`, `bcc`, `subject`, `text`, `html` | Saves the replacement first, then removes the old one. The replacement is a new message: new `uid` and `messageId`. |
-| `send_email` | `to`, `cc`, `bcc`, `subject`, `text`/`html`, `newRecipientsConfirmed` | Sends. Answers `messageId`, `accepted`, `rejected` and `sentAt` (the server's time). The Sent copy is the provider's or saved by Universal Mail, never both. |
-| `reply_email` | `mailbox`, `uid`, `text`/`html`, `cc`, `bcc`, `replyAll`, `newRecipientsConfirmed` | Replies with the right thread headers (`In-Reply-To`, `References`). Same answer as `send_email`. |
+| `create_draft` | `to`, `cc`, `bcc`, `subject`, `text`/`html`, `inReplyTo`, `references`, `attachments`, `files` | A draft in the Drafts folder. Sends nothing. |
+| `update_draft` | `mailbox`, `uid`, and any of `to`, `cc`, `bcc`, `subject`, `text`, `html`, `attachments`, `files` | Saves the replacement first, then removes the old one. The replacement is a new message: new `uid` and `messageId`. The draft keeps its attachments; more can be added. |
+| `send_email` | `to`, `cc`, `bcc`, `subject`, `text`/`html`, `attachments`, `files`, `newRecipientsConfirmed` | Sends. Answers `messageId`, `accepted`, `rejected` and `sentAt` (the server's time). The Sent copy is the provider's or saved by Universal Mail, never both. |
+| `reply_email` | `mailbox`, `uid`, `text`/`html`, `cc`, `bcc`, `replyAll`, `attachments`, `files`, `newRecipientsConfirmed` | Replies with the right thread headers (`In-Reply-To`, `References`). Same answer as `send_email`. |
+| `forward_email` | `mailbox`, `uid`, `to`, `cc`, `bcc`, `text` (a note), `includeAttachments` (default true), `newRecipientsConfirmed` | Forwards the message: the note, then the original's sender, date, subject and text, with its attachments copied as they are. Subject "Fwd: …". Same answer as `send_email`. |
 | `move_email` | `mailbox`, `uid`/`uids`, `destination` | Moves to an existing folder, named exactly (never guessed). |
 | `archive_email` | `mailbox`, `uid`/`uids` | Moves to the folder the provider marks as Archive (Gmail: All Mail). |
 | `trash_email` | `mailbox`, `uid`/`uids` | Moves to Trash. Reversible until the provider empties Trash. |
+| `junk_email` | `mailbox`, `uid`/`uids` | Moves to the folder the provider marks as Junk (Yahoo: Bulk; Gmail: Spam), which also teaches its spam filter. `restore_email` brings it back. |
 | `restore_email` | `mailbox`, `uid`/`uids`, `destination` (default INBOX) | Moves out of Trash (or any folder). |
 | `mark_read` / `mark_unread` | `mailbox`, `uid`/`uids` | Sets or clears read. |
 | `flag_email` | `mailbox`, `uid`/`uids`, `flagged` | Sets or clears the flag (a star in Gmail). |
 | `create_folder` | `path` | Creates a folder (a label in Gmail). One that already exists answers `created: false`. |
+| `unsubscribe` | `mailbox`, `uid` | Asks the sender of a newsletter to stop, with the one-click unsubscribe the email offers (RFC 8058). The email is left where it is. Refused for an email with cautions, and when the sender offers no one-click way. |
+
+## Attachments to send
+
+`send_email`, `reply_email`, `create_draft` and `update_draft` take two kinds:
+
+- **`attachments`**: files already in this account, each as `{ mailbox, uid, index }`
+  (the index from `get_email`'s `attachments` list). The server copies them as they
+  are, read in the parsing sandbox; nothing large passes through the AI. Up to 10.
+- **`files`**: small text files the AI writes, each as `{ filename, text }`, named
+  with `.txt`, `.csv`, `.tsv`, `.md`, `.json`, `.ics` or `.xml` (no folders, no hidden
+  names), sent as UTF-8. Up to 5, each up to 1,000,000 characters.
+
+Together they may come to 18 MB (`MAX_ATTACHMENT_BYTES`), under the 25 MB most
+providers accept once encoded. Answers list what went (`filename`, `contentType`,
+`size`); anything missing, not allowed or too large means nothing is sent.
 
 ## Before anything is sent
 
@@ -91,7 +110,7 @@ provider:
 - **First-time recipients.** Someone this account has never written to (found
   in its Sent folder, To or Cc, sent from the account's own address) holds the
   send: nothing is sent, and the answer is `MAIL-NEW-RECIPIENT` with
-  `details.newRecipients`. The AI asks the owner, and only after they confirm
+  `details.newRecipients` (and `details.attachments`, the files that would go). The AI asks the owner, and only after they confirm
   sends again with `newRecipientsConfirmed: true`. When the check can't be made
   (no Sent folder, a failed search) it asks too. The activity log on the owner's
   page marks such a send "someone new".
@@ -107,6 +126,11 @@ come from the server:
 | `MAIL-ACCOUNT-REQUIRED` | the app can reach more than one account and didn't say which |
 | `MAIL-ACCOUNT-UNKNOWN` | no account by that name is available to this app; the answer lists the ones it can use |
 | `MAIL-NOT-PERMITTED` | the app wasn't given that permission for that account (changed on your page) |
+| `MAIL-FILE-NOT-ALLOWED` | a file the AI wrote has a name or kind that isn't allowed |
+| `ATTACHMENTS_TOO_LARGE` | the attachments come to more than one email can carry |
+| `MAIL-UNSUBSCRIBE-MANUAL` | the sender offers no one-click unsubscribe; the owner can use their mail app |
+| `MAIL-UNSUBSCRIBE-CAUTION` | the email looks like a scam, so its unsubscribe wasn't used |
+| `MAIL-UNSUBSCRIBE-FAILED` | the sender's address wasn't safe to contact, didn't answer, or refused |
 | `MAIL-SEND-LIMIT` | the account reached its sending limit for the hour or the day (changed on your page) |
 | `MAIL-NEW-RECIPIENT` | a send or reply to someone this account never wrote to, held until the owner confirms |
 | `MAIL-SENDING-OFF` | sending is turned off for that account on your page |

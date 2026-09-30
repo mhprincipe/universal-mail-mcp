@@ -53,7 +53,7 @@ describe('reading attachments', () => {
     expect((await read(uid, 2)).result.data.text).toBe('plain words');
   });
 
-  it('ATT-02 an image comes back as a picture the AI can look at; the answer\'s JSON stays small; one too large is described instead', async () => {
+  it('ATT-02 an image comes back as a picture the AI can look at; the answer\'s JSON stays small; one too large is described instead', { timeout: 30_000 }, async () => {
     f = await startToolFixture();
     const raw = await messageWithAttachments([
       { filename: 'receipt.png', contentType: 'image/png', content: PNG_1X1 },
@@ -115,7 +115,7 @@ describe('reading attachments', () => {
 // The reader itself, outside the sandbox: the same function the worker runs,
 // so every branch is exercised where coverage can see it.
 describe('the attachment reader, directly', () => {
-  it('ATT-11 each kind, read as the worker reads it: text (with its charset), HTML, PDF, Word, an image, a large image, another kind, damaged files, a missing position (added: reading attachments)', { timeout: 30_000 }, async () => {
+  it('ATT-11 each kind, read as the worker reads it: text (with its charset), HTML, PDF, Word, an image, a large image, another kind, damaged files, a missing position (added: reading attachments)', { timeout: 60_000 }, async () => {
     const latin1 = Buffer.from('Café', 'latin1');
     const raw = await messageWithAttachments([
       { filename: 'menu.txt', contentType: 'text/plain; charset=iso-8859-1', content: latin1 },

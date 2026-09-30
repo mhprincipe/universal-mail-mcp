@@ -1,14 +1,17 @@
 import { createHash } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { MailError } from './errors.js';
-import type { AttachmentRead } from './attachmentCore.js';
+import type { AttachmentFile, AttachmentRead } from './attachmentCore.js';
 import type { ParsedMessage } from './parseCore.js';
 
 export type { ParsedMessage } from './parseCore.js';
-export type { AttachmentRead } from './attachmentCore.js';
+export type { AttachmentFile, AttachmentRead } from './attachmentCore.js';
 // attachment: one attachment by its position (undefined: there's none there),
-// read in the same sandbox as the email.
-export type SafeParser = { parse(raw: Buffer): Promise<ParsedMessage>; attachment(raw: Buffer, index: number): Promise<AttachmentRead | undefined>; close(): Promise<void> };
+// read in the same sandbox as the email. files: every attachment as it is, to send on.
+export type SafeParser = {
+  parse(raw: Buffer): Promise<ParsedMessage>; attachment(raw: Buffer, index: number): Promise<AttachmentRead | undefined>;
+  files(raw: Buffer): Promise<AttachmentFile[]>; close(): Promise<void>;
+};
 // maxExternalMb: how much the process's memory may grow during one job. The
 // worker's heap limit doesn't cover the buffers a PDF inflates into (ATT-08,
 // security review), and those belong to the worker's thread, so it's the
@@ -18,8 +21,9 @@ export type SafeParserOptions = { timeoutMs?: number; startupTimeoutMs?: number;
 // Under tests Node runs the TypeScript source directly; built, it runs the .js.
 const defaultWorkerFile = new URL(import.meta.url.endsWith('.ts') ? './parseWorker.ts' : './parseWorker.js', import.meta.url);
 
-type Reply = { ready: true } | { id: number; ok: true; message?: ParsedMessage; attachment?: AttachmentRead | null } | { id: number; ok: false; reason: string };
-type Job = { raw: Buffer; attachment?: number; fingerprint: string; resolve(result: unknown): void; reject(error: MailError): void };
+type Reply = { ready: true } | { id: number; ok: true; message?: ParsedMessage; attachment?: AttachmentRead | null; files?: AttachmentFile[] } | { id: number; ok: false; reason: string };
+// attachment: one attachment by position, or 'files' for all of them as they are.
+type Job = { raw: Buffer; attachment?: number | 'files'; fingerprint: string; resolve(result: unknown): void; reject(error: MailError): void };
 type Running = { id: number; job: Job; worker: Worker; timer?: NodeJS.Timeout; watch?: NodeJS.Timeout };
 type Outcome = { result: unknown } | { reason: string } | { unavailable: string };
 
@@ -103,7 +107,7 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
         return;
       }
       if (running?.id !== reply.id) return;
-      finish(reply.ok ? { result: 'attachment' in reply ? reply.attachment ?? undefined : reply.message } : { reason: reply.reason });
+      finish(reply.ok ? { result: 'files' in reply ? reply.files : 'attachment' in reply ? reply.attachment ?? undefined : reply.message } : { reason: reply.reason });
     });
     created.on('error', (error: Error & { code?: string }) =>
       retire(created, error.code === 'ERR_WORKER_OUT_OF_MEMORY' ? 'memory limit' : `worker error: ${error.message}`));
@@ -124,12 +128,12 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
     current.ref();
     running = { id: nextId++, job, worker: current };
     if (ready.has(current)) startClock(running);
-    current.postMessage({ id: running.id, raw: job.raw, ...(job.attachment !== undefined ? { attachment: job.attachment } : {}) });
+    current.postMessage({ id: running.id, raw: job.raw, ...(job.attachment === 'files' ? { files: true } : job.attachment !== undefined ? { attachment: job.attachment } : {}) });
   }
 
   // An attachment that failed is remembered by the email and its position, so
   // it never stops the email itself from opening.
-  const submit = <T>(raw: Buffer, attachment?: number) => {
+  const submit = <T>(raw: Buffer, attachment?: number | 'files') => {
     const fingerprint = createHash('sha256').update(raw).digest('hex') + (attachment === undefined ? '' : `#${attachment}`);
     if (failed.has(fingerprint)) return Promise.reject(unsafe('failed before'));
     return new Promise<T>((resolve, reject) => {
@@ -141,6 +145,7 @@ export function createSafeParser(options: SafeParserOptions = {}): SafeParser {
   return {
     parse: raw => submit<ParsedMessage>(raw),
     attachment: (raw, index) => submit<AttachmentRead | undefined>(raw, index),
+    files: raw => submit<AttachmentFile[]>(raw, 'files'),
     async close() {
       await worker?.terminate();
       worker = undefined;

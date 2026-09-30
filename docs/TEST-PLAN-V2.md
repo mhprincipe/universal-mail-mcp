@@ -578,12 +578,74 @@ what it says about the person's position is true.
 | ACT-06 | asked to stop (SIGTERM, as Cloud Run does), the server saves what is waiting and exits cleanly at once | K (package) |
 | ACT-07 | what it keeps stays under 16 KB, oldest dropped first (the settings record has a 64 KB limit) *(added: security review)* | U |
 | ACT-08 | undo finds the account by its address: after a rename it still works; if that address is gone, it refuses *(added: security review)* | U |
+| ACT-09 | forwards, unsubscribes and junk are listed (junk with undo); attachments on sends and drafts are counted, never named; the page's words for each *(added: 2.4.1)* | U |
 
 **Accessibility**
 
 | ID | Behavior | Tier |
 |---|---|---|
 | A11Y-01 | every page the server renders passes axe's automated rules: sign-in, code, approval, and your page with accounts, apps and activity | U |
+
+**Exit:** all of the above green; then tried live (not yet).
+
+### Phase 8 — Files and clean-up *(added 2026-09-30: 2.4.1)*
+
+**Sending attachments**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| OUT-01 | a send carries a file from another email, byte for byte, and a text file the AI wrote (UTF-8, labelled so); the answer lists them; the source email stays unread | U |
+| OUT-02 | a reply and a draft carry them too; editing a draft keeps its attachments and adds more | U |
+| OUT-03 | nothing is sent when an attachment isn't there, a written file's name or kind isn't allowed (programs, web pages, hidden names, folders, control characters, no extension), or they come to more than the limit | U |
+| OUT-04 | the tools describe both kinds and what may be written | U |
+| OUT-05 | held for someone new, the answer names the files that would go | U |
+| OUT-06 | on a real server and SMTP capture: a stored file and a written one arrive byte for byte; the source stays unread | P |
+| OUT-07 | every attachment as the sandbox hands it over: name, type, exact bytes; structure limits first *(added: coverage)* | U |
+
+**Forwarding**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| FWD-01 | the note, then the original's sender, date, subject, recipients and text, and its attachments byte for byte; "Fwd:" subject; the original stays unread | U |
+| FWD-02 | without attachments when asked; "Fwd:" never doubled; no note is fine | U |
+| FWD-03 | to someone new: held, naming the files, nothing sent | U |
+| FWD-04 | a message that isn't there: refused, nothing sent | U |
+| FWD-05 | needs Send; marked as reaching outside | U |
+| FWD-06 | on a real server: the forward reaches the SMTP capture with the original's text and attachments | P |
+
+**Unsubscribing**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| UNS-01 | a sender offering one click is asked once, at its own https address; the email is left as it was | U |
+| UNS-02 | no one click (mailto only, no promise header, nothing): left to the owner, nothing sent | U |
+| UNS-03 | an email with cautions is never answered | U |
+| UNS-04 | a refusal or error from the sender is reported with its status | U |
+| UNS-05 | only https, a name, port 443, no password; every DNS answer public (private, loopback, link-local, metadata, mixed, none: refused before connecting); anything but 2xx, redirects included, fails | U |
+| UNS-06 | the request: one POST of "List-Unsubscribe=One-Click" to the vetted address with the real host name; redirects not followed; slow or huge answers cut off | U |
+| UNS-07 | the headers read from the server, folded and in any case, read-only; a system email is not found | U |
+| UNS-08 | needs Organize; marked as reaching outside; never read-only | U |
+| UNS-09 | the real parts: DNS answers passed on; https with the certificate checked (an untrusted one refused before anything is sent) *(added: coverage)* | U |
+| UNS-10 | on a real server: the headers come from the stored message; the email stays unread | P |
+
+**Junk**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| JNK-01 | one or many go to the provider's Junk folder; restore brings one back | U |
+| JNK-02 | no Junk folder marked: refused, nothing moved, never guessed | U |
+| JNK-03 | needs Organize; one or a batch; not read-only | U |
+| JNK-04 | on a real server: the folder marked Junk, whatever its name (Yahoo's "Bulk") | P |
+
+**Who fills a folder**
+
+| ID | Behavior | Tier |
+|---|---|---|
+| WHO-01 | senders by count (most first, whenever their mail came), with unread counts, newest date and one-click unsubscribe; addresses in any case count as one; top N | U |
+| WHO-02 | a sender that looks like a scam carries its cautions | U |
+| WHO-03 | only the newest N by position, read-only, envelopes, flags and two headers, never a body; system emails left out | U |
+| WHO-04 | needs only Read; marked read-only | U |
+| WHO-05 | on a real server: counts from the server's envelopes, flags and headers | P |
 
 **Exit:** all of the above green; then tried live (not yet).
 
@@ -679,9 +741,10 @@ also where a later reader finds out why a line of code exists.
 | Everyday polish | 15 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| Serving people (2.4) | 35 |
-| **New** | **370** |
-| **Total** | **525** |
+| Serving people (2.4) | 36 |
+| Files and clean-up (2.4.1) | 32 |
+| **New** | **403** |
+| **Total** | **558** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

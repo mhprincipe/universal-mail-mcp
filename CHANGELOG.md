@@ -4,6 +4,30 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.4.1 (2026-09-30): sending files and cleaning up
+
+- **Send attachments** (OUT-01..07): send, reply and drafts can carry
+  attachments already in your mail (copied as they are, up to 18 MB) and small
+  text files your AI writes (.txt, .csv, .md, .json, .ics and a few more).
+  Editing a draft keeps its attachments (it used to refuse). A first message to
+  someone new with attachments names the files when it asks you.
+- **Forward** (FWD-01..06): a new Send tool, `forward_email`: your note, the
+  original's details and text, and its attachments.
+- **Junk** (JNK-01..04): `junk_email` moves mail to the folder your provider marks
+  as spam, which teaches its filter; undo from your page.
+- **Unsubscribe** (UNS-01..10): `unsubscribe` uses the one-click standard that
+  large senders offer. Never for an email that looks like a scam; the request is
+  made only to a safe, public https address.
+- **Who fills my inbox** (WHO-01..05): `summarize_senders` counts the newest
+  messages in a folder by sender, with unread counts and whether one-click
+  unsubscribe is offered.
+- **Recent activity** lists forwards, junk and unsubscribes, and counts
+  attachments on sends (ACT-09).
+- **Releases** take their security mark only from the tag's own message
+  (REL-09): 2.4.0 was marked a security release by mistake.
+- 21 tools in all. The security review of these changes is in
+  [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+
 ## 2.4.0 (2026-09-30): serving people
 
 Built around the principles now in the design (DESIGN-V2 §1): the owner stays

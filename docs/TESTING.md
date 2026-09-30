@@ -24,12 +24,13 @@ a release runs them again before building.
 
 | What | Automated tiers | Live |
 |---|---|---|
-| The 17 tools, their rules and answers | unit (faked mail) and slow (real IMAP/SMTP servers in Yahoo, Gmail and minimal layouts, with broken connections) | the live-test prompt on Yahoo (every tool, with Claude and with ChatGPT); Gmail connected, its full prompt not yet run |
+| The 21 tools, their rules and answers | unit (faked mail) and slow (real IMAP/SMTP servers in Yahoo, Gmail and minimal layouts, with broken connections) | the live-test prompt on Yahoo (every tool, with Claude and with ChatGPT); Gmail connected, its full prompt not yet run |
 | Provider quirks | slow tier, with the fault proxy imitating each (for example Yahoo's missing header search) | found on Yahoo, then turned into tests |
 | Sign-in (identity documents, PKCE, tokens, approval, passkeys, grants) | unit, with Claude's and ChatGPT's real published documents and a software passkey | Claude and ChatGPT connected and approved |
 | Your page | unit, over real HTTP with a session, forms and a software passkey; every page checked with axe's accessibility rules (A11Y-01) | used on a desktop browser; the phone test is open; not yet with a screen reader |
 | Attachments (2.4) | unit (each kind through the worker, damaged and hostile files, the limits) and slow (a PDF and an image from a real IMAP server; the built image reads a PDF) | not yet |
 | Scam warnings, first-time recipients, send limits, activity and undo (2.4) | unit, and recipients against a real Sent folder (slow) | not yet |
+| Sending attachments, forwarding, junk, sender summaries, unsubscribing (2.4.1) | unit (each rule, the permission each tool asks for, the unsubscribe request against a local server, its certificate check) and slow (a real IMAP server and SMTP capture: files arrive byte for byte; Junk found by its marking; headers and flags from the server) | not yet |
 | Setup | unit against a simulated Google; the built `setup.js` in a real terminal (slow tier) | the owner's install (2026-09-28) |
 | The server image and the release pipeline | slow tier (image, publishing scripts); CI and the release workflow | every release, verified afterwards (OPERATIONS.md) |
 | Subscription and the license service | unit | not yet: Paddle's sandbox |

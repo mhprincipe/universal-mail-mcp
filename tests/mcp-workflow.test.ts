@@ -25,7 +25,8 @@ async function fixture(extraEnv: NodeJS.ProcessEnv = {}) {
     { path: 'Draft', specialUse: '\\Drafts', selectable: true },
     { path: 'Sent', specialUse: '\\Sent', selectable: true },
     { path: 'Archive', specialUse: '\\Archive', selectable: true },
-    { path: 'Trash', specialUse: '\\Trash', selectable: true }
+    { path: 'Trash', specialUse: '\\Trash', selectable: true },
+    { path: 'Junk', specialUse: '\\Junk', selectable: true }
   ];
   let nextUid = 1;
   const rows = new Map<number, { mailbox: string; uid: number; raw: Buffer; messageId: string; read: boolean; flagged: boolean }>();
@@ -50,6 +51,10 @@ async function fixture(extraEnv: NodeJS.ProcessEnv = {}) {
   vi.spyOn(ImapGateway.prototype, 'fetchSummary').mockImplementation(async (mailbox, uid) => summary(get(mailbox, uid)));
   vi.spyOn(ImapGateway.prototype, 'fetchRaw').mockImplementation(async (mailbox, uid) => ({ summary: summary(get(mailbox, uid)), raw: get(mailbox, uid).raw, envelope: {} }));
   vi.spyOn(ImapGateway.prototype, 'fetchReplyHeaders').mockImplementation(async (mailbox, uid) => replyHeaders(get(mailbox, uid).raw));
+  // No list headers on the fixture's mail; every sender is the account itself.
+  vi.spyOn(ImapGateway.prototype, 'fetchListHeaders').mockImplementation(async (mailbox, uid) => ({ summary: summary(get(mailbox, uid)) }));
+  vi.spyOn(ImapGateway.prototype, 'senderStats').mockImplementation(async mailbox => [...rows.values()].filter(r => r.mailbox === mailbox)
+    .map(r => ({ from: { address: 'self@example.invalid' }, read: r.read, oneClick: false })));
   vi.spyOn(ImapGateway.prototype, 'findByMessageId').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.messageId === id).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'findThreadUids').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.raw.toString().includes(id)).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'append').mockImplementation(append);
@@ -84,10 +89,10 @@ async function fixture(extraEnv: NodeJS.ProcessEnv = {}) {
   return { rows, seedUid, original, call, ok, called, deliveries, sendMail, folders };
 }
 
-it('exercises all 17 tools through real authenticated HTTP/MCP, with fixture state assertions', async () => {
+it('exercises all 21 tools through real authenticated HTTP/MCP, with fixture state assertions', async () => {
   const f = await fixture();
   expect((await client!.listTools()).tools.map(t => t.name).sort()).toEqual(expectedTools);
-  expect(await f.ok('list_folders')).toHaveLength(5);
+  expect(await f.ok('list_folders')).toHaveLength(6);
   expect(await f.ok('search_email', { mailbox: 'INBOX' })).toHaveLength(1);
   const seed = { mailbox: 'INBOX', uid: f.seedUid };
   expect(await f.ok('get_email', seed)).toMatchObject({ messageId: f.original.messageId, read: false, untrustedContent: true });
@@ -121,6 +126,15 @@ it('exercises all 17 tools through real authenticated HTTP/MCP, with fixture sta
   expect(await f.ok('get_thread', { mailbox: 'INBOX', uid: current.destinationUid })).toHaveLength(2);
   // The seed has no attachments: asked for one anyway, it's plainly not there.
   expect((await f.call('get_attachment', { mailbox: 'INBOX', uid: current.destinationUid, index: 0 })).result).toMatchObject({ code: 'ATTACHMENT_NOT_FOUND' });
+  // 2.4.1: forward (to the account itself: no hold), who sends, junk and back, unsubscribe (not offered here).
+  const forwarded = await f.ok('forward_email', { mailbox: 'INBOX', uid: current.destinationUid, to: ['self@example.invalid'], text: 'fyi' });
+  expect(forwarded.accepted).toEqual(['self@example.invalid']);
+  expect((await simpleParser(f.deliveries.at(-1)!)).subject).toBe('Fwd: Fixture');
+  expect((await f.ok('summarize_senders', { mailbox: 'INBOX' })).senders[0]).toMatchObject({ address: 'self@example.invalid' });
+  const junked = await f.ok('junk_email', { mailbox: 'INBOX', uid: current.destinationUid });
+  expect(junked.destination).toBe('Junk');
+  current = await f.ok('restore_email', { mailbox: 'Junk', uid: junked.destinationUid });
+  expect((await f.call('unsubscribe', { mailbox: 'INBOX', uid: current.destinationUid })).result).toMatchObject({ code: 'MAIL-UNSUBSCRIBE-MANUAL' });
   expect([...f.called].sort()).toEqual(expectedTools);
 }, 20000);
 

@@ -107,6 +107,35 @@ trash the test message in your mail app when you're done.
 
 ---
 
+## What's new in 2.4.1
+
+Sending files, forwarding, the sender summary, junk and unsubscribe. It sends
+only to your own address, moves only the messages it creates, and unsubscribes
+from nothing unless you name a newsletter yourself. Replace `yahoo` with the
+account's name.
+
+```text
+Please test the new Universal Mail features on my account "yahoo" (pass account "yahoo" on every call), in this order. Use only the Universal Mail tools. Never send to anyone but my own address. Don't unsubscribe from anything and don't mark anything as junk except the test messages below. If a step fails, say so and go on.
+
+Keep a table: step, tool, worked (yes/no), what you saw, anything odd. Show it at the end.
+
+1. Summarize who sends to my Inbox (summarize_senders, the default 500 messages). Show me the top 10 with their counts, unread counts, and which offer one-click unsubscribe, and any cautions.
+2. Find a message with an attachment (search my Inbox with text "pdf", limit 10, and open them with get_email until one has attachments). Note its uid and the attachment's index.
+3. Send me an email at my own address with the subject "Universal Mail 2.4.1 files", a one-line body, that attachment (attachments: its folder, uid and index), and a small CSV you write (files: "totals.csv" with two lines). Tell me what the answer lists as attached.
+4. Search the Inbox for "Universal Mail 2.4.1 files" (at most 5 searches). Open it and list its attachments: both files should be there, with the right names.
+5. Forward that message to my own address with the note "Forward test" (forward_email). Then search for "Fwd: Universal Mail 2.4.1 files" (at most 5 searches) and tell me whether the note, the original's details, and both attachments are there.
+6. Mark the forwarded copy as junk (junk_email). Tell me which folder it went to. Then restore it to the Inbox (restore_email).
+7. Try unsubscribe on the original test message (it isn't a newsletter): it should say one-click isn't offered, and change nothing.
+8. Clean up: trash the test messages you created (Inbox and Sent).
+9. Show the table and your notes. Then tell me to open my Universal Mail page and check Recent activity: the send (with 2 attachments), the forward, the junk move and the restore should be listed.
+```
+
+To try unsubscribing for real, ask your AI about one newsletter you really
+want to leave: *"Unsubscribe me from <the newsletter>."* It uses the one-click
+way only if the sender offers it.
+
+---
+
 The timings, one line per tool call, from the server's log (Cloud Shell,
 after the test; replace the project id with yours). Since 2.2.4 each line
 ends with where the time went: `imap.connect` is a login, `imap.search`,

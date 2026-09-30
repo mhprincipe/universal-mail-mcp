@@ -4,6 +4,7 @@ import { ImapFlow } from 'imapflow';
 import { imapTransport, type AppConfig } from '../config.js';
 import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
 import { isSystemMessageId } from '../systemMail.js';
+import { oneClickTarget } from '../unsubscribe.js';
 import type { Address, FolderInfo, MessageSummary } from '../types.js';
 
 export type SearchInput = {
@@ -54,6 +55,19 @@ const person = (x: { name?: string; address: string }): Address => {
   const name = x.name?.trim();
   return name && name.toLowerCase() !== x.address.toLowerCase() ? { name, address: x.address } : { address: x.address };
 };
+
+// Header lines as the server sends them (any case, folded over lines), by
+// lowercase name; the first of each wins.
+export function headerValues(raw: Buffer | undefined): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const line of (raw?.toString('utf8') ?? '').replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/)) {
+    const colon = line.indexOf(':');
+    if (colon <= 0) continue;
+    const name = line.slice(0, colon).trim().toLowerCase();
+    values[name] ??= line.slice(colon + 1).trim();
+  }
+  return values;
+}
 
 const withCautions = (from: Address[], replyTo: Address[]) => {
   const cautions = cautionsFor({ from, replyTo });
@@ -342,6 +356,46 @@ export class ImapGateway {
           messageId: m.envelope?.messageId || undefined, subject: m.envelope?.subject || undefined,
           from: map(m.envelope?.from), replyTo: map(m.envelope?.replyTo), to: map(m.envelope?.to), cc: map(m.envelope?.cc), references
         };
+      } finally { lock.release(); }
+    });
+  }
+
+  // A mailing list's unsubscribe headers (UNS-07), with the message's summary
+  // (for its cautions), read-only, never the message itself.
+  async fetchListHeaders(mailbox: string, uid: number): Promise<{ summary: MessageSummary; listUnsubscribe?: string; listUnsubscribePost?: string }> {
+    return this.read(async client => {
+      const lock = await this.openToRead(client, mailbox);
+      try {
+        const m: any = await this.fetchOneFresh(client, uid, { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });
+        if (!m || isSystemMessageId(m.envelope?.messageId)) throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
+        const headers = headerValues(m.headers);
+        return {
+          summary: this.summary(mailbox, m),
+          ...(headers['list-unsubscribe'] ? { listUnsubscribe: headers['list-unsubscribe'] } : {}),
+          ...(headers['list-unsubscribe-post'] ? { listUnsubscribePost: headers['list-unsubscribe-post'] } : {})
+        };
+      } finally { lock.release(); }
+    });
+  }
+
+  // Who sends to this folder (WHO-03): its newest n messages by position,
+  // read-only: each one's sender, date, whether it's been read, and whether
+  // one click unsubscribes. Envelopes, flags and two headers; never a body.
+  async senderStats(mailbox: string, n: number): Promise<Array<{ from?: Address; date?: string; read: boolean; oneClick: boolean }>> {
+    return this.read(async client => {
+      const lock = await this.openToRead(client, mailbox);
+      try {
+        const rows: any[] = await this.newest(client, n, { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });
+        return rows.filter(row => !isSystemMessageId(row.envelope?.messageId)).map(row => {
+          const sender = (row.envelope?.from ?? []).find((x: any) => x?.address);
+          const date: string | undefined = row.envelope?.date?.toISOString?.();
+          const headers = headerValues(row.headers);
+          return {
+            ...(sender ? { from: person(sender) } : {}), ...(date ? { date } : {}),
+            read: Boolean(row.flags?.has('\\Seen')),
+            oneClick: oneClickTarget(headers['list-unsubscribe'], headers['list-unsubscribe-post']) !== undefined
+          };
+        });
       } finally { lock.release(); }
     });
   }

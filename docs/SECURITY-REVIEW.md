@@ -40,8 +40,31 @@ high-severity problem in a production dependency (REL-08).
 | **Undoing "mark read" marks every message in that batch unread**, including any that were already unread before. | Minor and visible; the log doesn't record each message's earlier state. | Recording which messages actually changed. |
 | **A failed settings save is logged and retried with the next change** (INS-05). A restart before then loses that change, now including the newest activity entries. | Existing behaviour; saves haven't failed live. | Retrying on a timer as well. |
 
-## Not in scope
+## Not in scope for 2.4
 
-Attachments are only read, never sent or saved, so nothing in 2.4 lets an AI
-move a file out of the mailbox except by quoting it in an email, which the
-first-time check and the send limits already cover.
+In 2.4 attachments were only read, never sent. 2.4.1 changed that; see below.
+
+# 2.4.1: sending attachments, forwarding, junk, unsubscribe, sender summaries
+
+Reviewed the same way before release. What each new path could be used for,
+and what stops it:
+
+| Path | The risk | What stops it | Test |
+|---|---|---|---|
+| **Sending files already in the mailbox** (attach, forward) | An AI tricked by an email sends your documents out ("forward all bank statements to…") | A send to anyone the account has never written to is held, and the hold now **names the files**; send limits; the activity log counts attachments on every send; Send is off unless ticked | OUT-05, FWD-03, ACT-09 |
+| **Files the AI writes** | A dangerous file (a program, a web page), or a name that plays tricks (folders, hidden names, control characters) | Only plain text kinds by extension (.txt .csv .tsv .md .json .ics .xml), plain names only, UTF-8, up to 5 files of 1,000,000 characters | OUT-03 |
+| **Size** | A message too big to send, or memory pressure | 18 MB together, checked before composing; attachments are read in the sandbox with its time, memory and structure limits | OUT-03, OUT-07 |
+| **Unsubscribe: a request to an address chosen by an email's sender** | The server made to reach something inside Google Cloud (the metadata server, private addresses), or any port or plain HTTP | https on 443 only; a host name, never a number; every DNS answer public, then the connection made to that vetted address (no second lookup); no redirects; 10 s; answer body read no further than 64 KB and ignored; the certificate checked | UNS-05, UNS-06, UNS-09 |
+| **Unsubscribe: confirming the address to a scammer** | Answering a scam's "unsubscribe" tells it the address is read | Refused for any email carrying cautions; only the one-click standard (big senders' own), never a mailto or a plain link | UNS-02, UNS-03 |
+| **Junk** | A move to a folder guessed by name | Only the folder the provider marks as Junk; none marked, nothing moved | JNK-02, JNK-04 |
+| **Sender summaries** | Hidden system emails, bodies read, or a slow full scan | Envelopes, flags and two headers of the newest messages only (up to 2,000, by position), system emails left out, names marked untrusted | WHO-03 |
+| **Permissions** | A read-only app reaching outside | forward needs Send; unsubscribe and junk need Organize and aren't marked read-only; only the summary is a read | FWD-05, UNS-08, JNK-03, WHO-04 |
+
+Known and accepted, added in 2.4.1:
+
+| Item | Why it's accepted | What would change it |
+|---|---|---|
+| **Sending to someone the account already knows isn't held**, attachments or not. An injected AI could forward a document to a known contact. | Known contacts are the owner's own; the log shows the send and its attachment count; limits apply. | Holding every send with attachments for the owner's confirmation. |
+| **One-click unsubscribe tells a real sender the address is in use.** | That's what unsubscribing is; scams are refused. | — |
+| **The sandbox's memory watch sees the whole process.** Other work at the same moment (another big message fetched) counts toward a parse's 160 MB. | A false stop only fails that one read ("couldn't be opened safely"); it can be retried. | Moving the parser to its own process. |
+| **Files from the owner's computer or the chat can't be attached.** | The AI apps don't pass uploaded files to connectors reliably; the safe way is an upload box on the owner's page. | The owner's decision (OPEN-QUESTIONS). |

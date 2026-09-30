@@ -6,11 +6,12 @@ import nodemailer from 'nodemailer';
 import type { ImapFlow } from 'imapflow';
 import { smtpTransport, type AppConfig } from '../config.js';
 import { MailError, classify, mutationFailure, success, type ToolEnvelope } from '../errors.js';
-import { sharedParser, type SafeParser } from '../safeParse.js';
+import { sharedParser, type AttachmentFile, type SafeParser } from '../safeParse.js';
 import { isSystemMessageId, systemMessageId } from '../systemMail.js';
 import type { MessageDetail, MessageSummary } from '../types.js';
 import { ImapGateway, type SearchInput } from './imap.js';
 import { composeRaw } from './mime.js';
+import { oneClickTarget, realOneClick, unsubscribeOneClick, type OneClickDeps } from '../unsubscribe.js';
 
 export type MailServiceOptions = {
   parser?: SafeParser;
@@ -21,7 +22,34 @@ export type MailServiceOptions = {
   // Send limits: when this account sent (shared across the server by default).
   sendLog?: SendLog;
   clock?: { now(): number };
+  // How one-click unsubscribe reaches a sender (tests replace it).
+  oneClick?: OneClickDeps;
 };
+
+// Attachments to send: of emails in this account (by folder, uid and position),
+// and small text files the AI writes.
+export type AttachmentRef = { mailbox: string; uid: number; index: number };
+export type OutgoingInput = { attachments?: AttachmentRef[]; files?: Array<{ filename: string; text: string }> };
+// text: a file the AI wrote, sent as UTF-8 text.
+type Outgoing = { filename?: string; contentType: string; content: Buffer; text?: true };
+
+const outgoing = (file: AttachmentFile): Outgoing => ({ ...(file.filename ? { filename: file.filename } : {}), contentType: file.contentType, content: Buffer.from(file.content) });
+const mimeParts = (files: Outgoing[]) => files.map(f => ({ ...(f.filename ? { filename: f.filename } : {}), contentType: f.text ? `${f.contentType}; charset=utf-8` : f.contentType, content: f.content }));
+// What an answer says went with a message: never the content.
+const listing = (files: Outgoing[]) => files.map(f => ({ ...(f.filename ? { filename: f.filename } : {}), contentType: f.contentType, size: f.content.length }));
+const sizeOf = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
+
+// The kinds of file an AI may write (OUT-03): plain text ones, by extension, and
+// a plain name: no folders, nothing hidden, no control characters.
+const WRITABLE: Record<string, string> = {
+  txt: 'text/plain', csv: 'text/csv', tsv: 'text/tab-separated-values', md: 'text/markdown',
+  json: 'application/json', ics: 'text/calendar', xml: 'application/xml'
+};
+function writableType(filename: string): string | undefined {
+  if (!/^[^\\/:*?"<>|\u0000-\u001f]+$/.test(filename) || filename.startsWith('.')) return undefined;
+  const extension = /\.([a-z0-9]+)$/i.exec(filename)?.[1]?.toLowerCase();
+  return extension ? WRITABLE[extension] : undefined;
+}
 
 export class MailService {
   readonly imap: ImapGateway;
@@ -30,12 +58,14 @@ export class MailService {
   private readonly unreliableHeaderSearch: boolean;
   private readonly sendLog: SendLog;
   private readonly clock: { now(): number };
+  private readonly oneClick: OneClickDeps;
 
   constructor(private readonly config: AppConfig, options: MailServiceOptions = {}) {
     this.parser = options.parser ?? sharedParser();
     this.unreliableHeaderSearch = options.unreliableHeaderSearch ?? true;
     this.sendLog = options.sendLog ?? sharedSendLog();
     this.clock = options.clock ?? Date;
+    this.oneClick = options.oneClick ?? realOneClick;
     this.imap = new ImapGateway(config, { unreliableHeaderSearch: this.unreliableHeaderSearch });
     this.smtp = nodemailer.createTransport({
       host: config.SMTP_HOST,
@@ -167,20 +197,55 @@ export class MailService {
     return { envelope: success(data, message), ...(read.kind === 'image' && read.image ? { image: { data: read.image, mimeType: read.contentType } } : {}) };
   }
 
-  async createDraft(input: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; text?: string; html?: string; inReplyTo?: string; references?: string[] }) {
+  // Every attachment of one email as it is, read in the sandbox.
+  private async filesOf(mailbox: string, uid: number): Promise<AttachmentFile[]> {
+    const { raw } = await this.imap.fetchRaw(mailbox, uid);
+    return phase('parse', () => this.parser.files(raw));
+  }
+
+  // What goes with a message (OUT-01..03): files carried over (a draft's own),
+  // attachments of emails in this account, copied as they are, then small text
+  // files the AI wrote. Checked whole before anything is composed: one missing,
+  // a name or kind not allowed, or too much together, and nothing is done.
+  private async gather(input: OutgoingInput, carried: AttachmentFile[] = []): Promise<Outgoing[]> {
+    const out: Outgoing[] = carried.map(outgoing);
+    const read = new Map<string, AttachmentFile[]>();
+    for (const ref of input.attachments ?? []) {
+      const key = `${ref.mailbox}\u0000${ref.uid}`;
+      const files = read.get(key) ?? await this.filesOf(ref.mailbox, ref.uid);
+      read.set(key, files);
+      const file = files[ref.index];
+      if (!file) throw new MailError('ATTACHMENT_NOT_FOUND', `The email ${ref.uid} in ${ref.mailbox} has no attachment at position ${ref.index}.`, 'NOT_FOUND');
+      out.push(outgoing(file));
+    }
+    for (const file of input.files ?? []) {
+      const type = writableType(file.filename);
+      if (!type) throw new MailError('MAIL-FILE-NOT-ALLOWED', `A file can't be attached under the name ${JSON.stringify(file.filename)}: use a plain name ending in .txt, .csv, .tsv, .md, .json, .ics or .xml.`);
+      out.push({ filename: file.filename, contentType: type, content: Buffer.from(file.text, 'utf8'), text: true });
+    }
+    const total = out.reduce((sum, a) => sum + a.content.length, 0);
+    const limit = this.config.MAX_ATTACHMENT_BYTES;
+    if (total > limit) throw new MailError('ATTACHMENTS_TOO_LARGE', `The attachments come to ${sizeOf(total)} together; one email can carry ${sizeOf(limit)}.`);
+    return out;
+  }
+
+  async createDraft(input: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; text?: string; html?: string; inReplyTo?: string; references?: string[] } & OutgoingInput) {
     const drafts = await this.specialFolder('drafts');
-    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, ...input }, true);
+    const { attachments: _attachments, files: _files, ...message } = input;
+    const outgoingFiles = await this.gather(input);
+    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, ...message, attachments: mimeParts(outgoingFiles) }, true);
+    const listed = outgoingFiles.length ? { attachments: listing(outgoingFiles) } : {};
     try {
       const uid = await this.imap.append(drafts, built.raw, ['\\Draft']);
-      return success({ mailbox: drafts, uid, messageId: built.messageId, operationId: built.operationId });
+      return success({ mailbox: drafts, uid, messageId: built.messageId, operationId: built.operationId, ...listed });
     } catch (error) {
       const hits = await this.imap.findByMessageId(drafts, built.messageId).catch(() => []);
-      if (hits.length) return success({ mailbox: drafts, uid: hits.at(-1), messageId: built.messageId, operationId: built.operationId }, 'Draft was created; confirmation was recovered after an interrupted append.', 'RECOVERED');
+      if (hits.length) return success({ mailbox: drafts, uid: hits.at(-1), messageId: built.messageId, operationId: built.operationId, ...listed }, 'Draft was created; confirmation was recovered after an interrupted append.', 'RECOVERED');
       throw mutationFailure(error);
     }
   }
 
-  async updateDraft(input: { mailbox: string; uid: number; to?: string[]; cc?: string[]; bcc?: string[]; subject?: string; text?: string; html?: string }) {
+  async updateDraft(input: { mailbox: string; uid: number; to?: string[]; cc?: string[]; bcc?: string[]; subject?: string; text?: string; html?: string } & OutgoingInput) {
     const drafts = await this.specialFolder('drafts');
     if (input.mailbox !== drafts) {
       throw new MailError('NOT_A_DRAFT_MAILBOX', `update_draft is restricted to the account's Drafts folder (${drafts}).`);
@@ -188,7 +253,8 @@ export class MailService {
     const current = await this.getEmail(drafts, input.uid);
     if (!current.data) throw new MailError('DRAFT_NOT_FOUND', 'Draft not found.', 'NOT_FOUND');
     const old = current.data;
-    if (old.attachments.length) throw new MailError('ATTACHMENTS_UNSUPPORTED', 'Updating a draft with attachments is unsupported in v1; the original draft was left intact.');
+    // The draft's own attachments go with the new version (OUT-02).
+    const outgoingFiles = await this.gather(input, old.attachments.length ? await this.filesOf(drafts, input.uid) : []);
     const to = input.to ?? old.to.map(a => a.address);
     const cc = input.cc ?? old.cc.map(a => a.address);
     const bcc = input.bcc ?? old.bcc.map(a => a.address);
@@ -199,16 +265,16 @@ export class MailService {
       from: this.config.MAIL_ADDRESS, to, cc, bcc,
       subject: input.subject ?? old.subject ?? '',
       text: bodyGiven ? input.text : old.text, html: bodyGiven ? input.html : old.html,
-      inReplyTo: old.inReplyTo, references: old.references
+      inReplyTo: old.inReplyTo, references: old.references, attachments: mimeParts(outgoingFiles)
     }, true);
     const newUid = await this.imap.append(drafts, built.raw, ['\\Draft']);
     const warnings: string[] = [];
     try { await this.imap.deleteMessage(drafts, input.uid); }
     catch { warnings.push(`New draft created, but old draft UID ${input.uid} could not be removed. Both may remain.`); }
-    return success({ mailbox: drafts, uid: newUid, messageId: built.messageId, operationId: built.operationId }, 'Draft updated.', 'OK', warnings);
+    return success({ mailbox: drafts, uid: newUid, messageId: built.messageId, operationId: built.operationId, ...(outgoingFiles.length ? { attachments: listing(outgoingFiles) } : {}) }, 'Draft updated.', 'OK', warnings);
   }
 
-  private async sendRaw(args: { raw: Buffer; messageId: string; operationId: string; to: string[]; cc?: string[]; bcc?: string[] }) {
+  private async sendRaw(args: { raw: Buffer; messageId: string; operationId: string; to: string[]; cc?: string[]; bcc?: string[]; attachments?: Outgoing[] }) {
     if (this.config.SENT_COPY_MODE === 'unverified') throw new MailError('SENT_POLICY_UNVERIFIED', 'Verify Sent-copy behavior with a disposable account before enabling sends.');
     // One address listed in both To and Cc would otherwise produce two RCPT TO
     // commands, which some servers deliver twice.
@@ -247,7 +313,10 @@ export class MailService {
         } catch { warnings.push('The mail provider accepted the message, but Universal Mail could not save its copy in Sent. Do not resend automatically.'); }
       }
       // sentAt: by the server's clock (POL-14), so an AI needn't guess the time.
-      return success({ messageId: args.messageId, operationId: args.operationId, accepted: info.accepted, rejected: info.rejected, sentAt: new Date().toISOString() }, 'The mail provider accepted the message.', 'SENT', warnings);
+      return success({
+        messageId: args.messageId, operationId: args.operationId, accepted: info.accepted, rejected: info.rejected, sentAt: new Date().toISOString(),
+        ...(args.attachments?.length ? { attachments: listing(args.attachments) } : {})
+      }, 'The mail provider accepted the message.', 'SENT', warnings);
     } catch (error: any) {
       const command = String(error?.command ?? '').toUpperCase();
       const responseCode = Number(error?.responseCode ?? 0);
@@ -271,8 +340,13 @@ export class MailService {
   // First-time recipients (RCP-01..03): anyone this account has never
   // written to holds the send until the owner confirms. A check that can't be
   // made asks too, rather than guessing.
-  private async holdForNewRecipients(recipients: string[], confirmed: boolean | undefined): Promise<void> {
+  // With attachments, the answer names them (OUT-05): the owner confirms the
+  // files as well as the person.
+  private async holdForNewRecipients(recipients: string[], confirmed: boolean | undefined, files: Outgoing[] = []): Promise<void> {
     if (confirmed) return;
+    const names = files.map(file => file.filename ?? 'an unnamed file');
+    const withFiles = names.length ? { attachments: names } : {};
+    const carrying = names.length ? `, with ${names.length} attachment${names.length === 1 ? '' : 's'} (${names.join(', ')})` : '';
     const own = this.config.MAIL_ADDRESS.toLowerCase();
     const seen = new Set<string>();
     const others = recipients.filter(address => {
@@ -288,21 +362,22 @@ export class MailService {
       fresh = [];
       for (const address of others) if (!(await this.imap.hasSentTo(sent, address.toLowerCase()))) fresh.push(address);
     } catch {
-      throw new MailError('MAIL-NEW-RECIPIENT', `Universal Mail couldn't check whether this account has written to ${others.join(', ')} before, so nothing was sent.`, 'FAILED', false, { newRecipients: others });
+      throw new MailError('MAIL-NEW-RECIPIENT', `Universal Mail couldn't check whether this account has written to ${others.join(', ')} before, so nothing was sent.`, 'FAILED', false, { newRecipients: others, ...withFiles });
     }
     if (fresh.length) {
-      throw new MailError('MAIL-NEW-RECIPIENT', `This would be the first message to ${fresh.join(', ')}. Nothing was sent.`, 'FAILED', false, { newRecipients: fresh });
+      throw new MailError('MAIL-NEW-RECIPIENT', `This would be the first message to ${fresh.join(', ')}${carrying}. Nothing was sent.`, 'FAILED', false, { newRecipients: fresh, ...withFiles });
     }
   }
 
-  async sendEmail(input: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; text?: string; html?: string; newRecipientsConfirmed?: boolean }) {
-    await this.holdForNewRecipients([...input.to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed);
-    const { newRecipientsConfirmed: _confirmed, ...message } = input;
-    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, ...message });
-    return this.sendRaw({ ...built, to: input.to, cc: input.cc, bcc: input.bcc });
+  async sendEmail(input: { to: string[]; cc?: string[]; bcc?: string[]; subject: string; text?: string; html?: string; newRecipientsConfirmed?: boolean } & OutgoingInput) {
+    const files = await this.gather(input);
+    await this.holdForNewRecipients([...input.to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed, files);
+    const { newRecipientsConfirmed: _confirmed, attachments: _attachments, files: _files, ...message } = input;
+    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, ...message, attachments: mimeParts(files) });
+    return this.sendRaw({ ...built, to: input.to, cc: input.cc, bcc: input.bcc, attachments: files });
   }
 
-  async replyEmail(input: { mailbox: string; uid: number; text?: string; html?: string; cc?: string[]; bcc?: string[]; replyAll?: boolean; newRecipientsConfirmed?: boolean }) {
+  async replyEmail(input: { mailbox: string; uid: number; text?: string; html?: string; cc?: string[]; bcc?: string[]; replyAll?: boolean; newRecipientsConfirmed?: boolean } & OutgoingInput) {
     // Only the headers a reply needs (ENG-24, tuning): not the whole message.
     const msg = await this.imap.fetchReplyHeaders(input.mailbox, input.uid);
     const primary = msg.replyTo[0]?.address ?? msg.from[0]?.address;
@@ -314,9 +389,73 @@ export class MailService {
     const refs = [...msg.references];
     if (msg.messageId && !refs.includes(msg.messageId)) refs.push(msg.messageId);
     const subject = /^re:/i.test(msg.subject ?? '') ? (msg.subject ?? '') : `Re: ${msg.subject ?? ''}`;
-    await this.holdForNewRecipients([...to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed);
-    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, to: [...to], cc: input.cc, bcc: input.bcc, subject, text: input.text, html: input.html, inReplyTo: msg.messageId, references: refs });
-    return this.sendRaw({ ...built, to: [...to], cc: input.cc, bcc: input.bcc });
+    const files = await this.gather(input);
+    await this.holdForNewRecipients([...to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed, files);
+    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, to: [...to], cc: input.cc, bcc: input.bcc, subject, text: input.text, html: input.html, inReplyTo: msg.messageId, references: refs, attachments: mimeParts(files) });
+    return this.sendRaw({ ...built, to: [...to], cc: input.cc, bcc: input.bcc, attachments: files });
+  }
+
+  // Forwarding (FWD-01..03): the owner's note, then the original's details and
+  // text, and its attachments as they are. Held for someone new like any send.
+  async forwardEmail(input: { mailbox: string; uid: number; to: string[]; cc?: string[]; bcc?: string[]; text?: string; includeAttachments?: boolean; newRecipientsConfirmed?: boolean }) {
+    const { raw, summary } = await this.imap.fetchRaw(input.mailbox, input.uid);
+    const original = await phase('parse', () => this.parser.parse(raw));
+    const carried = input.includeAttachments !== false && original.attachments.length ? await phase('parse', () => this.parser.files(raw)) : [];
+    const files = await this.gather({}, carried);
+    await this.holdForNewRecipients([...input.to, ...(input.cc ?? []), ...(input.bcc ?? [])], input.newRecipientsConfirmed, files);
+    const people = (list: Array<{ name?: string; address: string }>) => list.map(a => a.name ? `${a.name} <${a.address}>` : a.address).join(', ');
+    const details = [
+      '---------- Forwarded message ----------',
+      `From: ${people(original.from)}`,
+      ...(summary.date ? [`Date: ${summary.date}`] : []),
+      `Subject: ${original.subject ?? ''}`,
+      `To: ${people(original.to)}`,
+      ...(original.cc.length ? [`Cc: ${people(original.cc)}`] : [])
+    ].join('\n');
+    const note = input.text?.trim() ? `${input.text}\n\n` : '';
+    const subject = /^fwd?:/i.test(original.subject ?? '') ? original.subject! : `Fwd: ${original.subject ?? ''}`;
+    const built = await composeRaw({ from: this.config.MAIL_ADDRESS, to: input.to, cc: input.cc, bcc: input.bcc, subject, text: `${note}${details}\n\n${original.text ?? ''}`, attachments: mimeParts(files) });
+    return this.sendRaw({ ...built, to: input.to, cc: input.cc, bcc: input.bcc, attachments: files });
+  }
+
+  // Who fills a folder (WHO-01, WHO-02): its newest messages counted by
+  // sender (by address, whatever its case), most first.
+  async summarizeSenders(mailbox: string, messages: number, top: number) {
+    const rows = await this.imap.senderStats(mailbox, messages);
+    const senders = new Map<string, { address: string; name?: string; messages: number; unread: number; newest?: string; oneClickUnsubscribe: boolean }>();
+    for (const row of rows) {
+      if (!row.from) continue;
+      const address = row.from.address.toLowerCase();
+      const entry = senders.get(address) ?? { address, messages: 0, unread: 0, oneClickUnsubscribe: false };
+      entry.messages++;
+      if (!row.read) entry.unread++;
+      if (row.date && (!entry.newest || row.date > entry.newest)) entry.newest = row.date;
+      if (!entry.name && row.from.name) entry.name = row.from.name;
+      entry.oneClickUnsubscribe ||= row.oneClick;
+      senders.set(address, entry);
+    }
+    const ranked = [...senders.values()].sort((a, b) => b.messages - a.messages || a.address.localeCompare(b.address)).slice(0, top).map(entry => {
+      const cautions = cautionsFor({ from: [{ ...(entry.name ? { name: entry.name } : {}), address: entry.address }], replyTo: [] });
+      return { ...entry, ...(cautions.length ? { cautions } : {}) };
+    });
+    return success({ mailbox, looked: rows.length, senders: ranked, untrustedContent: true as const },
+      `The ${rows.length} newest messages in ${mailbox}, by sender.`);
+  }
+
+  // One-click unsubscribe (UNS-01..04): only what the standard offers, and
+  // never for an email that looks like a scam. The email itself is untouched.
+  async unsubscribe(mailbox: string, uid: number) {
+    const { summary, listUnsubscribe, listUnsubscribePost } = await this.imap.fetchListHeaders(mailbox, uid);
+    if (summary.cautions?.length) {
+      throw new MailError('MAIL-UNSUBSCRIBE-CAUTION', "This email shows signs of a scam, so its unsubscribe link wasn't used: answering it would only tell the sender this address is read. Mark it as junk instead.");
+    }
+    const target = oneClickTarget(listUnsubscribe, listUnsubscribePost);
+    if (!target) {
+      throw new MailError('MAIL-UNSUBSCRIBE-MANUAL', "This sender doesn't offer one-click unsubscribe. The owner can use the unsubscribe link in their mail app, or mark the email as junk.");
+    }
+    await phase('unsubscribe', () => unsubscribeOneClick(target, this.oneClick));
+    return success({ mailbox, uid, unsubscribed: true, sender: target.hostname },
+      'The sender was asked to stop. It can take a few days; if more arrive after that, mark them as junk.');
   }
 
   async moveEmail(mailbox: string, target: number | number[], destination: string) {
@@ -378,6 +517,8 @@ export class MailService {
 
   async archiveEmail(mailbox: string, target: number | number[]) { return this.moveEmail(mailbox, target, await this.specialFolder('archive')); }
   async trashEmail(mailbox: string, target: number | number[]) { return this.moveEmail(mailbox, target, await this.specialFolder('trash')); }
+  // Junk (JNK-01): the folder the provider marks, which is how it learns what spam looks like.
+  async junkEmail(mailbox: string, target: number | number[]) { return this.moveEmail(mailbox, target, await this.specialFolder('junk')); }
   async restoreEmail(mailbox: string, target: number | number[], destination?: string) { return this.moveEmail(mailbox, target, destination ?? await this.specialFolder('inbox')); }
   // One message (uid) or a batch (uids): a batch is one STORE command.
   private async flag(mailbox: string, target: number | number[], flag: '\\Seen' | '\\Flagged', value: boolean) {

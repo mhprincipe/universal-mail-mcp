@@ -91,9 +91,9 @@ fingerprint):
 
 | Permission | Lets the app |
 |---|---|
-| **Read** | list folders, search, open messages and threads |
-| **Organize** | mark read/unread, flag (star), move, archive, trash, restore, create folders and drafts |
-| **Send** | send and reply |
+| **Read** | list folders, search, open messages, threads and attachments, see who sends the most |
+| **Organize** | mark read/unread, flag (star), move, archive, trash, restore, mark as junk, unsubscribe from newsletters, create folders and drafts |
+| **Send** | send, reply and forward |
 
 An app sees only the accounts you ticked for it. **Ticking isn't enough: click
 Save permissions.** After adding an account, give each app permission for it
@@ -111,6 +111,9 @@ Talk to your AI normally. Some examples:
 - *"Show everything I've flagged."*
 - *"Archive every LinkedIn job alert in yahoo from this week."*
 - *"What does the PDF my landlord sent say?"* (reads attachments: text, PDF, Word, pictures)
+- *"Forward the invoice from Sam to my accountant."* (the attachments go with it)
+- *"Send Pat last month's statement PDF, and a CSV of the totals."* (a file from your mail, and one your AI writes)
+- *"Who fills my inbox? Unsubscribe me from the newsletters I never open, and mark the rest of that junk as spam."*
 - *"Draft a reply to Sam saying Thursday works."* (a draft; nothing is sent)
 - *"Send it."* (only if the app has **Send** for that account)
 
@@ -125,6 +128,9 @@ Good to know:
 - **Someone new.** Before your AI sends or replies to someone this account has
   never written to, it stops and asks you to confirm the address. That catches a
   mistyped address and a scammer's first "reply to this".
+- **Unsubscribing** uses the standard one-click way that large senders offer.
+  It's never used for an email that looks like a scam (that would only confirm
+  your address is read); your AI suggests marking those as junk instead.
 - **Send limits.** Each account sends at most 30 emails an hour and 200 a day,
   so a confused AI can't flood anyone. Change them on your page.
 - **Nothing is deleted permanently.** "Delete" means Trash, and anything in
@@ -148,7 +154,7 @@ idle, and every change is emailed to you.
 | **Your accounts** | see each account's status and when it was last used; **Fix it** or change its app password; turn **sending** on or off; **Rename** it (what your AI calls it; its password and every app's permissions carry over); **Remove** it (type its name to confirm); **Add an email account** |
 | **Your accounts: Sending limits** | how many emails an hour and a day this account may send (30 and 200 to start) |
 | **Connected apps** | see each app and when it last used your mail; change its **Permissions**; **Disconnect** it; step-by-step **Connect an AI app** |
-| **Recent activity** | what each app did in the last 30 days: moves, archives, trash, marks, flags, drafts, folders and sends (who did it, which account, how many; never the mail itself). **Put back** a move, archive or trash; undo a mark or a flag. A send can't be undone; one to someone new says so. |
+| **Recent activity** | what each app did in the last 30 days: moves, archives, trash, junk, marks, flags, drafts, folders, unsubscribes, sends and forwards (with how many attachments) (who did it, which account, how many; never the mail itself). **Put back** a move, archive or trash; undo a mark or a flag. A send can't be undone; one to someone new says so. |
 | **Health** | **Check that everything works**: runs the server's checks and shows a report you can paste into your AI (no mail, no secrets) |
 | **Sign-in** | set up your fingerprint |
 | **Subscription** | where your trial or plan stands; enter a license code |
@@ -182,6 +188,7 @@ When a new version is out you get an email. To install it:
 | **Sending is off** for an account | Your accounts → **Turn sending on**. |
 | The AI says an account **reached its sending limit** | Wait, or your page → Your accounts → **Sending limits** to raise it. |
 | The AI asks you to **confirm a recipient** | Normal for someone this account has never written to. Check the address is really who you mean, then say yes. |
+| The AI says a sender **doesn't offer one-click unsubscribe** | Open the email in your mail app and use its unsubscribe link, or ask your AI to mark it as junk. |
 | An app **did something you didn't want** | Your page → **Recent activity** → **Put back** (or undo the mark or flag). |
 | **Password not accepted** on your page | Make a new app password at your provider; your page → **Fix it**. |
 | The AI can't connect at all | Your page → **Check that everything works**. If the page won't load: Cloud Shell → `node setup.js` → **1 Check and fix**. |
@@ -191,9 +198,14 @@ When a new version is out you get an email. To install it:
 
 ## 8. Known limits
 
-- Attachments can be read (text, CSV, HTML, PDF, Word and pictures up to 3 MB)
-  but not sent, saved or forwarded. Other kinds (spreadsheets, zip files, older
-  .doc files) are described, not opened.
+- Attachments can be read (text, CSV, HTML, PDF, Word and pictures up to 3 MB);
+  other kinds (spreadsheets, zip files, older .doc files) are described, not
+  opened. Any attachment already in your mail can be sent or forwarded, up to
+  18 MB per email. Your AI can write only small text files to attach (.txt,
+  .csv, .md, .json, .ics, .xml); it can't attach files from your computer or
+  from the chat.
+- Unsubscribing works only where the sender offers one click; otherwise use the
+  link in your mail app.
 - A sent email can't be taken back: the activity log lists it but can't undo it.
 - Folders can be created but not renamed or deleted (do that in your mail app).
 - Nothing is ever permanently deleted by Universal Mail.

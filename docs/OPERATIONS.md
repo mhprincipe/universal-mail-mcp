@@ -94,7 +94,8 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 | `imap.noop` | the check of a connection idle for over two minutes |
 | `imap.wait` | queued behind another call on the same account (two apps at once) |
 | `smtp.send` | handing a message to the provider |
-| `parse` | reading a message safely |
+| `parse` | reading a message (or its attachments) safely |
+| `unsubscribe` | the one-click unsubscribe request to a sender |
 
 Reference numbers from the live Yahoo runs on 2.2.6: every Yahoo command
 ~0.3-0.4 s; a re-find after a change ~0.6 s; get_email ~0.7 s; send 2.4 s and
@@ -117,6 +118,15 @@ Your page's **Recent activity** lists what each app changed in the last 30 days
 saved with the settings (`universal-mail-state`) about 30 seconds after a change,
 and at once when Cloud Run stops the server (SIGTERM); it's capped at 100
 entries and 16 KB so the settings record stays under Secret Manager's 64 KB.
+
+### Unsubscribing: the one request to a sender
+
+`unsubscribe` is the only tool that contacts anyone besides the mail provider:
+one HTTPS POST saying `List-Unsubscribe=One-Click` to the address the email's
+`List-Unsubscribe` header names (RFC 8058). Only https on port 443, only a host
+name whose every DNS answer is public, connected to the vetted address, no
+redirects, 10 seconds, the answer's body ignored. Its time shows in the tool
+log as the `unsubscribe` phase.
 
 ### Messages and attachments that couldn't be read
 

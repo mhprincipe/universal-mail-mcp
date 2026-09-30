@@ -8,6 +8,7 @@ export type ComposeInput = {
   text?: string; html?: string; inReplyTo?: string; references?: string[];
   messageId?: string; operationId?: string;
   headers?: Record<string, string>;
+  attachments?: Array<{ filename?: string; contentType: string; content: Buffer }>;
 };
 
 // The Message-ID uses the sender's own domain, as mail apps do (ENG-19: it
@@ -21,6 +22,7 @@ export async function composeRaw(input: ComposeInput, keepBcc = false): Promise<
     from: input.from, to: input.to, cc: input.cc, bcc: keepBcc ? input.bcc : undefined, subject: input.subject,
     text: input.text, html: input.html, messageId, inReplyTo: input.inReplyTo,
     references: input.references, keepBcc,
+    ...(input.attachments?.length ? { attachments: input.attachments.map(a => ({ ...(a.filename ? { filename: a.filename } : {}), contentType: a.contentType, content: a.content })) } : {}),
     headers: { 'X-Universal-Mail-Operation-ID': operationId, ...input.headers }
   });
   return { raw: info.message as Buffer, messageId, operationId };

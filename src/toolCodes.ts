@@ -25,7 +25,7 @@ export const TOOL_CODES = {
 
   // ── Limits that protect the mailbox ──
   MESSAGE_TOO_LARGE: { remedy: 'This message is too large to open here. Tell the owner to open it in their mail app.' },
-  ATTACHMENTS_UNSUPPORTED: { remedy: 'Drafts with attachments can\'t be edited here. Create a new draft instead; the original is untouched.' },
+  ATTACHMENTS_TOO_LARGE: { remedy: 'Send fewer or smaller attachments, in separate emails if needed. Nothing was sent.' },
   SAFE_MOVE_UNAVAILABLE: { remedy: 'This provider can\'t move mail safely, so moving is off for this account. Leave the message where it is.' },
   SAFE_DELETE_UNAVAILABLE: { remedy: 'This provider can\'t remove drafts safely. The new draft was saved; the old one remains for the owner to delete.' },
   SENT_POLICY_UNVERIFIED: { remedy: 'Sending isn\'t set up for this account yet. Tell the owner to run Check and fix in Cloud Shell.' },
@@ -37,6 +37,10 @@ export const TOOL_CODES = {
   'MAIL-ACCOUNT-REQUIRED': { remedy: 'More than one account is connected. Ask the owner which account to use, then pass it as account.' },
   'MAIL-ACCOUNT-UNKNOWN': { remedy: 'Use one of the account names this app can use. If the owner just added an account, ask them to give this app permission for it on their Universal Mail page.' },
   'MAIL-NOT-PERMITTED': { remedy: 'Tell the owner this app needs that permission; they can grant it on their Universal Mail page.' },
+  'MAIL-FILE-NOT-ALLOWED': { remedy: 'Name each file with one of .txt, .csv, .tsv, .md, .json, .ics or .xml, and no folders in the name. Nothing was sent.' },
+  'MAIL-UNSUBSCRIBE-MANUAL': { remedy: 'Tell the owner they can unsubscribe from their mail app, or offer to mark the email as junk. Do not open links in the email.' },
+  'MAIL-UNSUBSCRIBE-CAUTION': { remedy: 'Tell the owner this email may be a scam, and offer to mark it as junk. Never open its links.' },
+  'MAIL-UNSUBSCRIBE-FAILED': { remedy: 'Tell the owner the unsubscribe may not have worked; offer to mark the sender\'s emails as junk. Do not retry more than once.' },
   'MAIL-NEW-RECIPIENT': { remedy: 'Ask the owner to confirm these recipients are right. If they confirm, send again with newRecipientsConfirmed: true. Never set it without asking them.' },
   'MAIL-SEND-LIMIT': { remedy: 'This account reached its sending limit. Tell the owner; do not send from another account instead. They can change the limit on their Universal Mail page.' },
   'MAIL-SENDING-OFF': { remedy: 'The owner turned sending off for this account. Tell them; they can turn it on on their Universal Mail page. Do not send from another account instead unless they ask.' },

@@ -4,7 +4,9 @@ import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
 import { vi } from 'vitest';
 import { createApp } from '../../src/app.js';
-import { ImapGateway } from '../../src/mail/imap.js';
+import { cautionsFor } from '../../src/cautions.js';
+import { ImapGateway, headerValues } from '../../src/mail/imap.js';
+import { oneClickTarget } from '../../src/unsubscribe.js';
 
 // The whole tool layer over real HTTP and MCP, with the mail server replaced
 // by an in-memory mailbox (ImapGateway's methods): fast enough for the unit
@@ -20,7 +22,7 @@ export async function replyHeaders(raw: Buffer) {
 }
 
 export async function startToolFixture(options: { env?: NodeJS.ProcessEnv } = {}) {
-  const folders = ['INBOX', 'Draft', 'Sent', 'Archive', 'Trash'].map(path => ({
+  const folders = ['INBOX', 'Draft', 'Sent', 'Archive', 'Trash', 'Junk'].map(path => ({
     path, specialUse: path === 'INBOX' ? '\\Inbox' : path === 'Draft' ? '\\Drafts' : `\\${path}`, selectable: true
   }));
   let nextUid = 1;
@@ -42,11 +44,46 @@ export async function startToolFixture(options: { env?: NodeJS.ProcessEnv } = {}
   vi.spyOn(ImapGateway.prototype, 'search').mockImplementation(async input => [...rows.values()].filter(r => r.mailbox === input.mailbox).map(summary));
   vi.spyOn(ImapGateway.prototype, 'searchPage').mockImplementation(async input => ({ messages: [...rows.values()].filter(r => r.mailbox === input.mailbox).map(summary) }));
   vi.spyOn(ImapGateway.prototype, 'fetchSummary').mockImplementation(async (mailbox, uid) => summary(get(mailbox, uid)));
-  vi.spyOn(ImapGateway.prototype, 'fetchRaw').mockImplementation(async (mailbox, uid) => ({ summary: summary(get(mailbox, uid)), raw: get(mailbox, uid).raw, envelope: {} }));
+  // With the Date header's time, as a real server's envelope gives it.
+  vi.spyOn(ImapGateway.prototype, 'fetchRaw').mockImplementation(async (mailbox, uid) => {
+    const row = get(mailbox, uid);
+    const date = (await simpleParser(row.raw)).date?.toISOString();
+    return { summary: { ...summary(row), ...(date ? { date } : {}) }, raw: row.raw, envelope: {} };
+  });
   vi.spyOn(ImapGateway.prototype, 'fetchReplyHeaders').mockImplementation(async (mailbox, uid) => replyHeaders(get(mailbox, uid).raw));
+  // The unsubscribe headers and the cautions a real server's envelope would give.
+  vi.spyOn(ImapGateway.prototype, 'fetchListHeaders').mockImplementation(async (mailbox, uid) => {
+    const row = get(mailbox, uid);
+    const headers = headerValues(Buffer.from(row.raw.toString('utf8').split(/\r?\n\r?\n/)[0]!));
+    const { from, replyTo } = await replyHeaders(row.raw);
+    const cautions = cautionsFor({ from, replyTo });
+    return {
+      summary: { ...summary(row), from, ...(cautions.length ? { cautions } : {}) },
+      ...(headers['list-unsubscribe'] ? { listUnsubscribe: headers['list-unsubscribe'] } : {}),
+      ...(headers['list-unsubscribe-post'] ? { listUnsubscribePost: headers['list-unsubscribe-post'] } : {})
+    };
+  });
+  // A folder's newest messages as a server would describe them for counting.
+  vi.spyOn(ImapGateway.prototype, 'senderStats').mockImplementation(async (mailbox, n) => Promise.all(
+    [...rows.values()].filter(r => r.mailbox === mailbox).sort((a, b) => a.uid - b.uid).slice(-n).map(async row => {
+      const { from } = await replyHeaders(row.raw);
+      const date = (await simpleParser(row.raw)).date?.toISOString();
+      const headers = headerValues(Buffer.from(row.raw.toString('utf8').split(/\r?\n\r?\n/)[0]!));
+      return { ...(from[0] ? { from: from[0] } : {}), ...(date ? { date } : {}), read: row.read, oneClick: oneClickTarget(headers['list-unsubscribe'], headers['list-unsubscribe-post']) !== undefined };
+    })));
   vi.spyOn(ImapGateway.prototype, 'findByMessageId').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.messageId === id).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'findThreadUids').mockImplementation(async (mailbox, id) => [...rows.values()].filter(r => r.mailbox === mailbox && r.raw.toString().includes(id)).map(r => r.uid));
   vi.spyOn(ImapGateway.prototype, 'append').mockImplementation(append);
+  // A move gives the message a new UID in its new folder, as a server does.
+  const relocate = (mailbox: string, uid: number, destination: string) => {
+    const row = get(mailbox, uid);
+    rows.delete(uid);
+    const moved = nextUid++;
+    rows.set(moved, { ...row, mailbox: destination, uid: moved });
+    return moved;
+  };
+  vi.spyOn(ImapGateway.prototype, 'move').mockImplementation(async (mailbox, uid, destination) => relocate(mailbox, uid, destination));
+  vi.spyOn(ImapGateway.prototype, 'moveMany').mockImplementation(async (mailbox, uids, destination) => new Map(uids.map(uid => [uid, relocate(mailbox, uid, destination)])));
   vi.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail: vi.fn(async (o: { envelope: { to: string[] } }) => ({ accepted: o.envelope.to, rejected: [] })), verify: async () => true } as never);
 
   const token = 'fixture-token-at-least-24-characters';

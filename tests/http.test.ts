@@ -6,7 +6,7 @@ import { MailService } from '../src/mail/mailService.js';
 import { VERSION } from '../src/version.js';
 
 const env: NodeJS.ProcessEnv = { AUTH_MODE: 'bearer', YAHOO_EMAIL: 'dummy@example.invalid', YAHOO_APP_PASSWORD: 'dummy-password', MCP_ACCESS_SECRET: 'dummy-token-at-least-24-chars', IMAP_HOST: '127.0.0.1', SMTP_HOST: '127.0.0.1' };
-const expected = ['search_email','get_email','get_attachment','get_thread','create_draft','update_draft','send_email','reply_email','move_email','archive_email','mark_read','mark_unread','flag_email','trash_email','restore_email','list_folders','create_folder'].sort();
+const expected = ['search_email','get_email','get_attachment','get_thread','create_draft','update_draft','send_email','reply_email','forward_email','summarize_senders','unsubscribe','move_email','archive_email','mark_read','mark_unread','flag_email','trash_email','junk_email','restore_email','list_folders','create_folder'].sort();
 const servers: Server[] = [];
 async function start(settings: NodeJS.ProcessEnv = env) {
   const server = createApp(settings).listen(0, '127.0.0.1');
@@ -68,7 +68,7 @@ describe('HTTP and live MCP contract with dummy credentials', () => {
     expect(await response.text()).not.toContain('private-mail-body');
     expect(logger).not.toHaveBeenCalled();
   });
-  it('discovers exactly 17 tools over HTTP without opening mail connections', async () => {
+  it('discovers exactly 21 tools over HTTP without opening mail connections', async () => {
     const connection = vi.spyOn(MailService.prototype, 'verifyConnectivity').mockRejectedValue(new Error('must not connect'));
     const client = new Client({ name: 'local-contract-test', version: '1.0.0' });
     try {

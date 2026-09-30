@@ -5,7 +5,7 @@ import { startProduct, type Product } from '../testkit/src/product.js';
 import { profiles, type ProfileName, type SpecialFolders } from '../testkit/src/profiles.js';
 import { peek, seed } from '../testkit/src/seed.js';
 
-// All 16 tools, over MCP, against a real mail server. Each step is checked
+// Every tool (21 since 2.4.1), over MCP, against a real mail server. Each step is checked
 // against what the server really holds, not against what the tool says.
 async function sixteenTools(p: Product, folders: SpecialFolders) {
   // Where archiving lands: the Archive folder, or All Mail where there is none (Gmail).
@@ -76,10 +76,20 @@ async function sixteenTools(p: Product, folders: SpecialFolders) {
   // The original has no attachments: asked for one anyway, it's plainly not there.
   expect((await call('get_attachment', { ...at, index: 0 })).result).toMatchObject({ code: 'ATTACHMENT_NOT_FOUND' });
 
+  // 2.4.1: forward (one more delivery), who sends, junk and back, unsubscribe (not offered here)
+  await ok('forward_email', { newRecipientsConfirmed: true, ...at, to: ['friend@example.invalid'], text: 'fyi' });
+  expect(p.smtp.messages).toHaveLength(3);
+  expect((await simpleParser(p.smtp.messages[2]!.raw)).subject).toBe('Fwd: Fixture');
+  expect((await ok('summarize_senders', { mailbox: 'INBOX' })).senders).toMatchObject([{ address: 'friend@example.invalid', messages: 1 }]);
+  at = await trip('junk_email', at, folders.junk);
+  at = await trip('restore_email', at, 'INBOX');
+  expect(await find(folders.junk, id)).toHaveLength(0);
+  expect((await call('unsubscribe', at)).result).toMatchObject({ code: 'MAIL-UNSUBSCRIBE-MANUAL' });
+
   expect([...called].sort()).toEqual(expectedTools);
 }
 
-describe('the 17-tool workflow on a real server', () => {
+describe('the whole-tool workflow on a real server', () => {
   const run = (profile: ProfileName) => async () => {
     const product = await startProduct(profile);
     try { await sixteenTools(product, profiles[profile].folders); } finally { await product.stop(); }

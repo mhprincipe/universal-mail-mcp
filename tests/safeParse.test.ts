@@ -226,7 +226,9 @@ describe('a PDF built to explode', () => {
       '--b', 'Content-Type: text/plain', '', 'see attached', '--b',
       'Content-Type: application/pdf; name="invoice.pdf"', 'Content-Disposition: attachment; filename="invoice.pdf"', 'Content-Transfer-Encoding: base64', '', ''
     ].join('\r\n')), Buffer.from(pdf.toString('base64').replace(/.{76}/g, '$&\r\n')), Buffer.from('\r\n--b--\r\n')]);
-    parser = createSafeParser({ maxExternalMb: 128 });
+    // Only the memory watch may stop it: under load, inflating is slow enough
+    // that the usual 10 s time limit could win first.
+    parser = createSafeParser({ maxExternalMb: 128, timeoutMs: 50_000 });
     await expect(parser.attachment(raw, 0)).rejects.toMatchObject({ code: 'MAIL-PARSE-UNSAFE', details: { reason: 'memory limit' } });
     expect(await parser.parse(raw)).toMatchObject({ subject: 'invoice' });
   });
