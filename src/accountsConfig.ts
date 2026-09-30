@@ -14,7 +14,8 @@ const accountList = z.array(z.object({
   smtp: z.object({ ...endpoint, tls: z.enum(['implicit', 'starttls', 'none']).optional() }),
   sentCopyMode: z.enum(['unverified', 'yahoo', 'append']).default('unverified'),
   reliableHeaderSearch: z.boolean().default(false),
-  sending: z.boolean().default(true)
+  sending: z.boolean().default(true),
+  sendLimits: z.object({ perHour: z.number().int(), perDay: z.number().int() }).optional()
 }));
 const passwordList = z.record(z.string(), z.string());
 
@@ -54,7 +55,8 @@ export function loadAccounts(env: NodeJS.ProcessEnv): NamedAccount[] {
         YAHOO_EMAIL: account.email, YAHOO_APP_PASSWORD: password,
         IMAP_HOST: account.imap.host, IMAP_PORT: String(account.imap.port), IMAP_TLS: account.imap.tls,
         SMTP_HOST: account.smtp.host, SMTP_PORT: String(account.smtp.port), SMTP_TLS: account.smtp.tls,
-        SENT_COPY_MODE: account.sentCopyMode
+        SENT_COPY_MODE: account.sentCopyMode,
+        ...(account.sendLimits ? { SEND_LIMIT_PER_HOUR: String(account.sendLimits.perHour), SEND_LIMIT_PER_DAY: String(account.sendLimits.perDay) } : {})
       });
       return { name: account.name, config, reliableHeaderSearch: account.reliableHeaderSearch, sending: account.sending };
     } catch (error) {

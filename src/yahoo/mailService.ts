@@ -1,4 +1,5 @@
 import { phase } from '../timing.js';
+import { sharedSendLog, type SendLog } from '../sendLimits.js';
 import { randomUUID } from 'node:crypto';
 import nodemailer from 'nodemailer';
 import type { ImapFlow } from 'imapflow';
@@ -16,6 +17,9 @@ export type MailServiceOptions = {
   // threads also scan recent messages' headers. Assumed unless a provider is
   // known to search reliably.
   unreliableHeaderSearch?: boolean;
+  // Send limits: when this account sent (shared across the server by default).
+  sendLog?: SendLog;
+  clock?: { now(): number };
 };
 
 export class MailService {
@@ -23,10 +27,14 @@ export class MailService {
   private readonly smtp: ReturnType<typeof nodemailer.createTransport>;
   private readonly parser: SafeParser;
   private readonly unreliableHeaderSearch: boolean;
+  private readonly sendLog: SendLog;
+  private readonly clock: { now(): number };
 
   constructor(private readonly config: AppConfig, options: MailServiceOptions = {}) {
     this.parser = options.parser ?? sharedParser();
     this.unreliableHeaderSearch = options.unreliableHeaderSearch ?? true;
+    this.sendLog = options.sendLog ?? sharedSendLog();
+    this.clock = options.clock ?? Date;
     this.imap = new ImapGateway(config, { unreliableHeaderSearch: this.unreliableHeaderSearch });
     this.smtp = nodemailer.createTransport({
       host: config.SMTP_HOST,
@@ -204,11 +212,21 @@ export class MailService {
     const seen = new Set<string>();
     const recipients = [...args.to, ...(args.cc ?? []), ...(args.bcc ?? [])]
       .filter(address => { const key = address.toLowerCase(); return seen.has(key) ? false : (seen.add(key), true); });
+    // Send limits (LIM-01): checked before anything leaves.
+    const now = this.clock.now();
+    const { SEND_LIMIT_PER_HOUR: perHour, SEND_LIMIT_PER_DAY: perDay } = this.config;
+    if (this.sendLog.since(this.config.YAHOO_EMAIL, now - 60 * 60_000) >= perHour) {
+      throw new MailError('MAIL-SEND-LIMIT', `This account has sent its limit of ${perHour} an hour. Nothing was sent.`, 'FAILED');
+    }
+    if (this.sendLog.since(this.config.YAHOO_EMAIL, now - 24 * 60 * 60_000) >= perDay) {
+      throw new MailError('MAIL-SEND-LIMIT', `This account has sent its limit of ${perDay} a day. Nothing was sent.`, 'FAILED');
+    }
     try {
       const info = await phase('smtp.send', () => this.smtp.sendMail({
         envelope: { from: this.config.YAHOO_EMAIL, to: recipients },
         raw: args.raw
       }));
+      this.sendLog.record(this.config.YAHOO_EMAIL, now);
       const warnings: string[] = [];
       if (this.config.SENT_COPY_MODE === 'yahoo') {
         // The provider files its own copy, a minute or so later (seen in every
@@ -238,6 +256,8 @@ export class MailService {
       // Nodemailer also reports CONN when the socket closes after DATA. The
       // command label alone therefore cannot prove that delivery never began.
       if (error?.code === 'EAUTH') throw classify(error);
+      // It may have gone: counted.
+      this.sendLog.record(this.config.YAHOO_EMAIL, now);
       throw new MailError('SEND_STATUS_UNKNOWN', 'The SMTP connection failed after delivery may have begun. The message was not retried.', 'UNKNOWN', false, { messageId: args.messageId, operationId: args.operationId, command });
     }
   }

@@ -1,4 +1,5 @@
 import { lookup } from 'node:dns/promises';
+import { DEFAULT_SEND_LIMITS } from '../sendLimits.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { createMcpExpressApp } from '@modelcontextprotocol/express';
 import { toNodeHandler } from '@modelcontextprotocol/node';
@@ -209,7 +210,7 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
     mountPage(app, {
       key, owner: approval.owner, signInAddress: () => store.signInAddress(), clock, notify: approval.notify,
       view: () => ({
-        accounts: store.accounts().map(a => ({ name: a.name, email: a.email, sending: a.sending ?? true, status: status.get(a.name) ?? 'unknown' })),
+        accounts: store.accounts().map(a => ({ name: a.name, email: a.email, sending: a.sending ?? true, sendLimits: a.sendLimits ?? DEFAULT_SEND_LIMITS, status: status.get(a.name) ?? 'unknown' })),
         apps: auth.grants.snapshot().apps.map(g => ({ ...g, lastUsed: lastUsed.get(g.appId) })),
         subscription: sub.current(), buyUrl: sub.buyUrl()
       }),

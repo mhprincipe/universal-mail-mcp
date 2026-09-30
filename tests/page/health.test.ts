@@ -65,7 +65,7 @@ describe('health on your page', () => {
     await p.signIn();
     await p.act('/check', {});
     const shown = [...p.pages, dashboard({ base: '/k', csrf: 'c', now: 0, canGrantSend: false, report: 'x'.repeat(5000),
-      accounts: [{ name: 'a-very-long-account-name-for-a-phone', email: 'someone.with.a.very.long.address@an-extremely-long-domain-name.example', sending: true, status: 'password' }],
+      accounts: [{ name: 'a-very-long-account-name-for-a-phone', email: 'someone.with.a.very.long.address@an-extremely-long-domain-name.example', sending: true, sendLimits: { perHour: 30, perDay: 200 }, status: 'password' }],
       apps: [] })];
     for (const html of shown.filter(h => h.startsWith('<!doctype html>'))) {
       expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');

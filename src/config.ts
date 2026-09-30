@@ -25,6 +25,9 @@ const schema = z.object({
   MAX_BODY_CHARS: z.coerce.number().int().positive().default(100_000),
   // A search the server hasn't answered by then is stopped (SEARCH_TOO_SLOW).
   SEARCH_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
+  // Send limits per account (LIM-01): changed on your page.
+  SEND_LIMIT_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(30),
+  SEND_LIMIT_PER_DAY: z.coerce.number().int().min(1).max(10_000).default(200),
   ALLOWED_HOSTS: z.string().optional(),
   ALLOWED_ORIGINS: z.string().optional()
 }).superRefine((config, ctx) => {

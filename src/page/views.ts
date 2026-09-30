@@ -7,7 +7,7 @@ import { longDate } from '../subscription/subscription.js';
 // escape(). It never shows email content, a password or a token: passwords
 // can be typed in, never shown back.
 
-export type AccountView = { name: string; email: string; sending: boolean; status: 'working' | 'password' | 'unknown'; lastUsed?: number };
+export type AccountView = { name: string; email: string; sending: boolean; sendLimits: { perHour: number; perDay: number }; status: 'working' | 'password' | 'unknown'; lastUsed?: number };
 export type AppView = Grant & { lastUsed?: number };
 
 // Readable at phone width: one column, nothing wider than the screen.
@@ -88,6 +88,9 @@ ${a.status === 'password' ? '<span class="error">⚠ Password not accepted</span
 ${form(base, '/accounts/password', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>New app password <input type="password" name="password" autocomplete="off" required></label>`, 'Save password')}
 </details>
 ${form(base, '/accounts/sending', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><input type="hidden" name="on" value="${a.sending ? 'off' : 'on'}">`, a.sending ? 'Turn sending off' : 'Turn sending on')}
+<details><summary>Sending limits: Up to ${a.sendLimits.perHour} an hour and ${a.sendLimits.perDay} a day</summary>
+${form(base, '/accounts/limits', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>An hour <input type="number" name="perHour" min="1" max="1000" value="${a.sendLimits.perHour}" required></label><label>A day <input type="number" name="perDay" min="1" max="10000" value="${a.sendLimits.perDay}" required></label>`, 'Save limits')}
+</details>
 <details><summary>Rename</summary>
 ${form(base, '/accounts/rename', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>New name (what your AI calls it) <input type="text" name="to" autocomplete="off" required></label>`, 'Rename')}
 </details>
