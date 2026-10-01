@@ -6,7 +6,7 @@ server in your own Google Cloud account. Your AI can search, read, organize
 and, when you allow it, send your email. You choose, per app and per account,
 what each may do.
 
-**Status:** version 2.4.4. Installed and in daily use: every tool tested live
+**Status:** version 2.4.5. Installed and in daily use: every tool tested live
 on Yahoo with Claude and with ChatGPT; Gmail connected live. 2.4 added reading
 attachments, scam warnings, a check before writing to someone new, send limits,
 and an activity log with undo; 2.4.1 added sending attachments, forwarding,

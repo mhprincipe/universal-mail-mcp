@@ -62,6 +62,17 @@ function attachmentsIn(root) {
 // at 1,000 at most (FND-03).
 const FILTERED_BATCH = 50;
 const MAX_EXAMINED = 1000;
+// The <ids> in some header lines of a block (Message-ID, References...),
+// folded or not; ids anywhere else in the header (Return-Path, From) don't count.
+function idsIn(raw, names) {
+    const values = headerValues(raw);
+    return names.flatMap(name => values[name.toLowerCase()]?.match(/<[^>\s]+>/g) ?? []);
+}
+// Header lines are read from the whole header block (BODY.PEEK[HEADER]), never
+// asked for by name (HEADER.FIELDS): Yahoo answered nothing to named lines,
+// though it serves whole messages and header blocks (UNS-12, found live twice:
+// no unsubscribe for any sender, threads found only through Sent).
+const HEADER_BLOCK = true;
 const withCautions = (from, replyTo) => {
     const cautions = cautionsFor({ from, replyTo });
     return cautions.length ? { cautions } : {};
@@ -413,13 +424,13 @@ export class ImapGateway {
         return this.read(async (client) => {
             const lock = await this.openToRead(client, mailbox);
             try {
-                const m = await this.fetchOneFresh(client, uid, { envelope: true, headers: ['References'] });
+                const m = await this.fetchOneFresh(client, uid, { envelope: true, headers: HEADER_BLOCK });
                 // A system email gets exactly the answer a missing one does.
                 if (!m || isSystemMessageId(m.envelope?.messageId))
                     throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
                 const map = (items) => (items ?? []).filter(x => x?.address).map(person);
-                // Every <id> in the header, on however many folded lines.
-                const references = (m.headers?.toString('utf8') ?? '').match(/<[^>\r\n]+>/g) ?? [];
+                // Every <id> in the References header, on however many folded lines.
+                const references = idsIn(m.headers, ['References']);
                 return {
                     messageId: m.envelope?.messageId || undefined, subject: m.envelope?.subject || undefined,
                     from: map(m.envelope?.from), replyTo: map(m.envelope?.replyTo), to: map(m.envelope?.to), cc: map(m.envelope?.cc), references
@@ -436,7 +447,7 @@ export class ImapGateway {
         return this.read(async (client) => {
             const lock = await this.openToRead(client, mailbox);
             try {
-                const m = await this.fetchOneFresh(client, uid, { envelope: true, flags: true, headers: ['List-Unsubscribe', 'List-Unsubscribe-Post'] });
+                const m = await this.fetchOneFresh(client, uid, { envelope: true, flags: true, headers: HEADER_BLOCK });
                 if (!m || isSystemMessageId(m.envelope?.messageId))
                     throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
                 const headers = headerValues(m.headers);
@@ -459,7 +470,7 @@ export class ImapGateway {
         return this.read(async (client) => {
             const lock = await this.openToRead(client, mailbox);
             try {
-                const rows = await this.newest(client, n, { envelope: true, flags: true, headers: ['List-Unsubscribe', 'List-Unsubscribe-Post'] });
+                const rows = await this.newest(client, n, { envelope: true, flags: true, headers: HEADER_BLOCK });
                 const map = (items) => (items ?? []).filter(x => x?.address).map(person);
                 return rows.filter(row => !isSystemMessageId(row.envelope?.messageId)).map(row => {
                     const sender = map(row.envelope?.from)[0];
@@ -546,9 +557,9 @@ export class ImapGateway {
                     return [...hits].sort((a, b) => a - b);
                 // Yahoo can return no HEADER References/In-Reply-To matches even when
                 // those headers are present. Inspect only threading headers of a bounded
-                // recent window, using read-only BODY.PEEK via ImapFlow's headers query.
-                for (const row of await this.newest(client, RECENT_SCAN, { headers: ['Message-ID', 'References', 'In-Reply-To'] })) {
-                    const headerIds = (row.headers?.toString('utf8').replace(/\r?\n[ \t]+/g, ' ') ?? '').match(/<[^>\r\n]+>/g) ?? [];
+                // recent window, read-only (BODY.PEEK), from each one's header block.
+                for (const row of await this.newest(client, RECENT_SCAN, { headers: HEADER_BLOCK })) {
+                    const headerIds = idsIn(row.headers, ['Message-ID', 'References', 'In-Reply-To']);
                     if (anchors.some(id => headerIds.includes(id)))
                         hits.add(row.uid);
                 }
