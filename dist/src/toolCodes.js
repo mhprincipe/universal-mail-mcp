@@ -35,6 +35,7 @@ export const TOOL_CODES = {
     'MAIL-NOT-PERMITTED': { remedy: 'Tell the owner this app needs that permission; they can grant it on their Universal Mail page.' },
     'MAIL-FILE-NOT-ALLOWED': { remedy: 'Name each file with one of .txt, .csv, .tsv, .md, .json, .ics or .xml, and no folders in the name. Nothing was sent.' },
     'MAIL-UNSUBSCRIBE-MANUAL': { remedy: 'Tell the owner they can unsubscribe from their mail app, or offer to mark the email as junk. Do not open links in the email.' },
+    'MAIL-UNSUBSCRIBE-OWN': { remedy: 'Nothing to do: the email is from the owner\'s own account.' },
     'MAIL-UNSUBSCRIBE-CAUTION': { remedy: 'Tell the owner this email may be a scam, and offer to mark it as junk. Never open its links.' },
     'MAIL-UNSUBSCRIBE-FAILED': { remedy: 'Tell the owner the unsubscribe may not have worked; offer to mark the sender\'s emails as junk. Do not retry more than once.' },
     'MAIL-PARSER-BUSY': { remedy: 'Wait a moment and try again, opening fewer emails or attachments at once.' },

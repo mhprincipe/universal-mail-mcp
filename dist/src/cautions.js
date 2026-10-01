@@ -66,7 +66,9 @@ const BRANDS = [
 const GENERIC = new Set(['support', 'team', 'service', 'services', 'security', 'alert', 'alerts', 'billing', 'account', 'accounts', 'customer',
     'care', 'notification', 'notifications', 'no', 'reply', 'noreply', 'inc', 'com', 'online', 'help', 'desk', 'center', 'centre', 'department',
     'dept', 'official', 'verification', 'verify', 'update', 'updates', 'info', 'mail', 'the', 'your', 'order', 'orders', 'payments', 'payment', 'fraud', 'prevention',
-    'insurance']);
+    'insurance',
+    // Sales words (SCM-09, found live: "Amazon Deals" from an unrelated domain).
+    'deals', 'deal', 'offers', 'offer', 'savings', 'sale', 'sales', 'rewards', 'discounts', 'coupons']);
 const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'gov', 'ac', 'edu']);
 // The domain a company registers: mail.bank.example → bank.example, and
 // alerts.amazon.co.uk → amazon.co.uk.

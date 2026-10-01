@@ -1,5 +1,5 @@
 {
-  "version": "2.4.3",
-  "image": "us-docker.pkg.dev/universal-mail-rel-zqrw/release/server@sha256:7dc83d23cf3c333103b6841e3695d188dd6ca3649bab3e53f423c20e7780a7bb",
+  "version": "2.4.4",
+  "image": "us-docker.pkg.dev/universal-mail-rel-zqrw/release/server@sha256:7cc2b065f0414086d26f82d03f34c3082ba76feba820c61cc9641e9b37667c8e",
   "feed": "https://raw.githubusercontent.com/mhprincipe/universal-mail-mcp/release/latest.json"
 }

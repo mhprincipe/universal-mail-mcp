@@ -103,7 +103,9 @@ export function createMultiMail(services) {
             });
             // Newest first across every account; messages without a date go last.
             found.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
-            return success(found, 'Success', 'OK', warnings);
+            // Which accounts were searched (ENG-30, found live): nothing from one is then an answer, not a doubt.
+            const searched = reachable.length > 1 ? `${reachable.slice(0, -1).join(', ')} and ${reachable.at(-1)}` : reachable.join('');
+            return success(found, `Searched ${searched}.`, 'OK', warnings);
         },
         // Accounts are separate mail servers; a move across them would be a copy
         // then a delete, which breaks the no-guessing rules. Refuse it outright,

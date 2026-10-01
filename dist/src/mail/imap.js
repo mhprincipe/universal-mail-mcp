@@ -413,7 +413,7 @@ export class ImapGateway {
         return this.read(async (client) => {
             const lock = await this.openToRead(client, mailbox);
             try {
-                const m = await this.fetchOneFresh(client, uid, { envelope: true, headers: ['references'] });
+                const m = await this.fetchOneFresh(client, uid, { envelope: true, headers: ['References'] });
                 // A system email gets exactly the answer a missing one does.
                 if (!m || isSystemMessageId(m.envelope?.messageId))
                     throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
@@ -436,7 +436,7 @@ export class ImapGateway {
         return this.read(async (client) => {
             const lock = await this.openToRead(client, mailbox);
             try {
-                const m = await this.fetchOneFresh(client, uid, { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });
+                const m = await this.fetchOneFresh(client, uid, { envelope: true, flags: true, headers: ['List-Unsubscribe', 'List-Unsubscribe-Post'] });
                 if (!m || isSystemMessageId(m.envelope?.messageId))
                     throw new MailError('MESSAGE_NOT_FOUND', 'Message not found.', 'NOT_FOUND');
                 const headers = headerValues(m.headers);
@@ -459,7 +459,7 @@ export class ImapGateway {
         return this.read(async (client) => {
             const lock = await this.openToRead(client, mailbox);
             try {
-                const rows = await this.newest(client, n, { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });
+                const rows = await this.newest(client, n, { envelope: true, flags: true, headers: ['List-Unsubscribe', 'List-Unsubscribe-Post'] });
                 const map = (items) => (items ?? []).filter(x => x?.address).map(person);
                 return rows.filter(row => !isSystemMessageId(row.envelope?.messageId)).map(row => {
                     const sender = map(row.envelope?.from)[0];
