@@ -83,6 +83,13 @@ Reviewed the same way. The changes close three of the accepted items above
 Still open: the new-recipient confirmation. Its fix is designed, for the
 owner's decision: [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md).
 
+# 2.4.5
+
+| Change | The trade-off | Why it's accepted |
+|---|---|---|
+| **Replies to another business's domain are quiet** (SCM-10) | A business-looking email whose replies go to another business-looking domain (a fraudster's own domain, in an invoice scam) is no longer cautioned for that | The owner's decision after the final live run: every such caution was on genuine mail (event, hiring and newsletter platforms, a dealer's system). Replies to a personal mailbox, a look-alike or a disguised domain, a company's name from the wrong domain, and look-alike senders are all still said; and nothing is sent to someone new without the owner's confirmation. |
+| **Whole header blocks read** (UNS-12) | A few kilobytes more per message read for headers | Read-only, never marking mail read, and the lines are picked out by name, so nothing else in a header is acted on. |
+
 # 2.4.3
 
 | Change | The trade-off | Why it's accepted |

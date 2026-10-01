@@ -563,8 +563,9 @@ what it says about the person's position is true.
 | SCM-05 | search results and an opened email carry the cautions, and the tools say to pass them on | U |
 | SCM-06 | a hostile sender name (thousands of @s, or a long run with no spaces) is checked in a moment, not seconds: it runs on the main thread *(added: security review)* | U |
 | SCM-07 | insurers, banks, lenders, credit bureaus, phone companies, shops and government services, named whole or with generic words, from someone else's address; quiet from their own, and on names that only share a word *(added: 2.4.2, found live)* | U |
-| SCM-08 | mail sent through a mailing service with replies to the business's own domain is quiet; replies to a personal mailbox, a non-service sender's replies elsewhere, and a company's name are still said *(added: 2.4.3, found live)* | U |
+| SCM-08 | mail sent through a mailing service with replies to the business's own domain is quiet; replies to a personal mailbox and a company's name are still said *(added: 2.4.3, found live; since 2.4.5 every business-to-business reply is quiet, SCM-10)* | U |
 | SCM-09 | sales words don't hide a company's name: "Amazon Deals" from another domain is a claim to be Amazon *(added: 2.4.4, found live)* | U |
+| SCM-10 | replies to another business's domain are quiet; replies to a personal mailbox, a look-alike or a disguised domain are said; MSN is Microsoft's *(added: 2.4.5, found live; the owner's decision)* | U |
 
 **First-time recipients**
 
@@ -641,7 +642,7 @@ what it says about the person's position is true.
 | UNS-09 | the real parts: DNS answers passed on; https with the certificate checked (an untrusted one refused before anything is sent) *(added: coverage)* | U |
 | UNS-10 | on a real server: the headers come from the stored message; the email stays unread | P |
 | UNS-11 | the account's own email: nothing to unsubscribe from, with its own code (MAIL-UNSUBSCRIBE-OWN since 2.4.4) and no talk of junk; other refusals say what the sender offers *(added: 2.4.2, found live)* | U |
-| UNS-12 | headers are asked for as they're written (List-Unsubscribe, References): on a server that matches names exactly (Yahoo), the summary, the unsubscribe tool and replies see them *(added: 2.4.4, found live)* | U |
+| UNS-12 | header lines are read from the whole header block, never asked for by name: on a server that answers nothing to named lines (Yahoo), the summary, the unsubscribe tool, replies and the thread scan see them; ids elsewhere in the header don't count *(added: 2.4.4; fixed 2.4.5, found live twice)* | U |
 
 **Junk**
 
@@ -770,10 +771,10 @@ also where a later reader finds out why a line of code exists.
 | Everyday polish | 15 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| Serving people (2.4) | 38 |
+| Serving people (2.4) | 39 |
 | Files and clean-up (2.4.1-2.4.4) | 53 |
-| **New** | **431** |
-| **Total** | **586** |
+| **New** | **432** |
+| **Total** | **587** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

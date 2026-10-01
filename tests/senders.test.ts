@@ -67,9 +67,9 @@ describe('what each sender offers, and where replies go', () => {
 
   it('WHO-07 a sender whose replies go to another domain carries that caution too, once (added: 2.4.2, found live)', async () => {
     f = await startToolFixture();
-    for (let i = 0; i < 2; i++) await f.seedRaw('INBOX', from('Wine Shop <shop@shared1.bulkmailer.example>', 'Wed, 30 Sep 2026 10:00:00 +0000', ['Reply-To: owner@freemail.example']));
+    for (let i = 0; i < 2; i++) await f.seedRaw('INBOX', from('Wine Shop <shop@shared1.bulkmailer.example>', 'Wed, 30 Sep 2026 10:00:00 +0000', ['Reply-To: you@gmail.com']));
     const [sender] = (await f.call('summarize_senders', {})).result.data.senders;
-    expect(sender.cautions).toEqual(['Replies would go to owner@freemail.example, not to the sender\'s own domain (bulkmailer.example).']);
+    expect(sender.cautions).toEqual(['Replies would go to you@gmail.com, not to the sender\'s own domain (bulkmailer.example).']);
   });
 });
 
@@ -84,7 +84,7 @@ describe('reading the newest messages', () => {
         headers: Buffer.from('List-Unsubscribe: <https://shop.example.com/u>\r\nList-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n\r\n') },
       { uid: 502, flags: new Set(), envelope: { messageId: '<code@system.universal-mail.invalid>', from: [{ address: 'me@example.invalid' }] }, headers: Buffer.from('') },
       // Replies going to another domain: a caution from the envelope's Reply-To (WHO-07).
-      { uid: 503, flags: new Set(), envelope: { messageId: '<w@x>', from: [{ address: 'shop@shared1.bulkmailer.example' }], replyTo: [{ address: 'owner@freemail.example' }] }, headers: Buffer.from('') },
+      { uid: 503, flags: new Set(), envelope: { messageId: '<w@x>', from: [{ address: 'shop@shared1.bulkmailer.example' }], replyTo: [{ address: 'you@gmail.com' }] }, headers: Buffer.from('') },
       { uid: 504, flags: new Set(), envelope: { messageId: '<b@x>', from: [] }, headers: Buffer.from('') }
     ]);
     const client = {
@@ -95,10 +95,10 @@ describe('reading the newest messages', () => {
     vi.spyOn(gateway, 'run').mockImplementation(fn => fn(client as never));
     expect(await gateway.senderStats('INBOX', 500)).toEqual([
       { from: { name: 'Shop', address: 'deals@shop.example.com' }, date: '2026-09-30T08:00:00.000Z', read: true, unsubscribe: 'one-click' },
-      { from: { address: 'shop@shared1.bulkmailer.example' }, read: false, unsubscribe: 'none', cautions: ["Replies would go to owner@freemail.example, not to the sender's own domain (bulkmailer.example)."] },
+      { from: { address: 'shop@shared1.bulkmailer.example' }, read: false, unsubscribe: 'none', cautions: ["Replies would go to you@gmail.com, not to the sender's own domain (bulkmailer.example)."] },
       { read: false, unsubscribe: 'none' }
     ]);
     expect(locks).toEqual([{ readOnly: true }]);
-    expect(fetchAll).toHaveBeenCalledWith('4:*', { envelope: true, flags: true, headers: ['List-Unsubscribe', 'List-Unsubscribe-Post'] });
+    expect(fetchAll).toHaveBeenCalledWith('4:*', { envelope: true, flags: true, headers: true });
   });
 });

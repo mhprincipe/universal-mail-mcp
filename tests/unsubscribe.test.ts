@@ -167,7 +167,7 @@ describe('reading the headers', () => {
       listUnsubscribe: '<mailto:a@x>, <https://news.example.com/u?id=7>', listUnsubscribePost: 'List-Unsubscribe=One-Click'
     });
     expect(locks).toEqual([{ readOnly: true }]);
-    expect(client.fetchOne).toHaveBeenCalledWith(4, { envelope: true, flags: true, headers: ['List-Unsubscribe', 'List-Unsubscribe-Post'] }, { uid: true });
+    expect(client.fetchOne).toHaveBeenCalledWith(4, { envelope: true, flags: true, headers: true }, { uid: true });
     await expect(gateway.fetchListHeaders('INBOX', 5)).rejects.toMatchObject({ code: 'MESSAGE_NOT_FOUND' });
   });
 });

@@ -1,6 +1,6 @@
 # Open questions, decisions made for you, and the live-install checklist
 
-## Where things stand (2026-10-01, version 2.4.4)
+## Where things stand (2026-10-01, version 2.4.5)
 
 The live install passed (2026-09-28). Every tool works live on Yahoo with Claude
 and with ChatGPT; Gmail is connected; timings are measured and tuned; v1 is
@@ -11,7 +11,7 @@ open:
 
 | Open | Whose | Notes |
 |---|---|---|
-| The final live test on 2.4.4 | owner | LIVE-TEST-PROMPT.md: the Claude prompt, your checks on the page, the ChatGPT check (no connector refresh needed) |
+| The two-minute Yahoo check on 2.4.5 | owner | LIVE-TEST-PROMPT.md, "After a fix": proves the header fix where only Yahoo can |
 | Attaching files from your computer or the chat | owner's decision | not built: would need an upload box on your page (the AI apps don't pass uploaded files to connectors reliably) |
 | **Confirming new recipients on your page** | owner's decision | [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md) ends with four questions |
 | **The 2.5 design: signing in with Microsoft and Google** | owner's decision | [DESIGN-PROVIDER-SIGNIN.md](DESIGN-PROVIDER-SIGNIN.md) ends with the questions only you can answer |

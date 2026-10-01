@@ -128,6 +128,18 @@ On your Universal Mail page:
    apps" email after updating to 2.4.3 (once), and the "is available" emails
    for the updates.
 
+## After a fix: the two-minute Yahoo check
+
+When a release fixes something only Yahoo shows (2.4.5: its headers), this
+proves it without the whole run. In a new Claude chat:
+
+```text
+Using only the Universal Mail tools, on my account "yahoo" (pass account "yahoo" on every call): 1. summarize_senders on the Inbox, and say how many senders offer one-click, link, email and none, and name three that offer one-click or a link. 2. Find one email from LinkedIn in the Inbox (search from "linkedin", limit 1) and call unsubscribe on it only if summarize_senders said LinkedIn offers a link, not one-click: it must refuse, saying the sender offers only a link, and change nothing. 3. get_thread on the newest Inbox message and say which folders its messages came from. Show a table.
+```
+
+Before 2.4.5, every Yahoo sender showed "none". Now most newsletters should
+show one-click or a link.
+
 ## 3. The ChatGPT check
 
 In a new ChatGPT chat with Universal Mail on (approve each tool it asks for):

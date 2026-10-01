@@ -162,7 +162,8 @@ describe('newsletters sent through mailing services', () => {
     expect(cautionsFor({ from: from('shop@shared1.ccsend.com', 'Wine Shop'), replyTo: from('you@gmail.com') })).toEqual([
       "Replies would go to you@gmail.com, not to the sender's own domain (ccsend.com)."
     ]);
-    expect(cautionsFor({ from: from('news@digest.example'), replyTo: from('support@other.example') })[0]).toMatch(/Replies would go to support@other\.example/);
+    // Replies to another business's domain are ordinary since 2.4.5 (SCM-10, the owner's decision).
+    expect(cautionsFor({ from: from('news@digest.example'), replyTo: from('support@other.example') })).toEqual([]);
     expect(cautionsFor({ from: from('alerts@shared1.ccsend.com', 'PayPal'), replyTo: from('help@paypal.com') })[0]).toMatch(/name says PayPal/);
   });
 });
@@ -173,5 +174,30 @@ describe('sales words', () => {
     expect(cautionsFor({ from: from('promo@offers.example', 'Walmart Savings') })[0]).toMatch(/name says Walmart/);
     expect(cautionsFor({ from: from('store-news@amazon.com', 'Amazon Deals') })).toEqual([]);
     expect(cautionsFor({ from: from('hello@bakery.example', 'Daily Deals') })).toEqual([]);
+  });
+});
+
+describe('where replies go', () => {
+  it('SCM-10 replies to another business are ordinary (platforms sending for an organization): quiet (added: 2.4.5, found live: every such caution was on genuine mail; the owner\'s decision)', () => {
+    const ordinary = [
+      { from: from('noreply@event-platform.example', 'Event Platform'), replyTo: from('info@organizer.example') },
+      { from: from('jobs@hiring-platform.example', 'Hiring'), replyTo: from('hiring@company.example') },
+      { from: from('sales@dealer.example', 'Car Dealer'), replyTo: from('team@dealer-crm.example') },
+      { from: from('digest@forum-host.example', 'Forum Digest'), replyTo: from('support@newsletters.forum.example') }
+    ];
+    for (const message of ordinary) expect(cautionsFor(message), JSON.stringify(message)).toEqual([]);
+  });
+
+  it('SCM-10 still said: replies to a personal mailbox, and replies to a look-alike or disguised domain', () => {
+    expect(cautionsFor({ from: from('billing@shop.example', 'Shop'), replyTo: from('you@gmail.com') })).toEqual([
+      "Replies would go to you@gmail.com, not to the sender's own domain (shop.example)."
+    ]);
+    expect(cautionsFor({ from: from('alerts@shop.example', 'Shop'), replyTo: from('help@paypa1.com') })[0]).toMatch(/Replies would go to help@paypa1\.com/);
+    expect(cautionsFor({ from: from('alerts@shop.example', 'Shop'), replyTo: from('help@xn--pypal-4ve.com') })[0]).toMatch(/Replies would go to help@xn--pypal-4ve\.com/);
+  });
+
+  it('SCM-10 MSN is one of Microsoft\'s names: from another domain it\'s a claim, from msn.com it\'s quiet (found live)', () => {
+    expect(cautionsFor({ from: from('news@smtp1.morningnews.example', 'MSN') })[0]).toMatch(/name says Microsoft/);
+    expect(cautionsFor({ from: from('news@msn.com', 'MSN') })).toEqual([]);
   });
 });

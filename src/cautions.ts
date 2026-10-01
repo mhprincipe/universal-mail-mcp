@@ -22,7 +22,7 @@ const BRANDS: Brand[] = [
   { name: 'DHL', aliases: ['dhl', 'dhl express'], domains: ['dhl.com'] },
   { name: 'Amazon', aliases: ['amazon', 'amazon prime'], domains: ['amazon.com', 'amazon.co.uk', 'amazon.de', 'amazon.ca', 'amazon.fr', 'amazon.it', 'amazon.es', 'amazon.co.jp', 'amazon.com.au'] },
   { name: 'Apple', aliases: ['apple', 'icloud', 'apple id'], domains: ['apple.com', 'icloud.com'] },
-  { name: 'Microsoft', aliases: ['microsoft', 'microsoft account', 'outlook', 'office 365', 'microsoft 365'], domains: ['microsoft.com', 'outlook.com', 'live.com', 'office.com', 'microsoftonline.com'] },
+  { name: 'Microsoft', aliases: ['microsoft', 'microsoft account', 'outlook', 'office 365', 'microsoft 365', 'msn'], domains: ['microsoft.com', 'outlook.com', 'live.com', 'office.com', 'microsoftonline.com', 'msn.com'] },
   { name: 'Google', aliases: ['google', 'gmail'], domains: ['google.com', 'youtube.com'] },
   { name: 'Netflix', aliases: ['netflix'], domains: ['netflix.com'] },
   { name: 'Facebook', aliases: ['facebook', 'meta', 'instagram'], domains: ['facebook.com', 'facebookmail.com', 'meta.com', 'instagram.com'] },
@@ -160,24 +160,21 @@ export function cautionsFor(message: { from?: Address[]; replyTo?: Address[] }):
     const official = imitated(domain);
     if (official) cautions.push(`The sender's domain ${registrable(domain)} looks like ${official} but isn't it.`);
   }
-  const replyTo = message.replyTo?.find(r => r.address && registrable(domainOf(r.address)) !== registrable(domain) && !throughMailingService(domain, r.address));
+  const replyTo = message.replyTo?.find(r => r.address && registrable(domainOf(r.address)) !== registrable(domain) && repliesWorthSaying(domainOf(r.address)));
   if (replyTo) cautions.push(`Replies would go to ${replyTo.address}, not to the sender's own domain (${registrable(domain)}).`);
   return cautions;
 }
 
-// Newsletters go out through mailing services, with replies to the business's
-// own domain: ordinary mail (SCM-08, found live: 5 of 8 cautions were this).
-// Replies to a personal mailbox are still worth a word.
-const MAILING_SERVICES = new Set([
-  'ccsend.com', 'constantcontact.com', 'mcsv.net', 'mcdlv.net', 'rsgsv.net', 'list-manage.com', 'mailchimpapp.net', 'mandrillapp.com',
-  'sendgrid.net', 'amazonses.com', 'mailgun.org', 'mailgun.net', 'sparkpostmail.com', 'shopifyemail.com', 'klaviyomail.com',
-  'hubspotemail.net', 'circle.so', 'substack.com', 'beehiiv.com', 'mlsend.com', 'sendinblue.com', 'brevosend.com',
-  'convertkit-mail.com', 'convertkit-mail2.com', 'createsend.com', 'cmail19.com', 'cmail20.com', 'aweber.com', 'e2ma.net', 'emailoctopus.com'
-]);
+// Where replies go (SCM-10, the owner's decision after the live run of
+// 2026-10-01): replies to another business's domain are ordinary (a newsletter
+// service, an event or hiring platform, a dealer's system, sending for an
+// organization), and every such caution in the live runs was on genuine mail.
+// What's still said: replies to a personal mailbox (a business-looking sender
+// whose replies go to Gmail), and to a look-alike or disguised domain.
 const PERSONAL_MAIL = new Set([
   'gmail.com', 'googlemail.com', 'yahoo.com', 'ymail.com', 'aol.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com',
   'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com', 'gmx.com', 'gmx.net', 'mail.com', 'yandex.com'
 ]);
-function throughMailingService(senderDomain: string, replyAddress: string): boolean {
-  return MAILING_SERVICES.has(registrable(senderDomain)) && !PERSONAL_MAIL.has(registrable(domainOf(replyAddress)));
+function repliesWorthSaying(replyDomain: string): boolean {
+  return PERSONAL_MAIL.has(registrable(replyDomain)) || replyDomain.split('.').some(label => label.startsWith('xn--')) || imitated(replyDomain) !== undefined;
 }

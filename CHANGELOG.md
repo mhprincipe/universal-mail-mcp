@@ -4,6 +4,20 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.4.5 (2026-10-01): fixes from the final test
+
+No tool's name, inputs or description changed: no refresh needed.
+
+- **Yahoo's headers, fixed** (UNS-12): 2.4.4's fix didn't work. Yahoo answers
+  nothing when asked for named header lines, so Universal Mail now reads each
+  message's whole header block. On Yahoo this fixes the sender summary's
+  unsubscribe ("none" for everyone), the unsubscribe tool, the References a
+  reply carries, and the thread search finding Inbox copies.
+- **"Replies go elsewhere" only when it matters** (SCM-10, the owner's choice):
+  said for replies to a personal mailbox or a look-alike domain; replies to
+  another business (platforms sending for an organization) are ordinary.
+- **MSN** is one of Microsoft's names for scam warnings.
+
 ## 2.4.4 (2026-10-01): the final fixes before the final test
 
 No tool's name, inputs or description changed: Claude and ChatGPT need no

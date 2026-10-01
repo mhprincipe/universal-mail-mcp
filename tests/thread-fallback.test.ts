@@ -21,7 +21,7 @@ describe('Yahoo thread header-search fallback', () => {
     vi.spyOn(gateway, 'read').mockImplementation(fn => fn(client as any));
     expect(await gateway.findThreadUids('INBOX', root, { relatedMessageId: '<seed@test.invalid>' })).toEqual([1, 2]);
     expect(client.getMailboxLock).toHaveBeenCalledWith('INBOX', { readOnly: true });
-    expect(client.fetchAll).toHaveBeenCalledWith('1:*', { headers: ['Message-ID', 'References', 'In-Reply-To'] });
+    expect(client.fetchAll).toHaveBeenCalledWith('1:*', { headers: true });
     expect(client.search).toHaveBeenCalledTimes(1);
     expect(release).toHaveBeenCalledTimes(1);
   });
