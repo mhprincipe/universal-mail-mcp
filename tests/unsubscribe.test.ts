@@ -62,7 +62,9 @@ describe('unsubscribing', () => {
     const posted = spyOneClick();
     const { uid } = await f.seedRaw('INBOX', newsletter([], 'Me <self@example.invalid>'));
     const answer = await f.call('unsubscribe', { mailbox: 'INBOX', uid });
-    expect(answer.result).toMatchObject({ ok: false, code: 'MAIL-UNSUBSCRIBE-MANUAL', data: { offers: 'own' } });
+    // Its own code, so the advice that comes with it fits (found live: it said to mark it as junk).
+    expect(answer.result).toMatchObject({ ok: false, code: 'MAIL-UNSUBSCRIBE-OWN' });
+    expect(answer.result.remedy).not.toMatch(/junk/);
     expect(answer.result.message).toMatch(/from this account itself/);
     expect(answer.result.message).not.toMatch(/junk/);
     expect(posted).toEqual([]);
@@ -165,7 +167,7 @@ describe('reading the headers', () => {
       listUnsubscribe: '<mailto:a@x>, <https://news.example.com/u?id=7>', listUnsubscribePost: 'List-Unsubscribe=One-Click'
     });
     expect(locks).toEqual([{ readOnly: true }]);
-    expect(client.fetchOne).toHaveBeenCalledWith(4, { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] }, { uid: true });
+    expect(client.fetchOne).toHaveBeenCalledWith(4, { envelope: true, flags: true, headers: ['List-Unsubscribe', 'List-Unsubscribe-Post'] }, { uid: true });
     await expect(gateway.fetchListHeaders('INBOX', 5)).rejects.toMatchObject({ code: 'MESSAGE_NOT_FOUND' });
   });
 });

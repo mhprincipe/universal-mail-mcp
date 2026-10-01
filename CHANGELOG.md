@@ -4,6 +4,27 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.4.4 (2026-10-01): the final fixes before the final test
+
+No tool's name, inputs or description changed: Claude and ChatGPT need no
+refresh for this update.
+
+- **Unsubscribe on Yahoo** (UNS-12): every Yahoo sender showed "none", LinkedIn
+  included. Headers are now asked for as they're written (List-Unsubscribe);
+  Yahoo answered nothing to the lower-case names. The same goes for the
+  References a reply needs to join its conversation.
+- **"Amazon Deals" from an unrelated domain gets a caution** (SCM-09): sales
+  words no longer hide a company's name.
+- **Unsubscribing from your own email** has its own answer (MAIL-UNSUBSCRIBE-OWN),
+  without the junk suggestion.
+- **A search of every account says which it searched** (ENG-30).
+- **Said in the answers:** a search for attachments notes that pictures shown in
+  an email's text don't count (FND-07); a Gmail conversation notes its messages
+  come from All Mail (THR-07).
+- **The live test** is now one Claude prompt that picks up where it stopped,
+  cleans each account as it goes and checks the send limit with you, plus your
+  checks on the page and a short ChatGPT check.
+
 ## 2.4.3 (2026-09-30): from the everything test
 
 - **You're told when your AI apps can't see new tools** (NTC-01, NTC-02). Found

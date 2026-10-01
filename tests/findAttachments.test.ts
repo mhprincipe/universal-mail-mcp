@@ -129,3 +129,15 @@ describe('text search on Gmail', () => {
     expect(asked[0].gmraw).toBeUndefined();
   });
 });
+
+describe('what counts as an attachment', () => {
+  let g: Awaited<ReturnType<typeof startToolFixture>> | undefined;
+  afterEach(async () => { await g?.stop(); g = undefined; });
+
+  it('FND-07 a search for attachments says that pictures shown in an email\'s text aren\'t counted; other searches don\'t (added: 2.4.4, found live)', async () => {
+    g = await startToolFixture();
+    expect((await g.call('search_email', { mailbox: 'INBOX', hasAttachments: true })).result.message).toMatch(/Pictures shown inside an email's text aren't counted/);
+    expect((await g.call('search_email', { mailbox: 'INBOX', attachmentName: 'pdf' })).result.message).toMatch(/Pictures shown/);
+    expect((await g.call('search_email', { mailbox: 'INBOX' })).result.message).not.toMatch(/Pictures/);
+  });
+});

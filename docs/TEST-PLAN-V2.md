@@ -158,6 +158,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | ENG-27 | a folder already open for changes serves the reads that follow without opening it again (reads only peek, and nothing is marked read); another folder, or one open read-only, is read read-only *(added: measured live, DIA-13: 0.4-1 s per reopen)* | U+P |
 | ENG-28 | no provider's name in the engine: it lives in `src/mail/`; the settings are `MAIL_ADDRESS` and `MAIL_APP_PASSWORD`, the old `YAHOO_` names still work and the new ones win *(added: 2.4)* | U |
 | ENG-29 | accounts are described with their provider (by mail server, else address domain) in the tools and the refusals; the names to pass stay plain *(added: 2.4.3, found live)* | U |
+| ENG-30 | a search of every account says which accounts it searched *(added: 2.4.4, found live)* | U |
 | ENG-14 | an unencrypted mail connection is allowed only to this machine; each transport setting maps to the right connection options *(added during build: the protocol tier's local test server is unencrypted, and the product must never allow that anywhere else)* | U |
 | ENG-15 | sending always requires encryption, on any port; a server that won't encrypt gets nothing, with a plain answer *(added during build: v1 only required it on port 587, so a custom port would have sent in whatever mode the server chose)* | U |
 | ENG-16 | several accounts load from the stored account list and a separate password list; v1's single-account settings become one account called `main`; a bad account is named in the error and its password never appears *(added during build: the accounts had no way in)* | U |
@@ -201,6 +202,7 @@ protocol, **S** sign-in, **M** setup matrix, or **W** web pages.
 | THR-04 | `allFolders: true` scans every selectable folder | P |
 | THR-05 | Gmail-like: a full scan skips All Mail, and a message under several labels appears once | U (scripted fake) |
 | THR-06 | the fallback still finds a reply when HEADER search returns nothing | P (fault proxy) |
+| THR-07 | on Gmail, a conversation's answer says its messages come from All Mail, and that those places work for every tool *(added: 2.4.4, found live)* | U |
 
 **Protocol tier: real IMAP per profile**
 
@@ -562,6 +564,7 @@ what it says about the person's position is true.
 | SCM-06 | a hostile sender name (thousands of @s, or a long run with no spaces) is checked in a moment, not seconds: it runs on the main thread *(added: security review)* | U |
 | SCM-07 | insurers, banks, lenders, credit bureaus, phone companies, shops and government services, named whole or with generic words, from someone else's address; quiet from their own, and on names that only share a word *(added: 2.4.2, found live)* | U |
 | SCM-08 | mail sent through a mailing service with replies to the business's own domain is quiet; replies to a personal mailbox, a non-service sender's replies elsewhere, and a company's name are still said *(added: 2.4.3, found live)* | U |
+| SCM-09 | sales words don't hide a company's name: "Amazon Deals" from another domain is a claim to be Amazon *(added: 2.4.4, found live)* | U |
 
 **First-time recipients**
 
@@ -637,7 +640,8 @@ what it says about the person's position is true.
 | UNS-08 | needs Organize; marked as reaching outside; never read-only | U |
 | UNS-09 | the real parts: DNS answers passed on; https with the certificate checked (an untrusted one refused before anything is sent) *(added: coverage)* | U |
 | UNS-10 | on a real server: the headers come from the stored message; the email stays unread | P |
-| UNS-11 | the account's own email: nothing to unsubscribe from, no talk of junk; other refusals say what the sender offers *(added: 2.4.2, found live)* | U |
+| UNS-11 | the account's own email: nothing to unsubscribe from, with its own code (MAIL-UNSUBSCRIBE-OWN since 2.4.4) and no talk of junk; other refusals say what the sender offers *(added: 2.4.2, found live)* | U |
+| UNS-12 | headers are asked for as they're written (List-Unsubscribe, References): on a server that matches names exactly (Yahoo), the summary, the unsubscribe tool and replies see them *(added: 2.4.4, found live)* | U |
 
 **Junk**
 
@@ -658,6 +662,7 @@ what it says about the person's position is true.
 | FND-04 | the search tool takes both filters, says so, and passes the warning on | U |
 | FND-05 | on a real server, from the stored message structure | P |
 | FND-06 | on Gmail, text search asks for the exact phrase with Gmail's own search; other servers keep the standard search *(added: 2.4.3, found live)* | U |
+| FND-07 | a search for attachments says that pictures shown in an email's text aren't counted *(added: 2.4.4, found live)* | U |
 
 **Who fills a folder**
 
@@ -756,7 +761,7 @@ also where a later reader finds out why a line of code exists.
 |---|---|
 | v1 baseline | 155 |
 | Test kit | 13 |
-| Engine | 85 |
+| Engine | 87 |
 | Sign-in | 67 |
 | Setup | 71 |
 | Installed server | 6 |
@@ -765,10 +770,10 @@ also where a later reader finds out why a line of code exists.
 | Everyday polish | 15 |
 | Diagnostics | 15 |
 | Subscription | 33 |
-| Serving people (2.4) | 37 |
-| Files and clean-up (2.4.1-2.4.3) | 51 |
-| **New** | **426** |
-| **Total** | **581** |
+| Serving people (2.4) | 38 |
+| Files and clean-up (2.4.1-2.4.4) | 53 |
+| **New** | **431** |
+| **Total** | **586** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

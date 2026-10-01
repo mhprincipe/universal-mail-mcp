@@ -90,7 +90,9 @@ export class MailService {
   // One page of results; cursor, when more matched, asks for the next page.
   async searchEmail(input: SearchInput): Promise<ToolEnvelope<MessageSummary[]> & { cursor?: string }> {
     const page = await this.imap.searchPage(input);
-    return { ...success(page.messages, 'Success', 'OK', page.warning ? [page.warning] : undefined), ...(page.next ? { cursor: String(page.next) } : {}) };
+    // Said when asked about attachments (FND-07, found live): newsletter pictures aren't files.
+    const message = input.hasAttachments !== undefined || input.attachmentName ? "Success. Pictures shown inside an email's text aren't counted as attachments." : 'Success';
+    return { ...success(page.messages, message, 'OK', page.warning ? [page.warning] : undefined), ...(page.next ? { cursor: String(page.next) } : {}) };
   }
 
   async getEmail(mailbox: string, uid: number, options: { client?: ImapFlow } = {}): Promise<ToolEnvelope<MessageDetail>> {
@@ -132,6 +134,7 @@ export class MailService {
     const scanned = options.allFolders ? folders.filter(f => f.specialUse !== '\\All')
       : folders.filter(f => f.path === mailbox || f.path.toUpperCase() === 'INBOX' || usual.includes(f.specialUse ?? ''));
     const warnings: string[] = [];
+    let fromAllMail = false;
     const dedupe = new Map<string, MessageDetail>([[seed.data.messageId ?? `${mailbox}:${uid}`, seed.data]]);
     // Scan and member fetches share one connection: Yahoo throttles rapid logins,
     // and a connect/logout cycle per member exceeded the deployed request timeout.
@@ -139,6 +142,7 @@ export class MailService {
       const found: Array<{ mailbox: string; uid: number }> = [];
       const allMail = folders.find(f => f.specialUse === '\\All')?.path;
       if (client.capabilities?.has('X-GM-EXT-1') && allMail) {
+        fromAllMail = true;
         const uids = await this.imap.findGmailThread(mailbox, uid, allMail, { client }).catch(() => {
           warnings.push('The thread could not be searched; it may be incomplete.');
           return [];
@@ -170,7 +174,9 @@ export class MailService {
     });
     if (!dedupe.size) dedupe.set(seed.data.messageId ?? `${mailbox}:${uid}`, seed.data);
     const data = [...dedupe.values()].sort((a,b) => String(a.date ?? '').localeCompare(String(b.date ?? '')));
-    return success(data, `Retrieved ${data.length} message(s) in the thread.`, 'OK', [...new Set(warnings)]);
+    // Said on Gmail (THR-07, found live): the places differ from the folder it was opened from.
+    const where = fromAllMail ? ' On Gmail, a conversation\'s messages are listed from All Mail: their mailbox and uid there work for every tool.' : '';
+    return success(data, `Retrieved ${data.length} message(s) in the thread.${where}`, 'OK', [...new Set(warnings)]);
   }
 
   // One attachment by its position in the email (ATT-01..04). Read in the
@@ -452,7 +458,7 @@ export class MailService {
     const { summary, listUnsubscribe, listUnsubscribePost } = await this.imap.fetchListHeaders(mailbox, uid);
     // The account's own email (UNS-11, found live: told to mark it as junk).
     if (summary.from[0]?.address.toLowerCase() === this.config.MAIL_ADDRESS.toLowerCase()) {
-      throw new MailError('MAIL-UNSUBSCRIBE-MANUAL', 'This email is from this account itself, so there is nothing to unsubscribe from.', 'FAILED', false, { offers: 'own' });
+      throw new MailError('MAIL-UNSUBSCRIBE-OWN', 'This email is from this account itself, so there is nothing to unsubscribe from.', 'FAILED', false, { offers: 'own' });
     }
     if (summary.cautions?.length) {
       throw new MailError('MAIL-UNSUBSCRIBE-CAUTION', "This email shows signs of a scam, so its unsubscribe link wasn't used: answering it would only tell the sender this address is read. Mark it as junk instead.");

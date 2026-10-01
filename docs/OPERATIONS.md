@@ -158,6 +158,7 @@ at once queue behind each other on the same account and blur the timings.
 | Provider | Behaviour | Handled by |
 |---|---|---|
 | Yahoo | header search misses new mail | a check of the newest 200 messages (ENG-21, ENG-22) |
+| Yahoo | answers a request for named headers only when the names are written as usual (List-Unsubscribe), found live: every sender showed no unsubscribe | headers asked for as written (UNS-12) |
 | Yahoo | batch moves report old/new UIDs mispaired | pairs checked by Message-ID (ENG-20) |
 | Yahoo | subject search ignores "Re:" | results checked against the subject (POL-13) |
 | Yahoo | files its own Sent copy a minute or two later | no lookup; the answer says so (ENG-24) |

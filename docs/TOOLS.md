@@ -130,6 +130,7 @@ come from the server:
 | `MAIL-FILE-NOT-ALLOWED` | a file the AI wrote has a name or kind that isn't allowed |
 | `ATTACHMENTS_TOO_LARGE` | the attachments come to more than one email can carry |
 | `MAIL-UNSUBSCRIBE-MANUAL` | the sender offers no one-click unsubscribe; the owner can use their mail app |
+| `MAIL-UNSUBSCRIBE-OWN` | the email is from the account itself: nothing to unsubscribe from |
 | `MAIL-UNSUBSCRIBE-CAUTION` | the email looks like a scam, so its unsubscribe wasn't used |
 | `MAIL-UNSUBSCRIBE-FAILED` | the sender's address wasn't safe to contact, didn't answer, or refused |
 | `MAIL-SEND-LIMIT` | the account reached its sending limit for the hour or the day (changed on your page) |

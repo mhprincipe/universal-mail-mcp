@@ -82,3 +82,17 @@ describe('thread strategies', () => {
     expect(result.data?.map(m => m.messageId)).toEqual(['<root@x>', '<seed@x>', '<reply@x>']);
   });
 });
+
+describe('a conversation on Gmail', () => {
+  it('THR-07 the answer says its messages come from All Mail, and that those places work for every tool (added: 2.4.4, found live: it could confuse a next step)', async () => {
+    const service = new MailService(config);
+    gmail(service, {
+      'INBOX:5': detail('INBOX', 5, '<seed@x>', '2026-09-02', ['<root@x>']),
+      '[Gmail]/All Mail:11': detail('[Gmail]/All Mail', 11, '<root@x>', '2026-09-01'),
+      '[Gmail]/All Mail:12': detail('[Gmail]/All Mail', 12, '<seed@x>', '2026-09-02', ['<root@x>']),
+      '[Gmail]/All Mail:13': detail('[Gmail]/All Mail', 13, '<reply@x>', '2026-09-03', ['<root@x>', '<seed@x>'])
+    });
+    const result = await service.getThread('INBOX', 5);
+    expect(result.message).toMatch(/All Mail.*mailbox and uid.*work/);
+  });
+});

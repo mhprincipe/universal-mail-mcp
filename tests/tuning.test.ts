@@ -40,7 +40,7 @@ describe('a reply reads only the headers it needs', () => {
       references: ['<a@example.invalid>', '<b@example.invalid>']
     });
     expect(c.getMailboxLock).toHaveBeenCalledWith('INBOX', { readOnly: true });
-    expect(c.fetchOne).toHaveBeenCalledWith(4, { envelope: true, headers: ['references'] }, { uid: true });
+    expect(c.fetchOne).toHaveBeenCalledWith(4, { envelope: true, headers: ['References'] }, { uid: true });
   });
 
   it('ENG-24 a missing message, or a system email, is not found', async () => {

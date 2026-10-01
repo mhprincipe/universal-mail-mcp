@@ -99,6 +99,6 @@ describe('reading the newest messages', () => {
       { read: false, unsubscribe: 'none' }
     ]);
     expect(locks).toEqual([{ readOnly: true }]);
-    expect(fetchAll).toHaveBeenCalledWith('4:*', { envelope: true, flags: true, headers: ['list-unsubscribe', 'list-unsubscribe-post'] });
+    expect(fetchAll).toHaveBeenCalledWith('4:*', { envelope: true, flags: true, headers: ['List-Unsubscribe', 'List-Unsubscribe-Post'] });
   });
 });

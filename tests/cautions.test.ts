@@ -166,3 +166,12 @@ describe('newsletters sent through mailing services', () => {
     expect(cautionsFor({ from: from('alerts@shared1.ccsend.com', 'PayPal'), replyTo: from('help@paypal.com') })[0]).toMatch(/name says PayPal/);
   });
 });
+
+describe('sales words', () => {
+  it('SCM-09 "Amazon Deals" from someone else\'s domain is a claim to be Amazon; from Amazon it\'s quiet (added: 2.4.4, found live)', () => {
+    expect(cautionsFor({ from: from('promo@thehappybuyer.example', 'Amazon Deals') })[0]).toMatch(/name says Amazon/);
+    expect(cautionsFor({ from: from('promo@offers.example', 'Walmart Savings') })[0]).toMatch(/name says Walmart/);
+    expect(cautionsFor({ from: from('store-news@amazon.com', 'Amazon Deals') })).toEqual([]);
+    expect(cautionsFor({ from: from('hello@bakery.example', 'Daily Deals') })).toEqual([]);
+  });
+});

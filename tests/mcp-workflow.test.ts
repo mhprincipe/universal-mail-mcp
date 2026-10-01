@@ -134,7 +134,7 @@ it('exercises all 21 tools through real authenticated HTTP/MCP, with fixture sta
   const junked = await f.ok('junk_email', { mailbox: 'INBOX', uid: current.destinationUid });
   expect(junked.destination).toBe('Junk');
   current = await f.ok('restore_email', { mailbox: 'Junk', uid: junked.destinationUid });
-  expect((await f.call('unsubscribe', { mailbox: 'INBOX', uid: current.destinationUid })).result).toMatchObject({ code: 'MAIL-UNSUBSCRIBE-MANUAL' });
+  expect((await f.call('unsubscribe', { mailbox: 'INBOX', uid: current.destinationUid })).result).toMatchObject({ code: 'MAIL-UNSUBSCRIBE-OWN' });
   expect([...f.called].sort()).toEqual(expectedTools);
 }, 20000);
 
@@ -274,4 +274,17 @@ it('preserves UNKNOWN through MCP and does not repeat an ambiguous SMTP attempt'
   expect(response.result).toMatchObject({ status: 'UNKNOWN', code: 'SEND_STATUS_UNKNOWN' });
   expect(JSON.stringify(response)).not.toContain('private-provider-text');
   expect(f.sendMail).toHaveBeenCalledTimes(1);
+});
+
+it('ENG-30 a search of every account says which accounts it searched, so finding nothing in one is clear (added: 2.4.4, found live)', async () => {
+  const account = (name: string) => ({
+    name, email: `${name}@example.invalid`, sentCopyMode: 'append',
+    imap: { host: '127.0.0.1', port: 993, tls: 'implicit' }, smtp: { host: '127.0.0.1', port: 587 }
+  });
+  const f = await fixture({
+    MAIL_ACCOUNTS: JSON.stringify([account('personal'), account('work')]),
+    MAIL_PASSWORDS: JSON.stringify({ personal: 'fixture-password', work: 'fixture-password' })
+  });
+  const answer = await f.call('search_email', { mailbox: 'INBOX', text: 'nothing like this' });
+  expect(answer.result.message).toBe('Searched personal and work.');
 });
