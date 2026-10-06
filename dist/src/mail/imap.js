@@ -3,6 +3,15 @@ import { cautionsFor } from '../cautions.js';
 import { ImapFlow } from 'imapflow';
 import { imapTransport } from '../config.js';
 import { MailError, classify, isAuthFailure, isTransient, mutationFailure } from '../errors.js';
+// A conversation's subject without its reply and forward prefixes (THR-10):
+// "RE: Re: Fwd: Plans" is "Plans".
+const REPLY_PREFIX = /^(?:re|fwd?|aw|sv|wg)\s*(?:\[\d+\])?\s*:\s*/i;
+export function threadSubject(subject) {
+    let s = (subject ?? '').trim();
+    while (REPLY_PREFIX.test(s))
+        s = s.replace(REPLY_PREFIX, '').trim();
+    return s.replace(/\s+/g, ' ');
+}
 import { isSystemMessageId } from '../systemMail.js';
 import { unsubscribeKind } from '../unsubscribe.js';
 // How many of a folder's newest messages a missed Message-ID search checks.
@@ -62,8 +71,9 @@ function attachmentsIn(root) {
 // at 1,000 at most (FND-03).
 const FILTERED_BATCH = 50;
 const MAX_EXAMINED = 1000;
-// Yahoo's own search left out mail moved into a folder (FND-08, found live:
-// 4 of a sender's 16 in Trash, whatever was asked). On a server whose search
+// Yahoo's own sender search leaves mail out (FND-08, found live: it matches a
+// sender's name words, whole address and domain, not a bare part, so "cnbc"
+// missed 7 of 15 from response.cnbc.com; see FND-11). On a server whose search
 // isn't trusted, a search by sender, recipient or subject also checks the
 // folder's newest messages directly, when the server found less than a page.
 // Read by position, envelopes only: about 4 s on Yahoo.
@@ -283,7 +293,17 @@ export class ImapGateway {
                 // reliable way to re-find a message after any write.
                 if (input.messageId)
                     query.header = { 'Message-ID': input.messageId };
-                if (input.from)
+                // Yahoo matches a sender's name words, whole address and domain, not a
+                // bare part of an address (FND-11, found live: "cnbc" missed mail from
+                // response.cnbc.com). A bare word is also asked as a domain; what that
+                // finds contains the word too.
+                const bare = input.from && /^[^\s@.]+$/.test(input.from) && !input.text
+                    && this.options.unreliableHeaderSearch && !client.capabilities?.has?.('X-GM-EXT-1');
+                if (bare) {
+                    const f = input.from;
+                    query.or = [{ from: f }, { or: [{ from: `${f}.com` }, { or: [{ from: `${f}.net` }, { from: `${f}.org` }] }] }];
+                }
+                else if (input.from)
                     query.from = input.from;
                 if (input.to)
                     query.to = input.to;
@@ -630,6 +650,30 @@ export class ImapGateway {
                         hits.add(row.uid);
                 }
                 return [...hits].sort((a, b) => a - b);
+            }
+            finally {
+                lock.release();
+            }
+        };
+        return options.client ? inspect(options.client) : this.read(inspect);
+    }
+    // A folder's messages with this subject (THR-10, found live: Yahoo's header
+    // search finds nothing and its newest-200 check misses older mail, but its
+    // subject search works): the newest 100, each with the ids its own header
+    // block names, for getThread to keep only those tied to the conversation.
+    async threadCandidates(mailbox, subject, options = {}) {
+        const inspect = async (client) => {
+            const lock = await this.openToRead(client, mailbox);
+            try {
+                const r = await this.withinSearchLimit(client, client.search({ subject }, { uid: true }));
+                const uids = (Array.isArray(r) ? [...r] : []).sort((a, b) => a - b).slice(-100);
+                if (!uids.length)
+                    return [];
+                const rows = await client.fetchAll(uids, { headers: HEADER_BLOCK }, { uid: true });
+                return [...rows].sort((a, b) => a.uid - b.uid).map(row => {
+                    const inReplyTo = idsIn(row.headers, ['In-Reply-To'])[0];
+                    return { uid: row.uid, messageId: idsIn(row.headers, ['Message-ID'])[0] ?? '', references: idsIn(row.headers, ['References']), ...(inReplyTo ? { inReplyTo } : {}) };
+                });
             }
             finally {
                 lock.release();
