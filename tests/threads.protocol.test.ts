@@ -54,7 +54,7 @@ describe('thread strategies on a real mail server', () => {
 
     const direct = await mailServiceFor(server, trusting).getThread('INBOX', rootUid);
     expect(ids(direct)).toEqual([root, mine, theirs]);
-    expect(direct.warnings ?? []).not.toContainEqual(expect.stringMatching(/most recent/));
+    expect(direct.warnings ?? []).not.toContainEqual(expect.stringMatching(/newest 200/));
 
     // Through a proxy that blanks every header search: had any scan of recent
     // messages run, it would still have found the replies.
@@ -81,7 +81,7 @@ describe('thread strategies on a real mail server', () => {
     try {
       const result = await mailServiceFor({ ...server, host: proxy.host, port: proxy.port }).getThread('INBOX', rootUid);
       expect(ids(result)).toEqual([root, mine, theirs]);
-      expect(result.warnings).toContainEqual(expect.stringMatching(/most recent/));
+      expect(result.warnings).toContainEqual(expect.stringMatching(/newest 200/));
     } finally {
       await proxy.stop();
     }

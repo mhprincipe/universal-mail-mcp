@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ImapGateway } from '../src/mail/imap.js';
 
-// FND-08 (added: 2.4.6, found live 2026-10-06): Yahoo's own search left out
-// mail moved into a folder. In Trash, every search for a sender found 4 of
-// its 16 messages: the 12 just moved there weren't found, even by their full
-// address. Here, a stand-in for that server: its search knows only some of
-// the folder, and the newest messages are checked directly as well.
+// FND-08 (added: 2.4.6, found live 2026-10-06): Yahoo's own sender search
+// leaves mail out. (Corrected in 2.5.1: first put down to mail moved into a
+// folder; the Trash mail thought missed had been deleted. Shown live: Yahoo
+// matches a sender's name words, whole address and domain, not a bare part, so
+// "cnbc" missed 7 emails named "Jim Cramer" from response.cnbc.com; FND-11.)
+// Here, a stand-in for that server: its search knows only some of the folder,
+// and the newest messages are checked directly as well.
 type Row = { uid: number; from: string; name?: string; to?: string; subject?: string; seen?: boolean };
+type Query = { from?: string; subject?: string; seen?: boolean; or?: Query[] };
 
 function server(rows: Row[], indexed: number[], options: { gmail?: boolean; reliable?: boolean } = {}) {
   const calls = { ranges: [] as string[], searches: 0 };
@@ -22,13 +25,14 @@ function server(rows: Row[], indexed: number[], options: { gmail?: boolean; reli
     connect: async () => undefined, logout: async () => undefined, close: () => undefined, noop: async () => undefined,
     getMailboxLock: async () => ({ release: () => undefined }),
     // The server's search: only what it indexed, by sender address or name.
-    search: async (query: { from?: string; subject?: string; seen?: boolean }) => {
+    search: async (query: Query) => {
       calls.searches++;
-      return rows.filter(r => indexed.includes(r.uid))
-        .filter(r => !query.from || `${r.name ?? ''} ${r.from}`.toLowerCase().includes(query.from.toLowerCase()))
-        .filter(r => !query.subject || (r.subject ?? 'news').toLowerCase().includes(query.subject.toLowerCase()))
-        .filter(r => query.seen === undefined || Boolean(r.seen) === query.seen)
-        .map(r => r.uid);
+      const matches = (r: Row, q: Query): boolean =>
+        (!q.from || `${r.name ?? ''} ${r.from}`.toLowerCase().includes(q.from.toLowerCase()))
+        && (!q.subject || (r.subject ?? 'news').toLowerCase().includes(q.subject.toLowerCase()))
+        && (q.seen === undefined || Boolean(r.seen) === q.seen)
+        && (!q.or || q.or.some(sub => matches(r, sub)));
+      return rows.filter(r => indexed.includes(r.uid)).filter(r => matches(r, query)).map(r => r.uid);
     },
     // By UID (a page) or by position ("first:*", the newest).
     fetchAll: async (wanted: number[] | string) => {
@@ -49,8 +53,9 @@ const other = (uid: number): Row => ({ uid, from: `news${uid}@shop.example`, nam
 const uids = (r: { messages: Array<{ uid: number }> }) => r.messages.map(m => m.uid);
 
 describe('finding mail the server\'s search left out', () => {
-  it('FND-08 a sender search also checks the newest messages directly: mail just moved in is found (added: 2.4.6, found live)', async () => {
-    // 1-3 indexed long ago; 8-10 moved in, never indexed.
+  it('FND-08 a sender search also checks the newest messages directly: mail the server\'s search left out is found (added: 2.4.6, found live)', async () => {
+    // The server's search finds 1-7 and leaves out 8-10 (as Yahoo left out
+    // mail whose sender's name didn't contain the word asked for).
     const rows = [nexxt(1), other(2), nexxt(3), other(4), other(5), other(6), other(7), nexxt(8), nexxt(9), nexxt(10)];
     const { gateway } = server(rows, [1, 2, 3, 4, 5, 6, 7]);
     const page = await gateway.searchPage({ mailbox: 'Trash', from: 'example-jobs', limit: 25 });

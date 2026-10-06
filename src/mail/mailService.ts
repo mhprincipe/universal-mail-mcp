@@ -9,7 +9,7 @@ import { MailError, classify, mutationFailure, success, type ToolEnvelope } from
 import { sharedParser, type AttachmentFile, type SafeParser } from '../safeParse.js';
 import { isSystemMessageId, systemMessageId } from '../systemMail.js';
 import type { MessageDetail, MessageSummary } from '../types.js';
-import { ImapGateway, type AccessTokens, type SearchInput } from './imap.js';
+import { ImapGateway, threadSubject, type AccessTokens, type SearchInput, type ThreadCandidate } from './imap.js';
 import { composeRaw } from './mime.js';
 import { UNSUBSCRIBE_RANK, oneClickTarget, realOneClick, unsubscribeKind, unsubscribeOneClick, type OneClickDeps, type UnsubscribeKind } from '../unsubscribe.js';
 
@@ -220,7 +220,7 @@ export class MailService {
         for (const hit of uids.slice(-100)) found.push({ mailbox: allMail, uid: hit });
       } else {
         const scanRecent = this.unreliableHeaderSearch;
-        if (scanRecent) warnings.push('Thread fallback checks only the 200 most recent messages per folder; older unindexed matches may be omitted.');
+        if (scanRecent) warnings.push('On this provider a conversation is found by its reply headers and by its subject; a message whose subject was changed, older than a folder\'s newest 200, may be missing.');
         let searched = 0;
         for (const folder of scanned) {
           if (!isUsual(folder) && this.clock.now() - started > THREAD_SCAN_MS) {
@@ -236,7 +236,40 @@ export class MailService {
           });
           for (const hit of uids.slice(-100)) found.push({ mailbox: folder.path, uid: hit });
         }
+        // THR-10 (found live: a week-old Yahoo conversation came back as 3 of
+        // 9): the folders searched are asked again by subject, and each message
+        // found is kept only if its reply headers tie it to the conversation,
+        // following the ties from message to message.
+        const subject = threadSubject(seed.data!.subject);
+        if (scanRecent && subject) {
+          const pool: Array<ThreadCandidate & { mailbox: string }> = [];
+          for (const folder of scanned.slice(0, searched)) {
+            const candidates = await this.imap.threadCandidates(folder.path, subject, { client }).catch(() => {
+              warnings.push('A folder could not be searched by subject; the thread may be incomplete.');
+              return [];
+            });
+            pool.push(...candidates.map(c => ({ ...c, mailbox: folder.path })));
+          }
+          const known = new Set([seed.data!.messageId, seed.data!.inReplyTo, ...seed.data!.references].filter((id): id is string => Boolean(id)));
+          const taken = new Set<string>();
+          for (let grew = true; grew;) {
+            grew = false;
+            for (const c of pool) {
+              const key = `${c.mailbox}:${c.uid}`;
+              const ids = [c.messageId, c.inReplyTo, ...c.references].filter((id): id is string => Boolean(id));
+              if (taken.has(key) || !ids.some(id => known.has(id))) continue;
+              taken.add(key);
+              for (const id of ids) known.add(id);
+              found.push({ mailbox: c.mailbox, uid: c.uid });
+              grew = true;
+            }
+          }
+        }
       }
+      // Each message once, however many ways it was found.
+      const unique = [...new Map(found.map(ref => [`${ref.mailbox}:${ref.uid}`, ref])).values()];
+      found.length = 0;
+      found.push(...unique);
       if (found.length > 99) warnings.push('Thread retrieval reached its 100-message fetch limit.');
       for (const ref of found.slice(0, 99)) {
         // The seed is already in hand; refetching it costs a round trip.

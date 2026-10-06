@@ -159,7 +159,8 @@ at once queue behind each other on the same account and blur the timings.
 |---|---|---|
 | Yahoo | header search misses new mail | a check of the newest 200 messages (ENG-21, ENG-22) |
 | Yahoo | answers nothing to a request for named header lines (HEADER.FIELDS), found live twice: no unsubscribe for any sender, threads only through Sent | the whole header block is read (UNS-12, 2.4.5) |
-| Yahoo | its search leaves out mail moved into a folder (found live: 4 of a sender's 16 in Trash, by any query) | a search by sender, recipient or subject also checks the newest 100 directly (FND-08, 2.4.6) |
+| Yahoo | its sender search matches a name's words, a whole address and a domain ("cnbc.com"), not a bare part ("cnbc") (found live; first misread as mail moved into a folder) | the newest 100 checked directly (FND-08, 2.4.6); a bare word also asked as a domain (FND-11, 2.5.1) |
+| Yahoo | header search finds no conversation; the newest-200 check misses older mail | each folder also searched by the conversation's subject, kept only when tied by reply headers (THR-10, 2.5.1) |
 | Yahoo | about 40-70 ms per message read, whatever is read (measured 2026-10-06) | a conversation in every folder stops at 45 s (THR-08) |
 | Yahoo | batch moves report old/new UIDs mispaired | pairs checked by Message-ID (ENG-20) |
 | Outlook.com | no app passwords; IMAP and SMTP only with OAuth (XOAUTH2) | Microsoft sign-in (2.5, MS-01..18); the app id is the server setting `MICROSOFT_CLIENT_ID` |

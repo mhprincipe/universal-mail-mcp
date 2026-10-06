@@ -683,9 +683,11 @@ what it says about the person's position is true.
 
 | ID | Behavior | Tier |
 |---|---|---|
-| FND-08 | on a server whose search isn't trusted (not Gmail), a search by sender, recipient or subject that found less than a page also checks the folder's newest 100 messages directly (envelopes, by position, first page only), matching any part of a name or address in any case; read and flagged still apply; the answer says how many the server's search left out; a real server's finds aren't listed twice *(found live: Yahoo's search found 4 of a sender's 16 in Trash)* | U+P |
+| FND-08 | on a server whose search isn't trusted (not Gmail), a search by sender, recipient or subject that found less than a page also checks the folder's newest 100 messages directly (envelopes, by position, first page only), matching any part of a name or address in any case; read and flagged still apply; the answer says how many the server's search left out; a real server's finds aren't listed twice *(found live; the cause corrected in 2.5.1: Yahoo matches a sender's name words, whole address and domain, not a bare part)* | U+P |
+| FND-11 | on a server whose search isn't trusted (not Gmail), a sender search by a bare word (no @, no dot, no space, no text search) also asks for it as a domain: .com, .net and .org; an address, a domain or a name is asked as given *(added: 2.5.1, found live: "cnbc" missed 7 of 15 emails from response.cnbc.com, "cnbc.com" found all)* | U |
 | FND-10 | `search_email` with `allFolders`: every folder of one account but Trash and Junk (Gmail: All Mail once), newest first, each result naming its folder; the usual folders first, then the rest within 45 s, the answer saying how many were left; the direct check only in the usual folders; the folder list asked afresh *(the owner's choice)* | U+P |
 | THR-08 | a conversation looked for in every folder: Inbox, Sent, Archive and its own folder first and always; the rest while within 45 s, the answer saying how many folders weren't searched *(found in the server's log: 206 s and 231 s on 44 Yahoo folders, one call cut at 300 s)* | U |
+| THR-10 | on a server whose header search isn't trusted (not Gmail), the folders searched are asked again by the conversation's subject (Re:, Fwd: and the like taken off), the newest 100 hits' header blocks read, and each kept only if its reply headers tie it to the conversation, following the ties from message to message; each message read once; a folder whose subject search fails is said; the answer says what can still be missed *(added: 2.5.1, found live: a week-old conversation came back as 3 of 9)* | U |
 | THR-09 | in that search, the other folders check only their newest 50 messages directly (the usual ones 200) | U |
 | SCM-11 | a sender's name with invisible characters between its letters (Unicode format characters, but not the joiner inside an emoji) is cautioned, and the name is checked with them taken out *(found live: a brand's name split by tag characters)* | U |
 | BLK-01 | `matching` on the eight tools that take `uids` (move, archive, mark read/unread, flag, trash, junk, restore): acts on what a search finds; the answer says how many matched *(the owner's choice)* | U+P |
@@ -819,8 +821,9 @@ also where a later reader finds out why a line of code exists.
 | Files and clean-up (2.4.1-2.4.4) | 53 |
 | Finding everything (2.4.6) | 12 |
 | Microsoft sign-in (2.5) | 18 |
-| **New** | **462** |
-| **Total** | **617** |
+| Search fixes (2.5.1) | 2 |
+| **New** | **464** |
+| **Total** | **619** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

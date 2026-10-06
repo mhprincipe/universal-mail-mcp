@@ -1,6 +1,6 @@
 # Open questions, decisions made for you, and the live-install checklist
 
-## Where things stand (2026-10-06, version 2.5.0)
+## Where things stand (2026-10-06, version 2.5.1)
 
 The live install passed (2026-09-28). Every tool works live on Yahoo with Claude
 and with ChatGPT; Gmail is connected; timings are measured and tuned; v1 is

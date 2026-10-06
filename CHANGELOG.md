@@ -4,6 +4,24 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.5.1 (2026-10-06): fixes from the live run of 2.5.0
+
+No tool changed: no connector refresh needed.
+
+- **Yahoo conversations, complete** (THR-10): a conversation from a week before
+  came back as 3 of its 9 messages (found live). Yahoo's header search finds
+  nothing and the direct check reads only a folder's newest 200; now each folder
+  is also searched by the conversation's subject, and only messages whose reply
+  headers tie them to it are kept, following the ties from one to the next.
+- **Yahoo sender search by part of an address** (FND-11): Yahoo matches a
+  sender's name, whole address and domain, but not a bare part: "cnbc" missed
+  the emails from response.cnbc.com named "Jim Cramer" (found live). A bare word
+  is now also asked as a domain (.com, .net, .org).
+- **2.4.6's notes corrected:** its Yahoo search fix (FND-08) was put down to mail
+  moved into a folder. That was wrong: the Trash mail thought missed had been
+  deleted. The real cause is the one above; the fix itself (checking the newest
+  100 directly) works and stays.
+
 ## 2.5.0 (2026-10-06): Outlook.com
 
 No tool changed: no connector refresh needed for this one.
@@ -29,9 +47,10 @@ refreshed to use them (everything else works without one).
   Up to 100 per call, the newest first, logged with undo like any other.
 - **Folder counts** (FOL-01): `list_folders` with `counts` says how many
   messages and how many unread each folder holds.
-- **Yahoo's search, fixed** (FND-08): Yahoo's own search leaves out mail moved
-  into a folder (found live: 4 of a sender's 16 in Trash). A search by sender,
-  recipient or subject now also checks the folder's newest 100 messages itself.
+- **Yahoo's search, fixed** (FND-08): Yahoo's own search leaves mail out. A
+  search by sender, recipient or subject now also checks the folder's newest
+  100 messages itself. *(The cause given here at first, mail moved into a
+  folder, was wrong; see 2.5.1.)*
 - **A conversation in every folder, fixed** (THR-08/09): on Yahoo it took over
   200 s and once hit the server's 300 s limit (found in the server's log). Now
   the usual folders come first and the rest stop at 45 s, saying what was left.
