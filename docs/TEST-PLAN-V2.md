@@ -698,6 +698,31 @@ what it says about the person's position is true.
 
 **Exit:** all of the above green, mutation-checked; then tried live.
 
+### Phase 10 — Microsoft sign-in *(added 2026-10-06: 2.5.0, docs/DESIGN-PROVIDER-SIGNIN.md, the owner's go-ahead: Outlook.com first)*
+
+| ID | Behavior | Tier |
+|---|---|---|
+| MS-01 | a sign-in starts at Microsoft's device-code endpoint with the app's id and exactly the mail scopes plus offline access; only an https page of Microsoft's own is ever shown *(added: 2.5)* | U |
+| MS-02 | waiting for approval: pending, slow down, done (a refresh token required), declined, expired, failed *(added: 2.5)* | U |
+| MS-03 | a refresh token buys an access token, reused until five minutes before it ends, one refresh at a time; a refused one is AUTH_FAILED, an outage TRANSIENT_NETWORK *(added: 2.5)* | U |
+| MS-04 | Microsoft's newer refresh token is used from then on and saved at most once a week; a refused token is asked about once per call, never in a loop *(added: 2.5)* | U |
+| MS-05 | no token, code or Microsoft's own error words in any error *(added: 2.5)* | U |
+| MS-06 | IMAP signs in with the address and a fresh access token (XOAUTH2), never a password; a refused sign-in drops the access token *(added: 2.5)* | U |
+| MS-07 | SMTP signs in with OAuth2 and a fresh access token for each send; a password account is unchanged *(added: 2.5)* | U |
+| MS-08 | `auth` and `tokenSavedAt` come through the account list; without the server's Microsoft app id every call says `MICROSOFT_NOT_SET_UP`; a newer refresh token is passed on to be saved *(added: 2.5)* | U |
+| MS-09 | the installed state keeps them; saving a newer token writes the credentials and its date without rebuilding the mail access *(added: 2.5)* | U |
+| MS-10 | setup's check signs in with the token: IMAP AUTHENTICATE XOAUTH2 (a "+" challenge answered empty, as the protocol asks) and SMTP AUTH XOAUTH2; nothing of the token in the log *(added: 2.5)* | U |
+| MS-11 | Outlook.com, Hotmail, Live and MSN: their own profile (outlook.office365.com, smtp-mail.outlook.com) signing in with Microsoft; a company domain at Microsoft is not taken for Outlook.com *(added: 2.5)* | U |
+| MS-12 | your page offers Add an Outlook.com account only when the server has the app id; an Outlook address given an app password is told to sign in with Microsoft, nothing checked *(added: 2.5)* | U |
+| MS-13 | the code and Microsoft's page shown (the device code never); Finish before approving says so and keeps the code; approved: checked with the token, added with auth microsoft, the refresh token kept as a password, emailed; no token in any page or log *(added: 2.5)* | U |
+| MS-14 | declined, expired at Microsoft, past its time here (not asked again), failing its check, a non-Outlook address, nothing started: each said, nothing saved *(added: 2.5)* | U |
+| MS-15 | a Microsoft account shows Sign in again, not an app password; signing in again replaces its token and keeps everything else *(added: 2.5)* | U |
+| MS-16 | on a real server (Dovecot accepting only XOAUTH2, an SMTP server accepting only the token, a stand-in token endpoint): read, send with the Sent copy filed, a refused refresh token AUTH_FAILED *(added: 2.5)* | P |
+| MS-17 | the "something broke" email says to sign in again; the page says the Microsoft sign-in needs renewing *(added: 2.5)* | U |
+| MS-18 | Check and fix never asks for an app password for a Microsoft account: it says to sign in again on the page *(added: 2.5)* | U |
+
+**Exit:** all of the above green, mutation-checked; then the owner's registration (docs/MICROSOFT-SETUP.md) and a live Outlook.com account.
+
 ### Diagnostics — across phases
 
 | ID | Behavior | Tier |
@@ -793,8 +818,9 @@ also where a later reader finds out why a line of code exists.
 | Serving people (2.4) | 39 |
 | Files and clean-up (2.4.1-2.4.4) | 53 |
 | Finding everything (2.4.6) | 12 |
-| **New** | **444** |
-| **Total** | **599** |
+| Microsoft sign-in (2.5) | 18 |
+| **New** | **462** |
+| **Total** | **617** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

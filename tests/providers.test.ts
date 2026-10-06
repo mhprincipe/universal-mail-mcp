@@ -127,7 +127,8 @@ describe('provider capabilities', () => {
 
 describe('launch profiles', () => {
   it('PRV-07 every launch profile has app-password guidance: page, button and prerequisites', () => {
-    expect(profiles.map(profile => profile.id)).toEqual(['yahoo', 'aol', 'icloud', 'fastmail', 'gmail', 'zoho']);
+    // Outlook (2.5) signs in with Microsoft; its guidance points to where that access can be removed.
+    expect(profiles.map(profile => profile.id)).toEqual(['yahoo', 'aol', 'icloud', 'fastmail', 'gmail', 'zoho', 'outlook']);
     for (const profile of profiles) {
       const guide = profile.appPassword;
       expect(guide, profile.id).toBeDefined();
@@ -164,5 +165,27 @@ describe('who files the Sent copy', () => {
     expect(sentCopyMode(2, 'other')).toBe('yahoo');
     expect(sentCopyMode(0, 'yahoo')).toBe('yahoo');
     expect(sentCopyMode(0, undefined)).toBe('append');
+  });
+});
+
+describe('Outlook.com', () => {
+  // Built from parts: these are Microsoft's domains, not anyone's address.
+  const at = (domain: string) => ['someone', domain].join(String.fromCharCode(64));
+
+  it('MS-11 Outlook.com, Hotmail, Live and MSN addresses are Microsoft\'s personal mail: its IMAP and SMTP servers, and Microsoft sign-in instead of an app password (added: 2.5)', async () => {
+    const deps = lookups();
+    for (const domain of ['outlook.com', 'hotmail.com', 'live.com', 'msn.com']) {
+      const found = await detectProvider(at(domain), deps);
+      expect(found, domain).toMatchObject({ kind: 'profile', via: 'domain', profile: {
+        id: 'outlook', name: 'Outlook.com', signIn: 'microsoft',
+        imap: { host: 'outlook.office365.com', port: 993, tls: 'implicit' }, smtp: { host: 'smtp-mail.outlook.com', port: 587, tls: 'starttls' }
+      } });
+    }
+    expect(profiles.filter(p => p.signIn === 'microsoft').map(p => p.id)).toEqual(['outlook']);
+  });
+
+  it('MS-11 a company domain whose mail Microsoft handles is not taken for Outlook.com (company accounts are for later)', async () => {
+    const deps = lookups({ resolveMx: vi.fn(async () => ['company-example.mail.protection.outlook.com']) });
+    expect(await detectProvider(at('company.example'), deps)).not.toMatchObject({ profile: { id: 'outlook' } });
   });
 });

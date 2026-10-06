@@ -1,6 +1,6 @@
 # Design for review: signing in with Microsoft (and Google)
 
-**Status:** proposal, 2026-09-29, for the owner's review. Nothing here is built.
+**Status:** phase 1 built in 2.5.0 (2026-10-06): personal Outlook.com accounts. Waiting on the owner's registration (docs/MICROSOFT-SETUP.md). See §8 for what was decided and how it was built.
 **Goal:** Outlook.com, Hotmail, Live and Microsoft 365 accounts, which no longer
 accept app passwords; and, if the owner chooses, Gmail without app passwords.
 
@@ -97,3 +97,21 @@ registration serves every installation.
 3. Agree to keep app passwords for Gmail for now?
 4. Can you get an Outlook.com account for testing, and create the Entra app
    registration? I'll write the exact clicks.
+
+
+## 8. Decided and built (2.5.0)
+
+The owner's answers (2026-10-06): **go ahead with phase 1**, **Outlook.com first**
+(personal accounts; company accounts later), **Gmail keeps app passwords**, and
+test with **the owner's own Outlook.com account**.
+
+| Part | As built |
+|---|---|
+| **The app id** | A server setting, `MICROSOFT_CLIENT_ID`, not built into releases: once the owner registers, it's set on the server and no release is needed. Without it, the Outlook option isn't shown and a Microsoft account answers `MICROSOFT_NOT_SET_UP`. |
+| **Authority** | `https://login.microsoftonline.com/consumers` (personal accounts), a setting (`MICROSOFT_AUTHORITY`) for tests. |
+| **Sign-in on the page** | Add an Outlook.com account → the code and Microsoft's page shown → Finish (no script, no polling: the person presses it after approving). The device code stays in the server's memory for that page session. |
+| **Tokens** | `src/microsoft.ts`: an access token kept until five minutes before it ends, one refresh at a time. Microsoft hands out a new refresh token with each refresh; it's used at once and **saved at most weekly** (a saved one stays good 90 days unused; saving each would write the secret hourly). Saving it doesn't rebuild the mail access. |
+| **Mail** | IMAP and SMTP with XOAUTH2, the same engine; SMTP gets a fresh transport per send. |
+| **Setup's check** | IMAP `AUTHENTICATE XOAUTH2` and SMTP `AUTH XOAUTH2`, a challenge answered as the protocol asks. Check and fix never asks for an app password for a Microsoft account. |
+| **Testing** | Unit: a scripted Microsoft. Slow tier: Dovecot accepting only XOAUTH2 (its static password is the access token), an SMTP server accepting only the token, a stand-in token endpoint. The live run waits for the registration. |
+| **Found while building** | Microsoft no longer lets a personal account register an app outside a directory: the owner needs an Entra directory first (MICROSOFT-SETUP.md). |

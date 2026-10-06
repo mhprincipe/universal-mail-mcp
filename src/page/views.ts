@@ -9,7 +9,7 @@ import { longDate } from '../subscription/subscription.js';
 // escape(). It never shows email content, a password or a token: passwords
 // can be typed in, never shown back.
 
-export type AccountView = { name: string; email: string; sending: boolean; sendLimits: { perHour: number; perDay: number }; status: 'working' | 'password' | 'unknown'; lastUsed?: number };
+export type AccountView = { name: string; email: string; sending: boolean; sendLimits: { perHour: number; perDay: number }; status: 'working' | 'password' | 'unknown'; lastUsed?: number; auth?: 'password' | 'microsoft' };
 export type AppView = Grant & { lastUsed?: number };
 
 // Readable at phone width: one column, nothing wider than the screen.
@@ -74,6 +74,8 @@ export function dashboard(view: {
   base: string; csrf: string; now: number; accounts: AccountView[]; apps: AppView[]; canGrantSend: boolean; activity?: ActivityEntry[];
   subscription?: SubscriptionState; buyUrl?: string;
   message?: { kind: 'ok' | 'error'; text: string }; report?: string; problem?: string;
+  // Microsoft sign-in (2.5): offered when set up; a sign-in under way shows its code.
+  microsoft?: boolean; signIn?: { userCode: string; verificationUri: string; email: string };
 }): string {
   const { base, csrf } = view;
   const subscription = view.subscription && view.subscription.state !== 'unlimited' ? `<section><h2>Subscription</h2>
@@ -84,11 +86,13 @@ ${form(base, '/subscription/activate', csrf, '<label>License code <input type="t
 </details></section>` : '';
   const accounts = view.accounts.map(a => `<div class="row" id="account-${escape(a.name)}">
 <strong>${escape(a.name)}</strong> ${escape(mask(a.email))} ·
-${a.status === 'password' ? '<span class="error">⚠ Password not accepted</span>' : a.status === 'working' ? '<span class="ok">Working</span>' : '<span class="note">Not checked yet</span>'}
+${a.status === 'password' ? `<span class="error">⚠ ${a.auth === 'microsoft' ? 'Microsoft sign-in needs renewing' : 'Password not accepted'}</span>` : a.status === 'working' ? '<span class="ok">Working</span>' : '<span class="note">Not checked yet</span>'}
 · <span class="note">${escape(ago(a.lastUsed, view.now))}</span> · Sending ${a.sending ? 'on' : 'off'}
-<details${a.status === 'password' ? ' open' : ''}><summary>${a.status === 'password' ? 'Fix it' : 'Change the app password'}</summary>
+${a.auth === 'microsoft'
+  ? form(base, '/accounts/microsoft/start', csrf, `<input type="hidden" name="email" value="${escape(a.email)}"><input type="hidden" name="again" value="${escape(a.name)}">`, 'Sign in again')
+  : `<details${a.status === 'password' ? ' open' : ''}><summary>${a.status === 'password' ? 'Fix it' : 'Change the app password'}</summary>
 ${form(base, '/accounts/password', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>New app password <input type="password" name="password" autocomplete="off" required></label>`, 'Save password')}
-</details>
+</details>`}
 ${form(base, '/accounts/sending', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><input type="hidden" name="on" value="${a.sending ? 'off' : 'on'}">`, a.sending ? 'Turn sending off' : 'Turn sending on')}
 <details><summary>Sending limits: Up to ${a.sendLimits.perHour} an hour and ${a.sendLimits.perDay} a day</summary>
 ${form(base, '/accounts/limits', csrf, `<input type="hidden" name="name" value="${escape(a.name)}"><label>An hour <input type="number" name="perHour" min="1" max="1000" value="${a.sendLimits.perHour}" required></label><label>A day <input type="number" name="perDay" min="1" max="10000" value="${a.sendLimits.perDay}" required></label>`, 'Save limits')}
@@ -126,7 +130,16 @@ ${view.problem ? `<pre class="error" style="white-space:pre-wrap">${escape(view.
 <section><h2>Your accounts</h2>${accounts}
 <details><summary>Add an email account</summary>
 ${form(base, '/accounts/add', csrf, `<label>Email address <input type="email" name="email" required></label><label>App password <input type="password" name="password" autocomplete="off" required></label><label>Name for your AI (optional) <input type="text" name="name" autocomplete="off"></label>`, 'Check and add')}
-</details></section>
+</details>${view.microsoft ? `
+<details${view.signIn ? ' open' : ''}><summary>Add an Outlook.com account</summary>
+<p class="note">Outlook.com, Hotmail, Live and MSN have no app passwords: you approve Universal Mail at microsoft.com instead.</p>
+${form(base, '/accounts/microsoft/start', csrf, `<label>Email address <input type="email" name="email" required></label><label>Name for your AI (optional) <input type="text" name="name" autocomplete="off"></label>`, 'Sign in with Microsoft')}
+</details>` : ''}${view.signIn ? `
+<div class="row"><strong>Sign in with Microsoft</strong>
+<ol><li>Open <a href="${escape(view.signIn.verificationUri)}" target="_blank" rel="noopener noreferrer">${escape(view.signIn.verificationUri)}</a></li>
+<li>Enter this code: <strong>${escape(view.signIn.userCode)}</strong></li>
+<li>Sign in as ${escape(view.signIn.email)} and approve Universal Mail</li></ol>
+${form(base, '/accounts/microsoft/finish', csrf, '', 'Finish')}</div>` : ''}</section>
 <section><h2>Connected apps</h2>${apps}
 <details><summary>Connect an AI app</summary><p>In Claude: Settings → Connectors → Add custom connector, and paste your AI-app address (the one setup showed, ending in /mcp). In ChatGPT (Plus or higher, on the web): Settings → Security and login → turn on Developer mode; then add a new app with the + button, name it Universal Mail, paste the same address and choose OAuth. Then approve it with a code. ChatGPT asks before each change to your mail; you can approve a tool once for the whole chat.</p></details></section>
 ${subscription}

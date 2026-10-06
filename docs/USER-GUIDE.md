@@ -34,8 +34,9 @@ This guide covers everything you do yourself. For how it works, see
 - **Claude** (any plan with custom connectors) and/or **ChatGPT** (Plus or
   higher, on the web).
 
-Outlook.com and Microsoft 365 don't allow app passwords, so they aren't
-supported yet.
+Outlook.com, Hotmail, Live and MSN don't have app passwords: from 2.5 they
+sign in with Microsoft instead (below, and docs/MICROSOFT-SETUP.md for the
+one-time setup). Company Microsoft 365 accounts aren't supported yet.
 
 ---
 
@@ -226,7 +227,10 @@ chat "List the Universal Mail tools you have".
   (ask for "all folders" for a slower, complete search). On providers whose
   header search is unreliable (Yahoo), only the 200 newest messages per folder
   are checked for replies that aren't searchable yet.
-- Outlook.com and Microsoft 365 aren't supported yet.
+- Outlook.com accounts sign in with Microsoft (2.5): your page → **Add an
+  Outlook.com account**, then approve the code at microsoft.com and press
+  **Finish**. It needs the one-time setup in docs/MICROSOFT-SETUP.md. Company
+  Microsoft 365 accounts aren't supported yet.
 - Tested live: every tool on Yahoo, with Claude and with ChatGPT; Gmail
   connected and working. Other providers are tested against simulated mail
   servers in their layouts.

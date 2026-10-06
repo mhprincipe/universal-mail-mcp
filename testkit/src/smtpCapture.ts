@@ -18,6 +18,8 @@ export type CaptureOptions = {
   password?: string;
   // Offer STARTTLS, with the test run's certificate for "localhost" (localhostTls.ts).
   starttls?: boolean;
+  // Also offer XOAUTH2, as Microsoft does, accepting only this access token.
+  accessToken?: string;
 };
 
 type Connection = { id: string; _socket: { destroy(): void } };
@@ -42,9 +44,16 @@ export async function startSmtpCapture(options: CaptureOptions = {}): Promise<Sm
     // Local and test-only: sign-in is allowed without encryption, unless
     // encryption is offered; then, like Yahoo, it is required first.
     allowInsecureAuth: !options.starttls,
-    onAuth: (auth, _session, done) => options.password !== undefined && auth.password !== options.password
-      ? done(Object.assign(new Error('Invalid username or password'), { responseCode: 535 }))
-      : done(null, { user: auth.username }),
+    ...(options.accessToken !== undefined ? { authMethods: ['PLAIN', 'LOGIN', 'XOAUTH2'] } : {}),
+    onAuth: (auth, _session, done) => {
+      if (auth.method === 'XOAUTH2') {
+        return auth.accessToken === options.accessToken ? done(null, { user: auth.username })
+          : done(Object.assign(new Error('Invalid token'), { responseCode: 535 }));
+      }
+      return options.password !== undefined && auth.password !== options.password
+        ? done(Object.assign(new Error('Invalid username or password'), { responseCode: 535 }))
+        : done(null, { user: auth.username });
+    },
     onData: (stream, session, done) => {
       const chunks: Buffer[] = [];
       stream.on('data', chunk => chunks.push(chunk));

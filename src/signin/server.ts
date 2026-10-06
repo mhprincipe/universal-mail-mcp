@@ -27,6 +27,7 @@ import { mountApproval, type SystemMail } from './approvalRoutes.js';
 import { createRefusals } from './refusals.js';
 import { DOCUMENT_LIMITS, pinnedGet, type DocumentDeps } from './clientDocument.js';
 import { createSubscription, longDate, type Subscription } from '../subscription/subscription.js';
+import { MICROSOFT_AUTHORITY, type MicrosoftSettings } from '../microsoft.js';
 
 // Apps that may connect: their identity documents must live on these origins.
 // Updates add origins as more apps adopt the standard (design §6.5).
@@ -97,12 +98,24 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
     status.set(name, 'password');
     if (!store || alerted.has(name)) return;
     alerted.add(name);
+    if (store.accounts().find(a => a.name === name)?.auth === 'microsoft') {
+      await approval.notify(`The Microsoft sign-in for ${name} stopped working`,
+        `Microsoft no longer accepts Universal Mail's sign-in for ${name} (a changed password or removed access does this), so your AI apps can't use it.\n\nPress Sign in again on your Universal Mail page and approve it at Microsoft.\nFix it: ${issuer}/${key}`);
+      return;
+    }
     await approval.notify(`The password for ${name} stopped working`,
       `Your email provider no longer accepts the app password Universal Mail uses for ${name}, so your AI apps can't use it.\n\nMake a new app password with your provider, then paste it on your Universal Mail page.\nFix it: ${issuer}/${key}`);
   };
+  // A Microsoft account's newer refresh token (MS-04): saved weekly, without
+  // rebuilding the mail access.
+  const onToken = (name: string, refreshToken: string) => { store?.saveToken(name, refreshToken, (deps.clock ?? Date).now()); };
+  // Microsoft sign-in (2.5): offered once the server has the app's id.
+  const microsoft: MicrosoftSettings | undefined = env.MICROSOFT_CLIENT_ID
+    ? { clientId: env.MICROSOFT_CLIENT_ID, authority: env.MICROSOFT_AUTHORITY || MICROSOFT_AUTHORITY, ...(deps.fetchImpl ? { fetch: deps.fetchImpl } : {}) }
+    : undefined;
   // The subscription (design §13): made once your page exists, below.
   let subscription: Subscription | undefined;
-  const getMail = () => mail ??= createMailRouter(getAccounts(), { onAuthFailure, readOnly: () => subscription?.readOnlySentence() });
+  const getMail = () => mail ??= createMailRouter(getAccounts(), { onAuthFailure, onToken, readOnly: () => subscription?.readOnlySentence() });
   // The old mail access logs out of its kept connections (ENG-18): they may carry an old password.
   store?.onAccountsChange(() => {
     const replaced = mail;
@@ -217,7 +230,8 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
     mountPage(app, {
       key, owner: approval.owner, signInAddress: () => store.signInAddress(), clock, notify: approval.notify,
       view: () => ({
-        accounts: store.accounts().map(a => ({ name: a.name, email: a.email, sending: a.sending ?? true, sendLimits: a.sendLimits ?? DEFAULT_SEND_LIMITS, status: status.get(a.name) ?? 'unknown' })),
+        accounts: store.accounts().map(a => ({ name: a.name, email: a.email, sending: a.sending ?? true, sendLimits: a.sendLimits ?? DEFAULT_SEND_LIMITS, status: status.get(a.name) ?? 'unknown', ...(a.auth ? { auth: a.auth } : {}) })),
+        microsoft: Boolean(microsoft),
         apps: auth.grants.snapshot().apps.map(g => ({ ...g, lastUsed: lastUsed.get(g.appId) })),
         subscription: sub.current(), buyUrl: sub.buyUrl(),
         activity: activity.list()
@@ -230,7 +244,7 @@ export function createSigninApp(env: NodeJS.ProcessEnv, deps: SigninDeps = {}) {
           const paid = outcome.state.state === 'active' ? ` Paid through ${longDate(Date.parse(outcome.state.paidThrough))}.` : '';
           tools.back(res, session, { kind: 'ok', text: `Your subscription is active.${paid}` });
         });
-        accountActions(tools, { store, mailCheck: deps.mailCheck!, grants: auth.grants, status, notify: approval.notify });
+        accountActions(tools, { store, mailCheck: deps.mailCheck!, grants: auth.grants, status, notify: approval.notify, clock, ...(microsoft ? { microsoft } : {}) });
         appActions(tools, { store, grants: auth.grants, disconnect: approval.disconnect, notify: approval.notify });
         activityActions(tools, { activity, getMail: () => getMail(), accountFor: email => store.accounts().find(a => a.email.toLowerCase() === email.toLowerCase())?.name });
         // Check that everything works: the report, shown for copying.

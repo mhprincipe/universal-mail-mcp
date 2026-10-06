@@ -9,7 +9,7 @@ import { MailError, classify, mutationFailure, success, type ToolEnvelope } from
 import { sharedParser, type AttachmentFile, type SafeParser } from '../safeParse.js';
 import { isSystemMessageId, systemMessageId } from '../systemMail.js';
 import type { MessageDetail, MessageSummary } from '../types.js';
-import { ImapGateway, type SearchInput } from './imap.js';
+import { ImapGateway, type AccessTokens, type SearchInput } from './imap.js';
 import { composeRaw } from './mime.js';
 import { UNSUBSCRIBE_RANK, oneClickTarget, realOneClick, unsubscribeKind, unsubscribeOneClick, type OneClickDeps, type UnsubscribeKind } from '../unsubscribe.js';
 
@@ -24,6 +24,8 @@ export type MailServiceOptions = {
   clock?: { now(): number };
   // How one-click unsubscribe reaches a sender (tests replace it).
   oneClick?: OneClickDeps;
+  // A Microsoft account (2.5): access tokens instead of a password, for IMAP and SMTP.
+  tokens?: AccessTokens;
 };
 
 // Attachments to send: of emails in this account (by folder, uid and position),
@@ -57,7 +59,10 @@ const THREAD_SCAN_MS = 45_000;
 
 export class MailService {
   readonly imap: ImapGateway;
-  private readonly smtp: ReturnType<typeof nodemailer.createTransport>;
+  // Password accounts keep one SMTP transport; a Microsoft account makes one per
+  // send, with an access token fresh enough for it (MS-07).
+  private readonly smtp?: ReturnType<typeof nodemailer.createTransport>;
+  private readonly tokens?: AccessTokens;
   private readonly parser: SafeParser;
   private readonly unreliableHeaderSearch: boolean;
   private readonly sendLog: SendLog;
@@ -70,18 +75,28 @@ export class MailService {
     this.sendLog = options.sendLog ?? sharedSendLog();
     this.clock = options.clock ?? Date;
     this.oneClick = options.oneClick ?? realOneClick;
-    this.imap = new ImapGateway(config, { unreliableHeaderSearch: this.unreliableHeaderSearch });
-    this.smtp = nodemailer.createTransport({
-      host: config.SMTP_HOST,
-      port: config.SMTP_PORT,
-      ...smtpTransport(config),
-      auth: { user: config.MAIL_ADDRESS, pass: config.MAIL_APP_PASSWORD },
+    this.tokens = options.tokens;
+    this.imap = new ImapGateway(config, { unreliableHeaderSearch: this.unreliableHeaderSearch, ...(options.tokens ? { tokens: options.tokens } : {}) });
+    if (!options.tokens) this.smtp = this.transport({ user: config.MAIL_ADDRESS, pass: config.MAIL_APP_PASSWORD });
+  }
+
+  private transport(auth: { user: string; pass: string } | { type: 'OAuth2'; user: string; accessToken: string }) {
+    return nodemailer.createTransport({
+      host: this.config.SMTP_HOST,
+      port: this.config.SMTP_PORT,
+      ...smtpTransport(this.config),
+      auth,
       logger: false,
       debug: false,
       connectionTimeout: 15_000,
       greetingTimeout: 15_000,
       socketTimeout: 30_000
-    });
+    } as never);
+  }
+
+  private async mailer() {
+    if (!this.tokens) return this.smtp!;
+    return this.transport({ type: 'OAuth2', user: this.config.MAIL_ADDRESS, accessToken: await this.tokens.accessToken() });
   }
 
   private async specialFolder(role: 'inbox'|'sent'|'drafts'|'trash'|'archive'|'junk'): Promise<string> {
@@ -363,7 +378,7 @@ export class MailService {
     // pass the check (LIM-04); given back only when the provider refuses it.
     this.sendLog.record(this.config.MAIL_ADDRESS, now);
     try {
-      const info = await phase('smtp.send', () => this.smtp.sendMail({
+      const info = await phase('smtp.send', async () => (await this.mailer()).sendMail({
         envelope: { from: this.config.MAIL_ADDRESS, to: recipients },
         raw: args.raw
       }));
@@ -581,7 +596,7 @@ export class MailService {
       from: this.config.MAIL_ADDRESS, to: [to], subject, text,
       messageId: systemMessageId(), headers: { 'X-Universal-Mail': 'system' }
     });
-    await phase('smtp.send', () => this.smtp.sendMail({ envelope: { from: this.config.MAIL_ADDRESS, to: [to] }, raw: built.raw }));
+    await phase('smtp.send', async () => (await this.mailer()).sendMail({ envelope: { from: this.config.MAIL_ADDRESS, to: [to] }, raw: built.raw }));
     return built.messageId;
   }
 
@@ -633,7 +648,7 @@ export class MailService {
 
   async verifyConnectivity() {
     const folders = await this.imap.listFolders();
-    await this.smtp.verify();
+    await (await this.mailer()).verify();
     return { imap: true, smtp: true, folders: folders.length };
   }
 }

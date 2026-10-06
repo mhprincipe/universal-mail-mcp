@@ -7,7 +7,7 @@ import { sentCopyMode } from '../providers.js';
 // read from Google (the two secrets and the running service), so it works
 // even after Cloud Shell has cleared its files.
 
-type State = { key: string; accounts: Array<{ name: string; email: string; provider?: string; sentCopyMode: string }> } & Record<string, unknown>;
+type State = { key: string; accounts: Array<{ name: string; email: string; provider?: string; sentCopyMode: string; auth?: string }> } & Record<string, unknown>;
 type Credentials = { passwords: Record<string, string> } & Record<string, unknown>;
 
 // How many times Check and fix repairs and checks again before handing over.
@@ -113,6 +113,12 @@ async function repair(d: SetupDeps, google: GoogleCloud, project: string, state:
   const provider = detected?.provider;
   const credentials = JSON.parse((await google.readSecret(project, CREDENTIALS_SECRET)) ?? '{}') as Credentials;
 
+  // An account that signs in with Microsoft (2.5) has no app password to ask
+  // for: only a new sign-in on the page mends it (MS-18).
+  if (kind === 'account' && failed.code === 'MAIL-APP-PASSWORD-REJECTED' && account.auth === 'microsoft') {
+    d.ui.say('FIX-MICROSOFT', { address: account.email, name: account.name });
+    return false;
+  }
   if (kind === 'account' && failed.code === 'MAIL-APP-PASSWORD-REJECTED') {
     d.ui.say('FIX-PASSWORD', { provider: provider?.name ?? 'Your provider', address: account.email, page: provider?.appPassword.page.replace(/^https:\/\//, '') ?? '' });
     for (;;) {

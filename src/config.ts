@@ -7,6 +7,14 @@ const schema = z.object({
   // first version's YAHOO_EMAIL and YAHOO_APP_PASSWORD are still read).
   MAIL_ADDRESS: z.string().email(),
   MAIL_APP_PASSWORD: z.string().min(8),
+  // password: the app password above. microsoft (2.5): MAIL_APP_PASSWORD holds
+  // the account's Microsoft refresh token, and mail is read and sent with
+  // access tokens (XOAUTH2).
+  MAIL_AUTH: z.enum(['password', 'microsoft']).default('password'),
+  // The Microsoft app registration's id (public, not a secret), and where to
+  // ask for tokens: personal accounts by default.
+  MICROSOFT_CLIENT_ID: z.string().min(1).optional(),
+  MICROSOFT_AUTHORITY: z.string().url().default('https://login.microsoftonline.com/consumers'),
   // builtin: v2's own sign-in server (design §6.5), what setup installs.
   // bearer: direct mode, one shared secret, for the test kit and local development.
   AUTH_MODE: z.enum(['bearer', 'builtin']).default('bearer'),

@@ -136,6 +136,7 @@ come from the server:
 | `ATTACHMENTS_TOO_LARGE` | the attachments come to more than one email can carry |
 | `MAIL-UNSUBSCRIBE-MANUAL` | the sender offers no one-click unsubscribe; the owner can use their mail app |
 | `MAIL-UNSUBSCRIBE-OWN` | the email is from the account itself: nothing to unsubscribe from |
+| `MICROSOFT_NOT_SET_UP` | an Outlook.com account, but the server doesn't have Microsoft's app id yet |
 | `MAIL-MATCHING-EMPTY` | `matching` gave nothing to match on, which would be the whole folder |
 | `MAIL-UNSUBSCRIBE-CAUTION` | the email looks like a scam, so its unsubscribe wasn't used |
 | `MAIL-UNSUBSCRIBE-FAILED` | the sender's address wasn't safe to contact, didn't answer, or refused |

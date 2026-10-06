@@ -17,7 +17,7 @@ function mailboxes(folders: SpecialFolders): string {
   }`).join('');
 }
 
-function config(password: string, capabilities: string[], folders: SpecialFolders): string {
+function config(password: string, capabilities: string[], folders: SpecialFolders, token = false): string {
   return `
 protocols = imap
 imap_capability = ${capabilities.join(' ')}
@@ -25,7 +25,7 @@ listen = *
 log_path = /dev/stderr
 ssl = no
 disable_plaintext_auth = no
-auth_mechanisms = plain login
+auth_mechanisms = ${token ? 'xoauth2' : 'plain login'}
 mail_location = maildir:~/Maildir
 first_valid_uid = 1000
 passdb {
@@ -48,7 +48,7 @@ namespace inbox {
 export async function startImapServer(profile: ProfileName): Promise<ImapServer> {
   const password = randomBytes(12).toString('hex');
   const container: StartedTestContainer = await new GenericContainer(IMAGE)
-    .withCopyContentToContainer([{ content: config(password, profiles[profile].advertises, profiles[profile].folders), target: '/etc/dovecot/dovecot.conf' }])
+    .withCopyContentToContainer([{ content: config(password, profiles[profile].advertises, profiles[profile].folders, profiles[profile].token), target: '/etc/dovecot/dovecot.conf' }])
     .withExposedPorts(143)
     .withWaitStrategy(Wait.forLogMessage(/starting up for imap/))
     .start();

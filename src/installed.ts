@@ -28,7 +28,10 @@ const stateSchema = z.object({
     // Turned off on your page: nothing can send from it (design §3.6).
     sending: z.boolean().optional(),
     // Changed on your page (LIM-02); unset: the defaults.
-    sendLimits: z.object({ perHour: z.number().int().min(1).max(1000), perDay: z.number().int().min(1).max(10_000) }).optional()
+    sendLimits: z.object({ perHour: z.number().int().min(1).max(1000), perDay: z.number().int().min(1).max(10_000) }).optional(),
+    // Signed in with Microsoft (2.5): its password is a refresh token, saved at tokenSavedAt.
+    auth: z.enum(['password', 'microsoft']).optional(),
+    tokenSavedAt: z.number().int().min(0).optional()
   })).min(1),
   // Setup writes {} before any app has connected.
   grants: z.object({ apps: z.array(grant).optional(), connections: z.record(z.string(), z.number().int().min(0)).optional() }),
@@ -111,7 +114,8 @@ export function mailSettings(accounts: InstalledAccount[], passwords: Record<str
   return {
     MAIL_ACCOUNTS: JSON.stringify(accounts.map(a => ({
       name: a.name, email: a.email, imap: a.imap, smtp: a.smtp, sentCopyMode: a.sentCopyMode, sending: a.sending ?? true, ...(a.sendLimits ? { sendLimits: a.sendLimits } : {}),
-      ...(a.reliableHeaderSearch === undefined ? {} : { reliableHeaderSearch: a.reliableHeaderSearch })
+      ...(a.reliableHeaderSearch === undefined ? {} : { reliableHeaderSearch: a.reliableHeaderSearch }),
+      ...(a.auth ? { auth: a.auth } : {}), ...(a.tokenSavedAt !== undefined ? { tokenSavedAt: a.tokenSavedAt } : {})
     }))),
     MAIL_PASSWORDS: JSON.stringify(Object.fromEntries(accounts.map(a => [a.name, passwords[a.name]])))
   };
@@ -132,6 +136,9 @@ export type InstallStore = SavedSignin & {
   // Everything carries over, the password included.
   renameAccount(from: string, to: string): void;
   onAccountsChange(listener: () => void): void;
+  // A Microsoft account's newer refresh token (MS-09): saved, without
+  // rebuilding the mail access, which already uses it.
+  saveToken(name: string, refreshToken: string, at: number): void;
   // Anything else kept in the state (reminders sent, and so on).
   note(part: Record<string, unknown>): void;
   noted(): Record<string, unknown>;
@@ -196,6 +203,13 @@ export function createInstallStore(installed: Extract<Installed, { status: 'read
       accountsChanged();
     },
     onAccountsChange: listener => { listeners.push(listener); },
+    saveToken(name, refreshToken, at) {
+      if (!state.accounts.some(a => a.name === name)) return;
+      credentials = { ...credentials, passwords: { ...credentials.passwords, [name]: refreshToken } };
+      saveCredentials();
+      state = { ...state, accounts: state.accounts.map(a => a.name === name ? { ...a, tokenSavedAt: at } : a) };
+      saveState();
+    },
     note(part) { state = { ...state, ...part }; saveState(); },
     noted: () => state as Record<string, unknown>
   };

@@ -13,6 +13,7 @@ import { createFakeClock } from '../../testkit/src/fakeClock.js';
 export const PUBLIC_URL = 'https://universal-mail-4f2a-uc.a.run.app';
 export const KEY = 'page-key-0123456789abcdefghij';
 export const SERVICE_URL = 'https://license.example.invalid';
+export const MS_AUTHORITY = 'https://login.example.invalid/consumers';
 export type Sent = { account: string; to: string; subject: string; text: string };
 
 export function records(overrides: { state?: Record<string, unknown>; passwords?: Record<string, string> } = {}) {
@@ -40,7 +41,10 @@ export type ServiceCall = { path: string; body: Record<string, unknown> };
 export async function startPage(options: {
   state?: Record<string, unknown>; passwords?: Record<string, string>; accepted?: Record<string, string>; feed?: unknown; env?: NodeJS.ProcessEnv; start?: Date;
   service?: (path: string, body: Record<string, unknown>) => ServiceAnswer | Promise<ServiceAnswer>;
+  // Microsoft's sign-in endpoints (2.5), faked; given, Microsoft sign-in is set up.
+  microsoft?: (path: string, body: Record<string, unknown>) => ServiceAnswer | Promise<ServiceAnswer>;
 } = {}) {
+  const microsoftCalls: ServiceCall[] = [];
   const r = records(options);
   const clock = createFakeClock(options.start ?? new Date('2026-09-25T12:00:00Z'));
   const feedAsked: string[] = [];
@@ -54,7 +58,8 @@ export async function startPage(options: {
   const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   const app = createApp({
     UNIVERSAL_MAIL_STATE: JSON.stringify(r.state), UNIVERSAL_MAIL_CREDENTIALS: JSON.stringify(r.credentials), PUBLIC_URL,
-    ...(serviceUrl ? { LICENSE_SERVICE_URL: serviceUrl } : {}), ...options.env
+    ...(serviceUrl ? { LICENSE_SERVICE_URL: serviceUrl } : {}),
+    ...(options.microsoft ? { MICROSOFT_CLIENT_ID: 'ms-client-id', MICROSOFT_AUTHORITY: MS_AUTHORITY } : {}), ...options.env
   }, {
     clock,
     saveState: async json => { saves.state.push(json); },
@@ -71,12 +76,16 @@ export async function startPage(options: {
     // found), down@ (unreachable), insecure@ (no encryption), nosend@ (the
     // sending test fails), appends@ (the provider files no Sent copy).
     mailCheck: {
-      // @files-late.example: detected as Yahoo (SET-86).
-      detect: async address => address.endsWith('@unknown.invalid') ? undefined : ({ provider: { id: address.endsWith('@files-late.example') ? 'yahoo' : 'other', name: 'Example Mail', appPassword: { page: 'https://example.invalid/app-passwords', button: 'New app password', prerequisites: [] },
+      // @files-late.example: detected as Yahoo (SET-86). @msmail.example: as
+      // Outlook.com, which signs in with Microsoft (2.5).
+      detect: async address => address.endsWith('@unknown.invalid') ? undefined : address.endsWith('@msmail.example') ? ({ provider: {
+        id: 'outlook', name: 'Outlook.com', signIn: 'microsoft' as const, appPassword: { page: 'https://account.microsoft.com/privacy/app-access', button: 'Sign in with Microsoft', prerequisites: [] },
+        imap: { host: 'outlook.office365.com', port: 993, tls: 'implicit' as const }, smtp: { host: 'smtp-mail.outlook.com', port: 587, tls: 'starttls' as const } } }) : ({ provider: { id: address.endsWith('@files-late.example') ? 'yahoo' : 'other', name: 'Example Mail', appPassword: { page: 'https://example.invalid/app-passwords', button: 'New app password', prerequisites: [] },
         imap: { host: '127.0.0.1', port: 3, tls: 'implicit' }, smtp: { host: '127.0.0.1', port: 3, tls: 'starttls' } } }),
       check: async (address, password) => address.startsWith('down@') ? { ok: false, reason: 'unreachable' }
         : address.startsWith('insecure@') ? { ok: false, reason: 'insecure' }
-        : accepted[address] === password ? { ok: true, folders: 7, safeMove: true } : { ok: false, reason: 'rejected' },
+        // A Microsoft account is checked with its access token: accepted as "token:<it>".
+        : accepted[address] === (typeof password === 'string' ? password : `token:${password.accessToken}`) ? { ok: true, folders: 7, safeMove: true } : { ok: false, reason: 'rejected' },
       sendTest: async address => {
         if (address.startsWith('nosend@')) throw new Error('the test email was not sent: unreachable');
         return { copies: address.startsWith('appends@') ? 0 : 1 };
@@ -84,6 +93,12 @@ export async function startPage(options: {
     },
     fetchImpl: (async (url: string | URL | Request, init?: RequestInit) => {
       const address = String(url);
+      if (options.microsoft && address.startsWith(MS_AUTHORITY)) {
+        const call = { path: address.slice(MS_AUTHORITY.length), body: Object.fromEntries(new URLSearchParams(String(init?.body ?? ''))) as Record<string, unknown> };
+        microsoftCalls.push(call);
+        const answer = await options.microsoft(call.path, call.body);
+        return new Response(JSON.stringify(answer.body ?? {}), { status: answer.status, headers: { 'content-type': 'application/json' } });
+      }
       if (serviceUrl && address.startsWith(serviceUrl)) {
         const call = { path: address.slice(serviceUrl.length), body: init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {} };
         serviceCalls.push(call);
@@ -157,7 +172,7 @@ export async function startPage(options: {
   };
 
   return {
-    app, base, clock, sent, broken, saves, accepted, records: r, get, post, csrfIn, codeIn, signIn, act, logged, pages, mcp, feedAsked, serviceCalls,
+    app, base, clock, sent, broken, saves, accepted, records: r, get, post, csrfIn, codeIn, signIn, act, logged, pages, mcp, feedAsked, serviceCalls, microsoftCalls,
     cookie: () => cookie, forgetCookie: () => { cookie = ''; },
     close: () => new Promise<void>(resolve => { logSpy.mockRestore(); server.close(() => resolve()); server.closeAllConnections(); })
   };

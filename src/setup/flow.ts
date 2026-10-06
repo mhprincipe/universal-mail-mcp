@@ -9,10 +9,11 @@ import type { Progress, ProgressStore } from './progress.js';
 import type { Ui } from './ui.js';
 
 export type MailCheck = {
-  detect(address: string): Promise<{ provider: Pick<ProviderProfile, 'id' | 'name' | 'appPassword' | 'imap' | 'smtp'> } | undefined>;
+  detect(address: string): Promise<{ provider: Pick<ProviderProfile, 'id' | 'name' | 'appPassword' | 'imap' | 'smtp' | 'signIn'> } | undefined>;
   // A failure says why: only "rejected" is the password's fault.
-  check(address: string, password: string): Promise<{ ok: true; folders: number; safeMove: boolean } | { ok: false; reason: 'rejected' | 'unreachable' | 'insecure' }>;
-  sendTest(address: string, password: string): Promise<{ copies: 0 | 1 | 2 }>;
+  // password: an app password, or a Microsoft account's access token (2.5).
+  check(address: string, password: string | { accessToken: string }): Promise<{ ok: true; folders: number; safeMove: boolean } | { ok: false; reason: 'rejected' | 'unreachable' | 'insecure' }>;
+  sendTest(address: string, password: string | { accessToken: string }): Promise<{ copies: 0 | 1 | 2 }>;
 };
 
 export type SetupDeps = {

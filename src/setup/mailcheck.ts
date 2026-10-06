@@ -9,6 +9,12 @@ import type { SetupLog } from './log.js';
 
 export type Endpoint = { host: string; port: number; tls: 'implicit' | 'starttls' | 'none' };
 export type Endpoints = { imap: Endpoint; smtp: Endpoint };
+// An app password, or (2.5) a Microsoft account's access token.
+export type Secret = string | { accessToken: string };
+// SASL XOAUTH2 (MS-10): the address and the token, separated by Ctrl-A.
+const SEP = String.fromCharCode(1);
+const xoauth2 = (address: string, token: string) => Buffer.from(`user=${address}${SEP}auth=Bearer ${token}${SEP}${SEP}`).toString('base64');
+
 export type CheckResult = { ok: true; folders: number; safeMove: boolean } | { ok: false; reason: 'rejected' | 'unreachable' | 'insecure' };
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1']);
@@ -88,7 +94,7 @@ const quoted = (text: string) => `"${text.replace(/\\/g, '\\\\').replace(/"/g, '
 
 // An IMAP session, signed in: each command gets its own tag, and returns its
 // lines up to and including the tagged reply. undefined: the password was refused.
-async function imapSession(address: string, password: string, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions) {
+async function imapSession(address: string, password: Secret, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions) {
   const c = await open(endpoint, timeoutMs, tls);
   let n = 0;
   const command = async (text: string) => {
@@ -103,12 +109,22 @@ async function imapSession(address: string, password: string, endpoint: Endpoint
       if (!(await command('STARTTLS')).ok) throw new Insecure();
       await c.upgrade(endpoint.host);
     }
-    if (!(await command(`LOGIN ${quoted(address)} ${quoted(password)}`)).ok) { c.close(); return undefined; }
+    const signedIn = typeof password === 'string'
+      ? (await command(`LOGIN ${quoted(address)} ${quoted(password)}`)).ok
+      : await (async () => {
+        const tag = `a${n++}`;
+        c.send(`${tag} AUTHENTICATE XOAUTH2 ${xoauth2(address, password.accessToken)}`);
+        let lines = await c.until(l => l.startsWith(`${tag} `) || l.startsWith('+'));
+        // A refusal can come as a challenge first (Gmail): answered empty, then the tagged NO.
+        if (lines.at(-1)!.startsWith('+')) { c.send(''); lines = await c.until(l => l.startsWith(`${tag} `)); }
+        return lines.at(-1)!.startsWith(`${tag} OK`);
+      })();
+    if (!signedIn) { c.close(); return undefined; }
   } catch (error) { c.close(); throw error; }
   return { command, close: () => { c.send(`a${n++} LOGOUT`); c.close(); } };
 }
 
-async function readMail(address: string, password: string, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions) {
+async function readMail(address: string, password: Secret, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions) {
   const s = await imapSession(address, password, endpoint, timeoutMs, tls);
   if (!s) return { ok: false as const };
   try {
@@ -120,7 +136,7 @@ async function readMail(address: string, password: string, endpoint: Endpoint, t
 
 // An SMTP session, signed in. reply() reads one whole reply: it ends at the
 // line with a space after the code ("250 OK", not "250-…"). undefined: refused.
-async function smtpSession(address: string, password: string, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions) {
+async function smtpSession(address: string, password: Secret, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions) {
   const c = await open(endpoint, timeoutMs, tls);
   const reply = async () => (await c.until(l => /^\d{3}( |$)/.test(l))).at(-1)!;
   try {
@@ -134,13 +150,17 @@ async function smtpSession(address: string, password: string, endpoint: Endpoint
       c.send('EHLO universal-mail-setup');
       await reply();
     }
-    c.send(`AUTH PLAIN ${Buffer.from(`\0${address}\0${password}`).toString('base64')}`);
-    if (!(await reply()).startsWith('235')) { c.send('QUIT'); c.close(); return undefined; }
+    if (typeof password === 'string') c.send(`AUTH PLAIN ${Buffer.from(`\0${address}\0${password}`).toString('base64')}`);
+    else c.send(`AUTH XOAUTH2 ${xoauth2(address, password.accessToken)}`);
+    let answer = await reply();
+    // XOAUTH2's refusal can be a 334 challenge, answered empty, then the 535.
+    if (answer.startsWith('334')) { c.send(''); answer = await reply(); }
+    if (!answer.startsWith('235')) { c.send('QUIT'); c.close(); return undefined; }
   } catch (error) { c.close(); throw error; }
   return { send: (text: string) => c.send(text), reply, close: () => { c.send('QUIT'); c.close(); } };
 }
 
-async function sendMail(address: string, password: string, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions) {
+async function sendMail(address: string, password: Secret, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions) {
   const s = await smtpSession(address, password, endpoint, timeoutMs, tls);
   s?.close();
   return { ok: Boolean(s) };
@@ -178,7 +198,7 @@ function listed(lines: string[]): Array<{ flags: string; name: string }> {
   return found;
 }
 
-async function countInSent(address: string, password: string, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions, messageId: string, poll: { tries: number; everyMs: number }) {
+async function countInSent(address: string, password: Secret, endpoint: Endpoint, timeoutMs: number, tls: ConnectionOptions, messageId: string, poll: { tries: number; everyMs: number }) {
   const s = await imapSession(address, password, endpoint, timeoutMs, tls);
   if (!s) throw new SendTestFailed('rejected');
   try {
@@ -203,7 +223,7 @@ async function countInSent(address: string, password: string, endpoint: Endpoint
 // Sends one test email from the account to itself, then counts the copies the
 // provider filed in Sent: 0, Universal Mail must file them; 1, the provider
 // does; 2, it filed two. Marked as a system email, so the AI never sees it.
-export async function sendTestEmail(address: string, password: string, endpoints: Endpoints, options: { log: SetupLog; timeoutMs?: number; tls?: ConnectionOptions; poll?: { tries: number; everyMs: number } }): Promise<{ copies: 0 | 1 | 2 }> {
+export async function sendTestEmail(address: string, password: Secret, endpoints: Endpoints, options: { log: SetupLog; timeoutMs?: number; tls?: ConnectionOptions; poll?: { tries: number; everyMs: number } }): Promise<{ copies: 0 | 1 | 2 }> {
   const timeoutMs = options.timeoutMs ?? 15_000;
   const tls = options.tls ?? {};
   const domain = address.split('@')[1];
@@ -243,7 +263,7 @@ export async function sendTestEmail(address: string, password: string, endpoints
 
 // tls: extra TLS options, such as a certificate authority to trust (tests;
 // perhaps a company's own mail server). Certificates are always checked.
-export async function checkAccount(address: string, password: string, endpoints: Endpoints, options: { log: SetupLog; timeoutMs?: number; tls?: ConnectionOptions }): Promise<CheckResult> {
+export async function checkAccount(address: string, password: Secret, endpoints: Endpoints, options: { log: SetupLog; timeoutMs?: number; tls?: ConnectionOptions }): Promise<CheckResult> {
   const timeoutMs = options.timeoutMs ?? 15_000;
   const domain = address.split('@')[1];
   const outcome = (error: unknown) => (error instanceof Insecure ? 'insecure' : 'unreachable') as 'insecure' | 'unreachable';

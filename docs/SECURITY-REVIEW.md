@@ -83,6 +83,15 @@ Reviewed the same way. The changes close three of the accepted items above
 Still open: the new-recipient confirmation. Its fix is designed, for the
 owner's decision: [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md).
 
+# 2.5.0
+
+| Change | The trade-off | Why it's accepted |
+|---|---|---|
+| **A Microsoft refresh token kept as a password** | Whoever reads the credentials secret could read and send that Outlook mail until the token is revoked, as with an app password | Kept exactly where app passwords are (Secret Manager, the server's identity only), never logged or shown (MS-05, MS-13 canaries); revocable at Microsoft at any time; scopes are mail only (IMAP, SMTP, offline access), nothing else. |
+| **Device-code sign-in** | A known phishing pattern sends people codes to approve | The code is only ever started from the owner's own signed-in page, for an address they typed; the page shows Microsoft's own https page only (MS-01). |
+| **The app id as a server setting** | Anyone who changes the server's settings could point it at another registration | Changing the server's settings already means full control of the project; the id is public, and the authority is Microsoft's own by default. |
+| **Newer refresh tokens saved weekly, not each time** | A token stolen from memory stays usable as long as Microsoft honours it | The saved one is never older than a week plus Microsoft's own expiry; revoking at Microsoft ends all of them. |
+
 # 2.4.6
 
 | Change | The trade-off | Why it's accepted |

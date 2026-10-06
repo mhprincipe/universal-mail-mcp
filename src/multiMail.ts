@@ -1,7 +1,8 @@
 import { createAccounts } from './accounts.js';
 import type { AppConfig } from './config.js';
 import { MailError, classify, success, type ToolEnvelope } from './errors.js';
-import type { SearchInput } from './mail/imap.js';
+import type { AccessTokens, SearchInput } from './mail/imap.js';
+import { MicrosoftTokens } from './microsoft.js';
 import { MailService } from './mail/mailService.js';
 import { providerName } from './providers.js';
 import type { MessageSummary } from './types.js';
@@ -9,9 +10,27 @@ import type { AccountGrant, Action } from './signin/grants.js';
 
 // One service — and so one connection gateway and one folder cache — per
 // account. A shared cache would hand one account another account's folders.
-export function createAccountServices(accounts: Array<{ name: string; config: AppConfig; reliableHeaderSearch?: boolean }>): Map<string, MailService> {
-  return new Map(accounts.map(({ name, config, reliableHeaderSearch }) =>
-    [name, new MailService(config, { unreliableHeaderSearch: !reliableHeaderSearch })]));
+// onToken: a new Microsoft refresh token to save (MS-04, at most weekly).
+type ServiceAccount = { name: string; config: AppConfig; reliableHeaderSearch?: boolean; auth?: 'password' | 'microsoft'; tokenSavedAt?: number };
+export function createAccountServices(accounts: ServiceAccount[], hooks: { onToken?(account: string, refreshToken: string): void } = {}): Map<string, MailService> {
+  return new Map(accounts.map(account => {
+    const { name, config, reliableHeaderSearch } = account;
+    const tokens = config.MAIL_AUTH === 'microsoft' ? microsoftTokens(account, hooks) : undefined;
+    return [name, new MailService(config, { unreliableHeaderSearch: !reliableHeaderSearch, ...(tokens ? { tokens } : {}) })];
+  }));
+}
+
+// A Microsoft account's tokens; without the server's Microsoft app id (MS-08),
+// every call says so instead of trying.
+function microsoftTokens(account: ServiceAccount, hooks: { onToken?(account: string, refreshToken: string): void }): AccessTokens {
+  const { config } = account;
+  if (!config.MICROSOFT_CLIENT_ID) {
+    return { accessToken: async () => { throw new MailError('MICROSOFT_NOT_SET_UP', 'Microsoft sign-in isn\'t set up on this server, so this Outlook account can\'t be reached.'); }, invalidate: () => undefined };
+  }
+  return new MicrosoftTokens({ clientId: config.MICROSOFT_CLIENT_ID, authority: config.MICROSOFT_AUTHORITY }, config.MAIL_APP_PASSWORD, {
+    ...(account.tokenSavedAt !== undefined ? { savedAt: account.tokenSavedAt } : {}),
+    ...(hooks.onToken ? { onRotated: (token: string) => hooks.onToken!(account.name, token) } : {})
+  });
 }
 
 // What one caller may reach: the accounts it was granted, and per account the
@@ -35,7 +54,8 @@ const verbs: Record<Action, string> = { read: 'read mail in', organize: 'organiz
 // "something broke" email and your page's "Fix it" come from this).
 // readOnly: the sentence to refuse organizing and sending with while the
 // subscription has lapsed (design §13.2); nothing while it hasn't.
-export type RouterHooks = { onAuthFailure?(account: string): void | Promise<void>; readOnly?(): string | undefined };
+// onToken: a Microsoft account's newer refresh token, to save (MS-04).
+export type RouterHooks = { onAuthFailure?(account: string): void | Promise<void>; readOnly?(): string | undefined; onToken?(account: string, refreshToken: string): void };
 
 // Every call to an account's service: a refused password is reported, then
 // the error goes on exactly as it was.
@@ -57,9 +77,9 @@ function watched(name: string, service: MailService, hooks: RouterHooks): MailSe
   });
 }
 
-export function createMailRouter(accounts: Array<{ name: string; config: AppConfig; reliableHeaderSearch?: boolean; sending?: boolean }>, hooks: RouterHooks = {}): MailRouter {
+export function createMailRouter(accounts: Array<ServiceAccount & { sending?: boolean }>, hooks: RouterHooks = {}): MailRouter {
   const sendingOff = new Set(accounts.filter(a => a.sending === false).map(a => a.name));
-  const plain = createAccountServices(accounts);
+  const plain = createAccountServices(accounts, hooks.onToken ? { onToken: hooks.onToken } : {});
   const services = new Map([...plain].map(([name, service]) => [name, watched(name, service, hooks)]));
   const directory = createAccounts(accounts.map(a => {
     const provider = providerName(a.config.MAIL_ADDRESS, a.config.IMAP_HOST);

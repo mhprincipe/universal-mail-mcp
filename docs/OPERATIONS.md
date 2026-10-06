@@ -162,6 +162,7 @@ at once queue behind each other on the same account and blur the timings.
 | Yahoo | its search leaves out mail moved into a folder (found live: 4 of a sender's 16 in Trash, by any query) | a search by sender, recipient or subject also checks the newest 100 directly (FND-08, 2.4.6) |
 | Yahoo | about 40-70 ms per message read, whatever is read (measured 2026-10-06) | a conversation in every folder stops at 45 s (THR-08) |
 | Yahoo | batch moves report old/new UIDs mispaired | pairs checked by Message-ID (ENG-20) |
+| Outlook.com | no app passwords; IMAP and SMTP only with OAuth (XOAUTH2) | Microsoft sign-in (2.5, MS-01..18); the app id is the server setting `MICROSOFT_CLIENT_ID` |
 | Yahoo | subject search ignores "Re:" | results checked against the subject (POL-13) |
 | Yahoo | files its own Sent copy a minute or two later | no lookup; the answer says so (ENG-24); the sending test counts Yahoo as filing its own (SET-86) |
 | Yahoo | IMAP dates compare whole days | a day either side, exact times applied (POL-12) |

@@ -2,7 +2,10 @@ import { phase, timedClient } from '../timing.js';
 import { cautionsFor } from '../cautions.js';
 import { ImapFlow } from 'imapflow';
 import { imapTransport, type AppConfig } from '../config.js';
-import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
+import { MailError, classify, isAuthFailure, isTransient, mutationFailure } from '../errors.js';
+
+// Where a Microsoft account's access tokens come from (src/microsoft.ts).
+export type AccessTokens = { accessToken(): Promise<string>; invalidate(): void };
 import { isSystemMessageId } from '../systemMail.js';
 import { unsubscribeKind, type UnsubscribeKind } from '../unsubscribe.js';
 import type { Address, FolderInfo, MessageSummary } from '../types.js';
@@ -31,7 +34,9 @@ export type SearchInput = {
 
 export type GatewayOptions = {
   // For tests: how a connection is made, the time, and how long a check may take.
-  createClient?: () => ImapFlow;
+  createClient?: (auth: { user: string; pass?: string; accessToken?: string }) => ImapFlow;
+  // A Microsoft account (2.5): access tokens instead of a password.
+  tokens?: AccessTokens;
   clock?: { now(): number };
   noopTimeoutMs?: number;
   // The provider's header search can miss (Yahoo, ENG-21): a Message-ID search
@@ -132,13 +137,17 @@ export class ImapGateway {
     this.clock = options.clock ?? Date;
   }
 
-  private client(): ImapFlow {
-    if (this.options.createClient) return this.options.createClient();
+  // A password, or a fresh access token for a Microsoft account (MS-06).
+  private async client(): Promise<ImapFlow> {
+    const auth = this.options.tokens
+      ? { user: this.config.MAIL_ADDRESS, accessToken: await this.options.tokens.accessToken() }
+      : { user: this.config.MAIL_ADDRESS, pass: this.config.MAIL_APP_PASSWORD };
+    if (this.options.createClient) return this.options.createClient(auth);
     const c = new ImapFlow({
       host: this.config.IMAP_HOST,
       port: this.config.IMAP_PORT,
       ...imapTransport(this.config),
-      auth: { user: this.config.MAIL_ADDRESS, pass: this.config.MAIL_APP_PASSWORD },
+      auth,
       logger: false
     });
     c.on('error', () => undefined);
@@ -175,8 +184,13 @@ export class ImapGateway {
     }
     if (kept) this.drop(kept.client);
     // Each command it sends is timed, for the tool's log line (DIA-13).
-    const client = timedClient(this.client(), 'imap');
-    await client.connect();
+    const client = timedClient(await this.client(), 'imap');
+    try { await client.connect(); }
+    catch (error) {
+      // A refused access token is never offered again (MS-06).
+      if (this.options.tokens && isAuthFailure(error)) this.options.tokens.invalidate();
+      throw error;
+    }
     this.session = { client, lastUsed: this.clock.now() };
     return client;
   }

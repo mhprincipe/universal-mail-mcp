@@ -23,7 +23,10 @@ const trustLocalhost = { ca: localhostTls.cert, servername: 'localhost' };
 // sentAsLiteral: the flagged name is sent as a literal, on a line of its own.
 // namedHeadersEmpty: like Yahoo (UNS-12, SET-85), named header lines
 // (HEADER.FIELDS) come back empty; the whole header block comes back whole.
-type TinyOptions = { password: string; capabilities?: string; folders?: number; starttls?: boolean; sent?: () => string[]; sentUnflagged?: boolean; sentAsLiteral?: boolean; namedHeadersEmpty?: boolean };
+// token: also signs in with AUTHENTICATE XOAUTH2 and this access token (MS-10);
+// a wrong one is refused at once (Microsoft) or, with challenge, after a "+"
+// the client must answer with an empty line (Gmail).
+type TinyOptions = { password: string; capabilities?: string; folders?: number; starttls?: boolean; sent?: () => string[]; sentUnflagged?: boolean; sentAsLiteral?: boolean; namedHeadersEmpty?: boolean; token?: string; challenge?: boolean };
 async function tinyImap(options: TinyOptions) {
   const sockets = new Set<Socket>();
   const commands: string[] = [];
@@ -34,13 +37,24 @@ async function tinyImap(options: TinyOptions) {
     socket.on('error', () => undefined);
     socket.write('* OK tiny IMAP ready\r\n');
     let buffer = '';
+    let challenged: string | undefined;
     const onData = (chunk: Buffer) => {
       buffer += chunk.toString();
       while (buffer.includes('\r\n')) {
         const line = buffer.slice(0, buffer.indexOf('\r\n'));
         buffer = buffer.slice(buffer.indexOf('\r\n') + 2);
-        const [tag, command] = line.split(' ');
+        // The client's empty answer to a failed XOAUTH2's "+" challenge.
+        if (challenged !== undefined) { commands.push('(EMPTY ANSWER)'); socket.write(`${challenged} NO [AUTHENTICATIONFAILED] Invalid credentials\r\n`); challenged = undefined; continue; }
+        const [tag, command, mechanism, initial] = line.split(' ');
         commands.push(command!.toUpperCase());
+        if (command === 'AUTHENTICATE' && mechanism === 'XOAUTH2' && options.token !== undefined) {
+          const said = Buffer.from(initial ?? '', 'base64').toString('utf8');
+          const good = said === `user=me@example.invalid${String.fromCharCode(1)}auth=Bearer ${options.token}${String.fromCharCode(1)}${String.fromCharCode(1)}`;
+          if (good) socket.write(`${tag} OK AUTHENTICATE completed\r\n`);
+          else if (options.challenge) { challenged = tag; socket.write(`+ ${Buffer.from('{"status":"401"}').toString('base64')}\r\n`); }
+          else socket.write(`${tag} NO AUTHENTICATE failed.\r\n`);
+          continue;
+        }
         if (command === 'STARTTLS' && options.starttls) {
           socket.write(`${tag} OK Begin TLS\r\n`);
           socket.removeListener('data', onData);
@@ -191,6 +205,32 @@ describe('the email password check', () => {
   it('SET-85 the copies in Sent are counted from whole header blocks: a server that answers nothing to named header lines (Yahoo) still shows the one it filed (added: 2.4.6)', async () => {
     const w = await world({ imapPassword: 'app-password-10', filedCopies: 1, namedHeadersEmpty: true });
     expect(await sendTestEmail('me@example.invalid', 'app-password-10', w.endpoints, { log: w.log, poll: quick })).toEqual({ copies: 1 });
+  });
+
+  it('MS-10 an account signed in with Microsoft is checked with its access token: IMAP AUTHENTICATE XOAUTH2 and SMTP AUTH XOAUTH2 (added: 2.5)', async () => {
+    const imap = await tinyImap({ password: 'unused-password', token: 'access-ok' });
+    const smtp = await startSmtpCapture({ password: 'unused-password', accessToken: 'access-ok' });
+    stops.push(imap.stop, smtp.stop);
+    const home = mkdtempSync(join(tmpdir(), 'mailcheck-'));
+    stops.push(async () => rmSync(home, { recursive: true, force: true }));
+    const endpoints: Endpoints = { imap: { host: '127.0.0.1', port: imap.port, tls: 'none' }, smtp: { host: '127.0.0.1', port: smtp.port, tls: 'none' } };
+    const log = createSetupLog(home, Date);
+    expect(await checkAccount('me@example.invalid', { accessToken: 'access-ok' }, endpoints, { log })).toMatchObject({ ok: true });
+    expect(imap.commands).toContain('AUTHENTICATE');
+    expect(imap.commands).not.toContain('LOGIN');
+    expect(await checkAccount('me@example.invalid', { accessToken: 'access-wrong' }, endpoints, { log })).toEqual({ ok: false, reason: 'rejected' });
+    expect(readFileSync(join(home, '.universal-mail', 'setup-log.jsonl'), 'utf8')).not.toContain('access-');
+  });
+
+  it('MS-10 a refused token answered with a challenge (as Gmail does) is still a plain refusal, never a hang', async () => {
+    const imap = await tinyImap({ password: 'unused-password', token: 'access-ok', challenge: true });
+    stops.push(imap.stop);
+    const home = mkdtempSync(join(tmpdir(), 'mailcheck-'));
+    stops.push(async () => rmSync(home, { recursive: true, force: true }));
+    const endpoints: Endpoints = { imap: { host: '127.0.0.1', port: imap.port, tls: 'none' }, smtp: { host: '127.0.0.1', port: 1, tls: 'none' } };
+    expect(await checkAccount('me@example.invalid', { accessToken: 'access-wrong' }, endpoints, { log: createSetupLog(home, Date), timeoutMs: 3_000 })).toEqual({ ok: false, reason: 'rejected' });
+    // The challenge was answered (with an empty line), as the protocol asks.
+    expect(imap.commands).toContain('(EMPTY ANSWER)');
   });
 
   it('SET-73 without special-use flags, Sent is found by its usual name', async () => {

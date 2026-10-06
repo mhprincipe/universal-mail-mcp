@@ -10,7 +10,9 @@ describe('TK-02 IMAP server profiles', () => {
   it.each(Object.keys(profiles) as ProfileName[])('%s advertises exactly its profile capabilities', async name => {
     const server = await startImapServer(name);
     try {
-      const client = new ImapFlow({ host: server.host, port: server.port, secure: false, auth: { user: server.user, pass: server.password }, logger: false });
+      // outlook-like takes only an access token (XOAUTH2), its password standing in for one.
+      const auth = profiles[name].token ? { user: server.user, accessToken: server.password } : { user: server.user, pass: server.password };
+      const client = new ImapFlow({ host: server.host, port: server.port, secure: false, auth, logger: false });
       await client.connect();
       const advertised = controlledCapabilities.filter(capability => client.capabilities.has(capability));
       await client.logout();

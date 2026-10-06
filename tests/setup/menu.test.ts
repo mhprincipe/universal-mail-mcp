@@ -55,6 +55,21 @@ describe('the menu', () => {
     expect(world.screen()).not.toContain('brand-new-app-password');
   });
 
+  it('MS-18 Check and fix never asks for an app password for an account that signs in with Microsoft: it says to sign in again on the page (added: 2.5)', async () => {
+    const world = await installed();
+    const state = stateOf(world);
+    const account = state.accounts[0];
+    account.auth = 'microsoft';
+    await world.fake.google.putSecret('p', 'universal-mail-state', JSON.stringify(state));
+    // Its saved sign-in no longer works.
+    Object.values(world.accounts)[0]!.password = 'something-else-now';
+    world.answers('1', '');
+    const before = world.asked.length;
+    await world.run();
+    expect(world.asked.slice(before).map(a => a.code)).not.toContain('ASK-APP-PASSWORD');
+    expect(world.text()).toContain(`press Sign in again for ${account.name}`);
+  });
+
   it('SET-51 Check and fix settles a Sent mode never settled: the sending test, saved, restarted, checked', async () => {
     const world = await installed();
     // As a conversion from version 1 can leave it: the Sent mode not yet known for yahoo.

@@ -4,6 +4,19 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.5.0 (2026-10-06): Outlook.com
+
+No tool changed: no connector refresh needed for this one.
+
+- **Outlook.com, Hotmail, Live and MSN accounts** (MS-01..18): Microsoft has no
+  app passwords, so these sign in with Microsoft. On your page, **Add an
+  Outlook.com account** shows a code and a link; you approve Universal Mail at
+  microsoft.com and press Finish. Reading and sending then use short-lived
+  tokens; **Sign in again** mends an account Microsoft stops accepting.
+- **Waiting on a one-time registration** (docs/MICROSOFT-SETUP.md): until the
+  server has Microsoft's app id, the option isn't shown and nothing changes.
+- Company (Microsoft 365) accounts are not offered yet.
+
 ## 2.4.6 (2026-10-06): finding everything
 
 Three tools take a new option, so Claude and ChatGPT need their connector

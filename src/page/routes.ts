@@ -21,16 +21,19 @@ export type PageDeps = {
   clock: { now(): number };
   notify(subject: string, text: string): Promise<void>;
   // What the dashboard shows, as it is right now.
-  view(): { accounts: AccountView[]; apps: AppView[]; subscription?: SubscriptionState; buyUrl?: string; activity?: ActivityEntry[] };
+  view(): { accounts: AccountView[]; apps: AppView[]; subscription?: SubscriptionState; buyUrl?: string; activity?: ActivityEntry[]; microsoft?: boolean };
   // Routes the later slices add, given the same guard, session and helpers.
   extend?(tools: PageTools): void;
 };
+
+// Shown once with the next page: a report, a problem, or a Microsoft sign-in under way (2.5).
+export type Extra = { report?: string; problem?: string; signIn?: { userCode: string; verificationUri: string; email: string } };
 
 export type PageTools = {
   base: string;
   post(path: string, handler: (req: Request, res: Response, session: Session) => Promise<void> | void): void;
   // Back to the page, with a message for its next showing.
-  back(res: Response, session: Session, message?: { kind: 'ok' | 'error'; text: string }, extra?: { report?: string; problem?: string }): void;
+  back(res: Response, session: Session, message?: { kind: 'ok' | 'error'; text: string }, extra?: Extra): void;
   canGrantSend(session: Session): boolean;
 };
 
@@ -38,7 +41,7 @@ export function mountPage(app: Express, deps: PageDeps) {
   const base = `/${deps.key}`;
   const sessions = new Map<string, Session>();
   // A message (or report) for the next time the page is shown in this session.
-  const flash = new Map<string, { message?: { kind: 'ok' | 'error'; text: string }; report?: string; problem?: string }>();
+  const flash = new Map<string, { message?: { kind: 'ok' | 'error'; text: string } } & Extra>();
   const form = express.urlencoded({ extended: false, limit: '16kb' });
   const json = express.json({ limit: '16kb' });
 
@@ -72,7 +75,7 @@ export function mountPage(app: Express, deps: PageDeps) {
   };
   const signedIn = (s: Session) => deps.owner.level(s.owner) !== 'none';
   const refuse = (res: Response) => res.status(403).send(signInPage(base, deps.signInAddress(), '', false, 'This page expired. Sign in again.'));
-  const back = (res: Response, id: string, message?: { kind: 'ok' | 'error'; text: string }, extra: { report?: string; problem?: string } = {}) => {
+  const back = (res: Response, id: string, message?: { kind: 'ok' | 'error'; text: string }, extra: Extra = {}) => {
     flash.set(id, { message, ...extra });
     res.redirect(303, base);
   };
