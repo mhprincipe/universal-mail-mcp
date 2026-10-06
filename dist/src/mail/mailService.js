@@ -33,7 +33,10 @@ const THREAD_SCAN_MS = 45_000;
 export class MailService {
     config;
     imap;
+    // Password accounts keep one SMTP transport; a Microsoft account makes one per
+    // send, with an access token fresh enough for it (MS-07).
     smtp;
+    tokens;
     parser;
     unreliableHeaderSearch;
     sendLog;
@@ -46,18 +49,28 @@ export class MailService {
         this.sendLog = options.sendLog ?? sharedSendLog();
         this.clock = options.clock ?? Date;
         this.oneClick = options.oneClick ?? realOneClick;
-        this.imap = new ImapGateway(config, { unreliableHeaderSearch: this.unreliableHeaderSearch });
-        this.smtp = nodemailer.createTransport({
-            host: config.SMTP_HOST,
-            port: config.SMTP_PORT,
-            ...smtpTransport(config),
-            auth: { user: config.MAIL_ADDRESS, pass: config.MAIL_APP_PASSWORD },
+        this.tokens = options.tokens;
+        this.imap = new ImapGateway(config, { unreliableHeaderSearch: this.unreliableHeaderSearch, ...(options.tokens ? { tokens: options.tokens } : {}) });
+        if (!options.tokens)
+            this.smtp = this.transport({ user: config.MAIL_ADDRESS, pass: config.MAIL_APP_PASSWORD });
+    }
+    transport(auth) {
+        return nodemailer.createTransport({
+            host: this.config.SMTP_HOST,
+            port: this.config.SMTP_PORT,
+            ...smtpTransport(this.config),
+            auth,
             logger: false,
             debug: false,
             connectionTimeout: 15_000,
             greetingTimeout: 15_000,
             socketTimeout: 30_000
         });
+    }
+    async mailer() {
+        if (!this.tokens)
+            return this.smtp;
+        return this.transport({ type: 'OAuth2', user: this.config.MAIL_ADDRESS, accessToken: await this.tokens.accessToken() });
     }
     async specialFolder(role) {
         const path = (await this.imap.specialFolders())[role];
@@ -354,7 +367,7 @@ export class MailService {
         // pass the check (LIM-04); given back only when the provider refuses it.
         this.sendLog.record(this.config.MAIL_ADDRESS, now);
         try {
-            const info = await phase('smtp.send', () => this.smtp.sendMail({
+            const info = await phase('smtp.send', async () => (await this.mailer()).sendMail({
                 envelope: { from: this.config.MAIL_ADDRESS, to: recipients },
                 raw: args.raw
             }));
@@ -585,7 +598,7 @@ export class MailService {
             from: this.config.MAIL_ADDRESS, to: [to], subject, text,
             messageId: systemMessageId(), headers: { 'X-Universal-Mail': 'system' }
         });
-        await phase('smtp.send', () => this.smtp.sendMail({ envelope: { from: this.config.MAIL_ADDRESS, to: [to] }, raw: built.raw }));
+        await phase('smtp.send', async () => (await this.mailer()).sendMail({ envelope: { from: this.config.MAIL_ADDRESS, to: [to] }, raw: built.raw }));
         return built.messageId;
     }
     // A used code email goes to Trash, wherever copies of it are: the Inbox it
@@ -635,7 +648,7 @@ export class MailService {
     }
     async verifyConnectivity() {
         const folders = await this.imap.listFolders();
-        await this.smtp.verify();
+        await (await this.mailer()).verify();
         return { imap: true, smtp: true, folders: folders.length };
     }
 }

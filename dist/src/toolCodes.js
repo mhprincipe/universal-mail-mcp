@@ -28,6 +28,8 @@ export const TOOL_CODES = {
     SENT_POLICY_UNVERIFIED: { remedy: 'Sending isn\'t set up for this account yet. Tell the owner to run Check and fix in Cloud Shell.' },
     APPEND_FAILED: { remedy: 'The message could not be saved to the folder. Try once more; if it fails again, tell the owner.' },
     DELETE_FAILED: { remedy: 'The old draft could not be removed. The new one is saved; tell the owner the old draft remains.' },
+    MICROSOFT_NOT_SET_UP: { remedy: 'This Outlook account can\'t be used until Microsoft sign-in is set up on the server. Tell the owner.' },
+    MICROSOFT_SIGNIN_FAILED: { remedy: 'Microsoft didn\'t answer as expected. Tell the owner to try signing in again on their Universal Mail page.' },
     'MAIL-MATCHING-EMPTY': { remedy: 'Say what to match: at least one of from, to, subject, text, since, before, read or flagged. Nothing was changed.' },
     SEARCH_TOO_SLOW: { remedy: 'This search took too long. Narrow your search: add from, subject, or a since/before date range.' },
     // ── Accounts and permissions ──

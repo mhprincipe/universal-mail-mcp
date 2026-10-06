@@ -65,6 +65,16 @@ export const profiles = [
             page: 'https://accounts.zoho.com/home#security/app_password', button: 'Generate New Password',
             prerequisites: ['Two-factor authentication', 'IMAP access turned on in Zoho Mail settings']
         }
+    },
+    {
+        // Microsoft's personal mail (2.5, MS-11): no app passwords, so it signs in
+        // with Microsoft. By its domains only: a company whose mail Microsoft
+        // handles (MX at outlook.com) is a work account, for later.
+        id: 'outlook', name: 'Outlook.com', signIn: 'microsoft',
+        domains: ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'], mxSuffixes: [],
+        imap: { host: 'outlook.office365.com', port: 993, tls: 'implicit' }, smtp: { host: 'smtp-mail.outlook.com', port: 587, tls: 'starttls' },
+        expectedCapabilities: [],
+        appPassword: { page: 'https://account.microsoft.com/privacy/app-access', button: 'Sign in with Microsoft', prerequisites: [] }
     }
 ];
 // The live server's answer is what the engine uses. A difference from the

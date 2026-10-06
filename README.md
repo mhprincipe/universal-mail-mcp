@@ -6,7 +6,7 @@ server in your own Google Cloud account. Your AI can search, read, organize
 and, when you allow it, send your email. You choose, per app and per account,
 what each may do.
 
-**Status:** version 2.4.6. Installed and in daily use: every tool tested live
+**Status:** version 2.5.0. Installed and in daily use: every tool tested live
 on Yahoo with Claude and with ChatGPT; Gmail connected live. 2.4 added reading
 attachments, scam warnings, a check before writing to someone new, send limits,
 and an activity log with undo; 2.4.1 added sending attachments, forwarding,
@@ -40,7 +40,8 @@ Then connect Claude and ChatGPT and choose their permissions: see the
 | [docs/DESIGN-V2.md](docs/DESIGN-V2.md) | what it is and why: the full design and its decisions |
 | [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) | the 2.4 and 2.4.1 security reviews: what was found, what was fixed, what's left |
 | [docs/DESIGN-CONFIRM-ON-PAGE.md](docs/DESIGN-CONFIRM-ON-PAGE.md) | proposed: confirming a new recipient on your page instead of in the chat, for the owner's review |
-| [docs/DESIGN-PROVIDER-SIGNIN.md](docs/DESIGN-PROVIDER-SIGNIN.md) | proposed for 2.5: signing in with Microsoft and Google (for Outlook), for the owner's review |
+| [docs/DESIGN-PROVIDER-SIGNIN.md](docs/DESIGN-PROVIDER-SIGNIN.md) | signing in with Microsoft (for Outlook.com): built in 2.5.0 |
+| [docs/MICROSOFT-SETUP.md](docs/MICROSOFT-SETUP.md) | the one-time Microsoft registration that turns on Outlook.com accounts |
 | [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md) | every test, by ID |
 | [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md) | every red-green cycle and live run |
 | [docs/LIVE-TEST-PROMPT.md](docs/LIVE-TEST-PROMPT.md) | one prompt that tests everything on every account |

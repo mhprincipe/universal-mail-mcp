@@ -110,6 +110,12 @@ async function repair(d, google, project, state, result) {
     const detected = await d.mail.detect(account.email);
     const provider = detected?.provider;
     const credentials = JSON.parse((await google.readSecret(project, CREDENTIALS_SECRET)) ?? '{}');
+    // An account that signs in with Microsoft (2.5) has no app password to ask
+    // for: only a new sign-in on the page mends it (MS-18).
+    if (kind === 'account' && failed.code === 'MAIL-APP-PASSWORD-REJECTED' && account.auth === 'microsoft') {
+        d.ui.say('FIX-MICROSOFT', { address: account.email, name: account.name });
+        return false;
+    }
     if (kind === 'account' && failed.code === 'MAIL-APP-PASSWORD-REJECTED') {
         d.ui.say('FIX-PASSWORD', { provider: provider?.name ?? 'Your provider', address: account.email, page: provider?.appPassword.page.replace(/^https:\/\//, '') ?? '' });
         for (;;) {

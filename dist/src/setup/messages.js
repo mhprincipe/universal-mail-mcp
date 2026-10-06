@@ -43,6 +43,7 @@ export const MESSAGES = {
     'ASK-MENU': line('Type a number and press Enter ›'),
     'CHECKING': line('Checking everything. This takes about a minute.'),
     'FIX-PASSWORD': line('{provider} no longer accepts the app password for {address}.\nMake a new app password on the {provider} page ({page}), then paste it here.'),
+    'FIX-MICROSOFT': line('{address} signs in with Microsoft, which is renewed on your page, not here.\nOpen your Universal Mail page and press Sign in again for {name}.'),
     'FIXED': line('✓ Saved. Checking again.'),
     'REPAIRED-BILLING': line('✓ Billing had come unlinked from the project, and was linked again.'),
     'REPAIRED-SERVICES': line('✓ Google services were off, and were turned on again.'),

@@ -1,6 +1,9 @@
 import { connect as netConnect } from 'node:net';
 import { connect as tlsConnect } from 'node:tls';
 import { systemMessageId } from '../systemMail.js';
+// SASL XOAUTH2 (MS-10): the address and the token, separated by Ctrl-A.
+const SEP = String.fromCharCode(1);
+const xoauth2 = (address, token) => Buffer.from(`user=${address}${SEP}auth=Bearer ${token}${SEP}${SEP}`).toString('base64');
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1']);
 class Unreachable extends Error {
 }
@@ -109,7 +112,20 @@ async function imapSession(address, password, endpoint, timeoutMs, tls) {
                 throw new Insecure();
             await c.upgrade(endpoint.host);
         }
-        if (!(await command(`LOGIN ${quoted(address)} ${quoted(password)}`)).ok) {
+        const signedIn = typeof password === 'string'
+            ? (await command(`LOGIN ${quoted(address)} ${quoted(password)}`)).ok
+            : await (async () => {
+                const tag = `a${n++}`;
+                c.send(`${tag} AUTHENTICATE XOAUTH2 ${xoauth2(address, password.accessToken)}`);
+                let lines = await c.until(l => l.startsWith(`${tag} `) || l.startsWith('+'));
+                // A refusal can come as a challenge first (Gmail): answered empty, then the tagged NO.
+                if (lines.at(-1).startsWith('+')) {
+                    c.send('');
+                    lines = await c.until(l => l.startsWith(`${tag} `));
+                }
+                return lines.at(-1).startsWith(`${tag} OK`);
+            })();
+        if (!signedIn) {
             c.close();
             return undefined;
         }
@@ -151,8 +167,17 @@ async function smtpSession(address, password, endpoint, timeoutMs, tls) {
             c.send('EHLO universal-mail-setup');
             await reply();
         }
-        c.send(`AUTH PLAIN ${Buffer.from(`\0${address}\0${password}`).toString('base64')}`);
-        if (!(await reply()).startsWith('235')) {
+        if (typeof password === 'string')
+            c.send(`AUTH PLAIN ${Buffer.from(`\0${address}\0${password}`).toString('base64')}`);
+        else
+            c.send(`AUTH XOAUTH2 ${xoauth2(address, password.accessToken)}`);
+        let answer = await reply();
+        // XOAUTH2's refusal can be a 334 challenge, answered empty, then the 535.
+        if (answer.startsWith('334')) {
+            c.send('');
+            answer = await reply();
+        }
+        if (!answer.startsWith('235')) {
             c.send('QUIT');
             c.close();
             return undefined;

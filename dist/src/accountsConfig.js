@@ -11,7 +11,9 @@ const accountList = z.array(z.object({
     sentCopyMode: z.enum(['unverified', 'yahoo', 'append']).default('unverified'),
     reliableHeaderSearch: z.boolean().default(false),
     sending: z.boolean().default(true),
-    sendLimits: z.object({ perHour: z.number().int(), perDay: z.number().int() }).optional()
+    sendLimits: z.object({ perHour: z.number().int(), perDay: z.number().int() }).optional(),
+    auth: z.enum(['password', 'microsoft']).default('password'),
+    tokenSavedAt: z.number().int().min(0).optional()
 }));
 const passwordList = z.record(z.string(), z.string());
 // Parses without ever repeating the input: a JSON error can quote it, and the
@@ -57,10 +59,10 @@ export function loadAccounts(env) {
                 MAIL_ADDRESS: account.email, MAIL_APP_PASSWORD: password,
                 IMAP_HOST: account.imap.host, IMAP_PORT: String(account.imap.port), IMAP_TLS: account.imap.tls,
                 SMTP_HOST: account.smtp.host, SMTP_PORT: String(account.smtp.port), SMTP_TLS: account.smtp.tls,
-                SENT_COPY_MODE: account.sentCopyMode,
+                SENT_COPY_MODE: account.sentCopyMode, MAIL_AUTH: account.auth,
                 ...(account.sendLimits ? { SEND_LIMIT_PER_HOUR: String(account.sendLimits.perHour), SEND_LIMIT_PER_DAY: String(account.sendLimits.perDay) } : {})
             });
-            return { name: account.name, config, reliableHeaderSearch: account.reliableHeaderSearch, sending: account.sending };
+            return { name: account.name, config, reliableHeaderSearch: account.reliableHeaderSearch, sending: account.sending, auth: account.auth, ...(account.tokenSavedAt !== undefined ? { tokenSavedAt: account.tokenSavedAt } : {}) };
         }
         catch (error) {
             throw new Error(`Account '${account.name}': ${describe(error)}`);

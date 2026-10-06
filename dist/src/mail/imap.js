@@ -2,7 +2,7 @@ import { phase, timedClient } from '../timing.js';
 import { cautionsFor } from '../cautions.js';
 import { ImapFlow } from 'imapflow';
 import { imapTransport } from '../config.js';
-import { MailError, classify, isTransient, mutationFailure } from '../errors.js';
+import { MailError, classify, isAuthFailure, isTransient, mutationFailure } from '../errors.js';
 import { isSystemMessageId } from '../systemMail.js';
 import { unsubscribeKind } from '../unsubscribe.js';
 // How many of a folder's newest messages a missed Message-ID search checks.
@@ -96,14 +96,18 @@ export class ImapGateway {
         this.options = options;
         this.clock = options.clock ?? Date;
     }
-    client() {
+    // A password, or a fresh access token for a Microsoft account (MS-06).
+    async client() {
+        const auth = this.options.tokens
+            ? { user: this.config.MAIL_ADDRESS, accessToken: await this.options.tokens.accessToken() }
+            : { user: this.config.MAIL_ADDRESS, pass: this.config.MAIL_APP_PASSWORD };
         if (this.options.createClient)
-            return this.options.createClient();
+            return this.options.createClient(auth);
         const c = new ImapFlow({
             host: this.config.IMAP_HOST,
             port: this.config.IMAP_PORT,
             ...imapTransport(this.config),
-            auth: { user: this.config.MAIL_ADDRESS, pass: this.config.MAIL_APP_PASSWORD },
+            auth,
             logger: false
         });
         c.on('error', () => undefined);
@@ -143,8 +147,16 @@ export class ImapGateway {
         if (kept)
             this.drop(kept.client);
         // Each command it sends is timed, for the tool's log line (DIA-13).
-        const client = timedClient(this.client(), 'imap');
-        await client.connect();
+        const client = timedClient(await this.client(), 'imap');
+        try {
+            await client.connect();
+        }
+        catch (error) {
+            // A refused access token is never offered again (MS-06).
+            if (this.options.tokens && isAuthFailure(error))
+                this.options.tokens.invalidate();
+            throw error;
+        }
         this.session = { client, lastUsed: this.clock.now() };
         return client;
     }
