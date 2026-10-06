@@ -21,7 +21,9 @@ const trustLocalhost = { ca: localhostTls.cert, servername: 'localhost' };
 // "Posted", flagged \Sent (a name nothing would guess), or, with sentUnflagged,
 // a plain "Sent Items" beside it, as a server without special-use flags shows.
 // sentAsLiteral: the flagged name is sent as a literal, on a line of its own.
-type TinyOptions = { password: string; capabilities?: string; folders?: number; starttls?: boolean; sent?: () => string[]; sentUnflagged?: boolean; sentAsLiteral?: boolean };
+// namedHeadersEmpty: like Yahoo (UNS-12, SET-85), named header lines
+// (HEADER.FIELDS) come back empty; the whole header block comes back whole.
+type TinyOptions = { password: string; capabilities?: string; folders?: number; starttls?: boolean; sent?: () => string[]; sentUnflagged?: boolean; sentAsLiteral?: boolean; namedHeadersEmpty?: boolean };
 async function tinyImap(options: TinyOptions) {
   const sockets = new Set<Socket>();
   const commands: string[] = [];
@@ -61,9 +63,12 @@ async function tinyImap(options: TinyOptions) {
           socket.write(`* ${options.sent().length} EXISTS\r\n${tag} OK [READ-ONLY] EXAMINE completed\r\n`);
         } else if (command === 'FETCH' && options.sent) {
           // Literal header blocks, as a real server sends them.
+          const named = line.includes('HEADER.FIELDS');
           options.sent().forEach((id, i) => {
-            const header = `Message-ID: ${id}\r\n\r\n`;
-            socket.write(`* ${i + 1} FETCH (BODY[HEADER.FIELDS (MESSAGE-ID)] {${header.length}}\r\n${header})\r\n`);
+            const header = named && options.namedHeadersEmpty ? '\r\n'
+              : named ? `Message-ID: ${id}\r\n\r\n`
+              : `From: me@example.invalid\r\nSubject: Universal Mail test\r\nMessage-ID: ${id}\r\nX-Universal-Mail: system\r\n\r\n`;
+            socket.write(`* ${i + 1} FETCH (BODY[${named ? 'HEADER.FIELDS (MESSAGE-ID)' : 'HEADER'}] {${header.length}}\r\n${header})\r\n`);
           });
           socket.write(`${tag} OK FETCH completed\r\n`);
         } else if (command === 'LOGOUT') socket.end(`* BYE\r\n${tag} OK\r\n`);
@@ -86,12 +91,12 @@ afterEach(async () => { for (const stop of stops) await stop(); stops = []; });
 
 // filedCopies: how many times the "provider" files each email it sends in
 // Sent, after three older messages; undefined for no Sent folder at all.
-async function world(options: { imapPassword: string; smtpPassword?: string; capabilities?: string; folders?: number; starttls?: boolean; filedCopies?: number; sentUnflagged?: boolean; sentAsLiteral?: boolean }) {
+async function world(options: { imapPassword: string; smtpPassword?: string; capabilities?: string; folders?: number; starttls?: boolean; filedCopies?: number; sentUnflagged?: boolean; sentAsLiteral?: boolean; namedHeadersEmpty?: boolean }) {
   let smtp: SmtpCapture | undefined;
   const older = ['<old-1@example.invalid>', '<old-2@example.invalid>', '<old-3@example.invalid>'];
   const sent = options.filedCopies === undefined ? undefined : () => [...older, ...(smtp?.messages ?? []).flatMap(m =>
     Array<string>(options.filedCopies!).fill(/^Message-ID: (.+)$/mi.exec(m.raw.toString('utf8'))![1]!.trim()))];
-  const imap = await tinyImap({ password: options.imapPassword, capabilities: options.capabilities, folders: options.folders, starttls: options.starttls, sent, sentUnflagged: options.sentUnflagged, sentAsLiteral: options.sentAsLiteral });
+  const imap = await tinyImap({ password: options.imapPassword, capabilities: options.capabilities, folders: options.folders, starttls: options.starttls, sent, sentUnflagged: options.sentUnflagged, sentAsLiteral: options.sentAsLiteral, namedHeadersEmpty: options.namedHeadersEmpty });
   smtp = await startSmtpCapture({ password: options.smtpPassword ?? options.imapPassword, starttls: options.starttls });
   const home = mkdtempSync(join(tmpdir(), 'mailcheck-'));
   stops.push(imap.stop, smtp.stop, async () => rmSync(home, { recursive: true, force: true }));
@@ -181,6 +186,11 @@ describe('the email password check', () => {
       expect(w.imap.commands).not.toContain('STORE');
       expect(w.entries().find(e => e.op === 'send-test-detail')).toMatchObject({ sending: 'ok', counting: 'ok', sentFolder: 'Posted', copies: filed, polls: filed ? 1 : 3 });
     }
+  });
+
+  it('SET-85 the copies in Sent are counted from whole header blocks: a server that answers nothing to named header lines (Yahoo) still shows the one it filed (added: 2.4.6)', async () => {
+    const w = await world({ imapPassword: 'app-password-10', filedCopies: 1, namedHeadersEmpty: true });
+    expect(await sendTestEmail('me@example.invalid', 'app-password-10', w.endpoints, { log: w.log, poll: quick })).toEqual({ copies: 1 });
   });
 
   it('SET-73 without special-use flags, Sent is found by its usual name', async () => {

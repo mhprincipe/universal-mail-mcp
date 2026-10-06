@@ -1,6 +1,6 @@
 import type { InstallStore } from '../installed.js';
 import type { MailCheck } from '../setup/flow.js';
-import { appPassword } from '../providers.js';
+import { appPassword, sentCopyMode as sentCopyModeFor } from '../providers.js';
 import { problemText } from '../setup/messages.js';
 import type { GrantStore } from '../signin/grants.js';
 import type { PageTools } from './routes.js';
@@ -48,7 +48,7 @@ export function accountActions(tools: PageTools, deps: {
       }) });
     }
     // Setup's sending test: one email to the account itself, to learn who files the Sent copy.
-    const sentCopyMode = await mailCheck.sendTest(email, password).then(({ copies }) => copies === 0 ? 'append' as const : 'yahoo' as const, () => 'unverified' as const);
+    const sentCopyMode = await mailCheck.sendTest(email, password).then(({ copies }) => sentCopyModeFor(copies, provider.id), () => 'unverified' as const);
     store.putAccount({
       name, email, provider: provider.id, imap: provider.imap, smtp: provider.smtp,
       sentCopyMode, safeMove: checked.safeMove, sending: true

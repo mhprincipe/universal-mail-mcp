@@ -189,8 +189,11 @@ async function countInSent(address: string, password: string, endpoint: Endpoint
     for (let polls = 1; ; polls++) {
       // EXAMINE: read-only, so nothing in Sent is marked read or changed.
       const exists = Math.max(0, ...(await s.command(`EXAMINE ${quoted(sent.name)}`)).lines.map(l => Number(/^\* (\d+) EXISTS/i.exec(l)?.[1] ?? 0)));
-      const copies = exists === 0 ? 0 : (await s.command(`FETCH ${Math.max(1, exists - NEWEST + 1)}:${exists} (BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])`))
-        .lines.filter(l => l.toLowerCase().includes(id)).length;
+      // Whole header blocks (SET-85): Yahoo answers nothing to named lines
+      // (HEADER.FIELDS, UNS-12), so a filed copy went uncounted. Only a
+      // Message-ID line counts.
+      const copies = exists === 0 ? 0 : (await s.command(`FETCH ${Math.max(1, exists - NEWEST + 1)}:${exists} (BODY.PEEK[HEADER])`))
+        .lines.filter(l => /^message-id:/i.test(l) && l.toLowerCase().includes(id)).length;
       if (copies || polls >= poll.tries) return { folder: sent.name, copies, polls };
       await new Promise(resolve => setTimeout(resolve, poll.everyMs));
     }

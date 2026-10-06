@@ -48,7 +48,10 @@ describe('update from version 1', () => {
     w = createWorld({ google: { v1: { ...V1, sentCopyMode: 'unverified' } }, accounts: { 'me@yahoo.com': { provider: 'yahoo', password: V1.password, copies: 0 } } });
     w.answers('', '');
     expect(await w.run()).toEqual({ outcome: 'done' });
-    expect(secret(w, 'universal-mail-state').accounts[0].sentCopyMode).toBe('append');
+    // No copy within the test's 20 s, but this is Yahoo, which files its own
+    // a minute or two later (SET-86, 2.4.6): 'append' here would mean two
+    // copies of every email sent. It said 'append' before 2.4.6.
+    expect(secret(w, 'universal-mail-state').accounts[0].sentCopyMode).toBe('yahoo');
   });
 
   it('SET-55 declining the conversion is an ordinary new install', async () => {

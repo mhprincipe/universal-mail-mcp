@@ -163,7 +163,7 @@ at once queue behind each other on the same account and blur the timings.
 | Yahoo | about 40-70 ms per message read, whatever is read (measured 2026-10-06) | a conversation in every folder stops at 45 s (THR-08) |
 | Yahoo | batch moves report old/new UIDs mispaired | pairs checked by Message-ID (ENG-20) |
 | Yahoo | subject search ignores "Re:" | results checked against the subject (POL-13) |
-| Yahoo | files its own Sent copy a minute or two later | no lookup; the answer says so (ENG-24) |
+| Yahoo | files its own Sent copy a minute or two later | no lookup; the answer says so (ENG-24); the sending test counts Yahoo as filing its own (SET-86) |
 | Yahoo | IMAP dates compare whole days | a day either side, exact times applied (POL-12) |
 | Yahoo | lists the address as its own display name | dropped (POL-15) |
 | Yahoo | adds a `References … .ref` header to mail it stores | its own; Universal Mail adds none (ENG-19) |

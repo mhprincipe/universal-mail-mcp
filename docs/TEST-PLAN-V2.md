@@ -692,6 +692,8 @@ what it says about the person's position is true.
 | BLK-02 | more than 100 match: the newest 100 are acted on, and the answer says to call again | U |
 | BLK-03 | `matching` with nothing to match on is refused (`MAIL-MATCHING-EMPTY`), nothing changed; exactly one of `uid`, `uids` or `matching` | U |
 | BLK-04 | nothing matched: a plain answer (`NOTHING_MATCHED`), nothing for the activity log; what matching acted on is logged with its count and undo | U |
+| SET-85 | the sending test counts the copies in Sent from whole header blocks, by their Message-ID line: a server that answers nothing to named header lines (Yahoo) still shows the one it filed *(found reading the code after UNS-12)* | U+P |
+| SET-86 | a provider known to file its own Sent copy a minute or two later (Yahoo, ENG-24) files its own even when the test saw none in its 20 s: on your page, in setup and in Check and fix *(found with SET-85: otherwise every email sent would leave two copies)* | U |
 | FOL-01 | `list_folders` with `counts`: each folder's messages and unread from the server (STATUS), a folder that holds no mail skipped, the list asked afresh; without it, none asked *(the owner's choice)* | U+P |
 
 **Exit:** all of the above green, mutation-checked; then tried live.
@@ -790,9 +792,9 @@ also where a later reader finds out why a line of code exists.
 | Subscription | 33 |
 | Serving people (2.4) | 39 |
 | Files and clean-up (2.4.1-2.4.4) | 53 |
-| Finding everything (2.4.6) | 10 |
-| **New** | **442** |
-| **Total** | **597** |
+| Finding everything (2.4.6) | 12 |
+| **New** | **444** |
+| **Total** | **599** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

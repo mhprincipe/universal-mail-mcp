@@ -71,7 +71,8 @@ export async function startPage(options: {
     // found), down@ (unreachable), insecure@ (no encryption), nosend@ (the
     // sending test fails), appends@ (the provider files no Sent copy).
     mailCheck: {
-      detect: async address => address.endsWith('@unknown.invalid') ? undefined : ({ provider: { id: 'other', name: 'Example Mail', appPassword: { page: 'https://example.invalid/app-passwords', button: 'New app password', prerequisites: [] },
+      // @files-late.example: detected as Yahoo (SET-86).
+      detect: async address => address.endsWith('@unknown.invalid') ? undefined : ({ provider: { id: address.endsWith('@files-late.example') ? 'yahoo' : 'other', name: 'Example Mail', appPassword: { page: 'https://example.invalid/app-passwords', button: 'New app password', prerequisites: [] },
         imap: { host: '127.0.0.1', port: 3, tls: 'implicit' }, smtp: { host: '127.0.0.1', port: 3, tls: 'starttls' } } }),
       check: async (address, password) => address.startsWith('down@') ? { ok: false, reason: 'unreachable' }
         : address.startsWith('insecure@') ? { ok: false, reason: 'insecure' }

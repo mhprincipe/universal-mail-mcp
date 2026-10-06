@@ -30,6 +30,14 @@ export type Detection =
 // (Gmail: "abcd efgh ijkl mnop"), and none contains a space, so spaces go.
 export const appPassword = (typed: string) => typed.replace(/\s+/g, '');
 
+// Who files the Sent copy, from the sending test's count (SET-86): none seen
+// means Universal Mail must, except for a provider known to file its own a
+// minute or two later (Yahoo, ENG-24 found live), which the test can't wait for.
+const FILES_SENT_LATE = new Set(['yahoo']);
+export function sentCopyMode(copies: 0 | 1 | 2, providerId: string | undefined): 'append' | 'yahoo' {
+  return copies === 0 && !FILES_SENT_LATE.has(providerId ?? '') ? 'append' : 'yahoo';
+}
+
 // The provider an account is at, for saying so beside its name (ENG-29): by its
 // mail server, else its address's domain; undefined when neither is known.
 export function providerName(address: string | undefined, imapHost: string | undefined): string | undefined {

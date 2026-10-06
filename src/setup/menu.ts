@@ -1,6 +1,7 @@
 import type { GoogleCloud } from './google.js';
 import { CREDENTIALS_SECRET, STATE_SECRET, type Outcome, type SelfTestResult, type SetupDeps } from './flow.js';
 import { Stop } from './stop.js';
+import { sentCopyMode } from '../providers.js';
 
 // The menu on an existing installation (design §3.9). Everything it needs is
 // read from Google (the two secrets and the running service), so it works
@@ -136,7 +137,7 @@ async function repair(d: SetupDeps, google: GoogleCloud, project: string, state:
     const { copies } = await d.mail.sendTest(account.email, credentials.passwords[account.name] ?? '');
     d.log.event({ type: 'mail', op: 'sendTest', provider: provider?.id ?? 'other', copies });
     const latest = JSON.parse((await google.readSecret(project, STATE_SECRET)) ?? '{}') as State;
-    const accounts = latest.accounts.map(a => a.name === account.name ? { ...a, sentCopyMode: copies === 0 ? 'append' : 'yahoo' } : a);
+    const accounts = latest.accounts.map(a => a.name === account.name ? { ...a, sentCopyMode: sentCopyMode(copies, provider?.id) } : a);
     await google.putSecret(project, STATE_SECRET, JSON.stringify({ ...latest, accounts }));
     return true;
   }

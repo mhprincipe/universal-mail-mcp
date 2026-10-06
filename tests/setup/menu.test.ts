@@ -72,6 +72,18 @@ describe('the menu', () => {
     expect(world.text()).toContain('✓ 6 of 6 checks passed');
   });
 
+  it('SET-86 Check and fix: Yahoo with no copy seen in the test still files its own (added: 2.4.6)', async () => {
+    const world = await installed();
+    const state = stateOf(world);
+    state.accounts[0].sentCopyMode = 'unverified';
+    await world.fake.google.putSecret('p', 'universal-mail-state', JSON.stringify(state));
+    await world.fake.google.restartServer('p', 0);
+    Object.values(world.accounts)[0]!.copies = 0;
+    world.answers('1');
+    expect(await world.run()).toEqual({ outcome: 'done' });
+    expect(stateOf(world).accounts[0].sentCopyMode).toBe('yahoo');
+  });
+
   it('SET-50 an answer that isn\'t on the menu asks again', async () => {
     const world = await installed();
     world.answers('9', 'show', '3');

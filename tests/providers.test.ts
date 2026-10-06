@@ -155,3 +155,14 @@ describe('launch profiles', () => {
     ]);
   });
 });
+
+describe('who files the Sent copy', () => {
+  it('SET-86 the sending test decides, except that Yahoo, which files late, always files its own (added: 2.4.6)', async () => {
+    const { sentCopyMode } = await import('../src/providers.js');
+    expect(sentCopyMode(0, 'other')).toBe('append');
+    expect(sentCopyMode(1, 'other')).toBe('yahoo');
+    expect(sentCopyMode(2, 'other')).toBe('yahoo');
+    expect(sentCopyMode(0, 'yahoo')).toBe('yahoo');
+    expect(sentCopyMode(0, undefined)).toBe('append');
+  });
+});

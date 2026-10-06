@@ -22,6 +22,12 @@ refreshed to use them (everything else works without one).
 - **A conversation in every folder, fixed** (THR-08/09): on Yahoo it took over
   200 s and once hit the server's 300 s limit (found in the server's log). Now
   the usual folders come first and the rest stop at 45 s, saying what was left.
+- **A Yahoo account added on your page or by setup** (SET-85/86): the test that
+  learns who files the Sent copy asked Yahoo for named header lines, which it
+  answers with nothing, and Yahoo files its copy only a minute or two later.
+  Either way Universal Mail would have filed a second copy of every email sent.
+  Yahoo now always files its own. (The owner's Yahoo came over from version 1
+  and was never affected.)
 - **Hidden characters in a sender's name** (SCM-11): cautioned, and the name is
   checked without them (found live: a brand's name split by invisible
   characters).

@@ -46,6 +46,14 @@ describe('your page, the unusual paths', () => {
     expect(last(p.saves.state).accounts.at(-1)).toMatchObject({ name: 'nosend', sentCopyMode: 'unverified' });
   });
 
+  it('SET-86 Yahoo files its own Sent copy a minute or two later: no copy seen in the test still means Yahoo files it (added: 2.4.6, ENG-24 found live)', async () => {
+    p = await startPage();
+    p.accepted['appends@files-late.example'] = 'y-app-password';
+    await p.signIn();
+    await p.act('/accounts/add', { email: 'appends@files-late.example', password: 'y-app-password', name: 'late' });
+    expect(last(p.saves.state).accounts.at(-1)).toMatchObject({ name: 'late', sentCopyMode: 'yahoo' });
+  });
+
   it('PG-04 an account that isn\'t there any more: said so, for a password, a removal and sending', async () => {
     p = await startPage();
     await p.signIn();
