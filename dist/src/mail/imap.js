@@ -62,6 +62,14 @@ function attachmentsIn(root) {
 // at 1,000 at most (FND-03).
 const FILTERED_BATCH = 50;
 const MAX_EXAMINED = 1000;
+// Yahoo's own search left out mail moved into a folder (FND-08, found live:
+// 4 of a sender's 16 in Trash, whatever was asked). On a server whose search
+// isn't trusted, a search by sender, recipient or subject also checks the
+// folder's newest messages directly, when the server found less than a page.
+// Read by position, envelopes only: about 4 s on Yahoo.
+const DIRECT_CHECK = 100;
+const contains = (haystack, needle) => (haystack ?? '').toLowerCase().includes(needle.toLowerCase());
+const anyAddress = (items, needle) => (items ?? []).some(x => contains(x?.address, needle) || contains(x?.name, needle));
 // The <ids> in some header lines of a block (Message-ID, References...),
 // folded or not; ids anywhere else in the header (Return-Path, From) don't count.
 function idsIn(raw, names) {
@@ -197,8 +205,12 @@ export class ImapGateway {
     // createFolder clears it so a new folder is usable immediately.
     folders;
     static folderTtlMs = 30_000;
-    async listFolders() {
-        if (this.folders && Date.now() - this.folders.at < ImapGateway.folderTtlMs)
+    // fresh: asks the server, never the cache (counts and a search of every
+    // folder want one made a moment ago too: found on the real server).
+    async listFolders(options = {}) {
+        if (options.counts)
+            return this.folderCounts(await this.listFolders({ fresh: true }));
+        if (!options.fresh && this.folders && Date.now() - this.folders.at < ImapGateway.folderTtlMs)
             return this.folders.value;
         const value = await this.read(async (client) => (await client.list()).map(m => ({
             path: m.path,
@@ -208,6 +220,22 @@ export class ImapGateway {
         })));
         this.folders = { at: Date.now(), value };
         return value;
+    }
+    // How many messages each folder holds, and how many unread (FOL-01): the
+    // server's own count (STATUS), folder by folder, never a message read.
+    async folderCounts(folders) {
+        return this.read(async (client) => {
+            const counted = [];
+            for (const folder of folders) {
+                if (!folder.selectable) {
+                    counted.push(folder);
+                    continue;
+                }
+                const status = await client.status(folder.path, { messages: true, unseen: true });
+                counted.push({ ...folder, messages: status?.messages ?? 0, unread: status?.unseen ?? 0 });
+            }
+            return counted;
+        });
     }
     async specialFolders() {
         const list = (await this.listFolders()).filter(m => m.selectable);
@@ -272,6 +300,26 @@ export class ImapGateway {
                 if (!remaining.length && input.messageId && this.options.unreliableHeaderSearch) {
                     remaining = await this.scanForMessageId(client, input.messageId, input.beforeUid);
                 }
+                const direct = new Set();
+                const checkable = Boolean(input.from || input.to || input.subject) && !input.text && !input.messageId;
+                if (checkable && input.directCheck !== false && this.options.unreliableHeaderSearch && !client.capabilities?.has?.('X-GM-EXT-1')
+                    && input.beforeUid === undefined && remaining.length < input.limit) {
+                    const known = new Set(remaining);
+                    for (const row of await this.newest(client, DIRECT_CHECK, { envelope: true })) {
+                        const e = row.envelope;
+                        if (known.has(row.uid) || !e)
+                            continue;
+                        if (input.from && !anyAddress(e.from, input.from))
+                            continue;
+                        if (input.to && !anyAddress(e.to, input.to))
+                            continue;
+                        if (input.subject && !contains(e.subject, input.subject))
+                            continue;
+                        remaining.push(row.uid);
+                        direct.add(row.uid);
+                    }
+                    remaining.sort((a, b) => a - b);
+                }
                 const inTime = (m) => {
                     if (!m.date)
                         return true;
@@ -293,7 +341,11 @@ export class ImapGateway {
                         return false;
                     return !wantedName || names.some(name => plain(name).includes(wantedName));
                 };
-                const checkedHere = Boolean(input.since || input.before || wantedSubject || input.hasAttachments !== undefined || wantedName);
+                // Read and flagged state: the server checked its own finds; the ones
+                // checked directly (FND-08) are checked here.
+                const flagsMatch = (m) => !direct.has(m.uid)
+                    || ((input.read === undefined || m.read === input.read) && (input.flagged === undefined || m.flagged === input.flagged));
+                const checkedHere = Boolean(input.since || input.before || wantedSubject || input.hasAttachments !== undefined || wantedName || direct.size);
                 // System emails don't exist, as far as a search is concerned, so they
                 // mustn't use up the page either (SIG-82, found live: "asked for 5, got
                 // 3"). Older messages fill in until the page is full, looked at newest
@@ -313,7 +365,7 @@ export class ImapGateway {
                     for (const row of [...rows].sort((a, b) => b.uid - a.uid)) {
                         examined++;
                         const m = this.summary(input.mailbox, row);
-                        if (!isSystemMessageId(m.messageId) && inTime(m) && subjectMatches(m) && attachmentsMatch(m))
+                        if (!isSystemMessageId(m.messageId) && inTime(m) && subjectMatches(m) && attachmentsMatch(m) && flagsMatch(m))
                             messages.push(m);
                         if (messages.length >= input.limit) {
                             lowest = row.uid;
@@ -324,8 +376,10 @@ export class ImapGateway {
                 }
                 const more = remaining.length > 0 && lowest !== undefined;
                 const stopped = more && messages.length < input.limit;
+                const missed = messages.filter(m => direct.has(m.uid)).length;
                 return {
                     messages, ...(more ? { next: lowest } : {}),
+                    ...(missed ? { note: `The mail server's own search left out ${missed} of these; they were found by checking the newest ${DIRECT_CHECK} messages in the folder directly. Older mail it left out may still be missing.` } : {}),
                     ...(stopped ? { warning: `Looked at the newest ${MAX_EXAMINED.toLocaleString('en-US')} messages that could match and found ${messages.length}. Pass the cursor to look further back.` } : {})
                 };
             }
@@ -558,7 +612,7 @@ export class ImapGateway {
                 // Yahoo can return no HEADER References/In-Reply-To matches even when
                 // those headers are present. Inspect only threading headers of a bounded
                 // recent window, read-only (BODY.PEEK), from each one's header block.
-                for (const row of await this.newest(client, RECENT_SCAN, { headers: HEADER_BLOCK })) {
+                for (const row of await this.newest(client, options.recent ?? RECENT_SCAN, { headers: HEADER_BLOCK })) {
                     const headerIds = idsIn(row.headers, ['Message-ID', 'References', 'In-Reply-To']);
                     if (anchors.some(id => headerIds.includes(id)))
                         hits.add(row.uid);

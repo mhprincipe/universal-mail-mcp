@@ -1,5 +1,5 @@
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
-import { appPassword } from '../providers.js';
+import { appPassword, sentCopyMode } from '../providers.js';
 import { GoogleRefusal, NotReadyYet } from './google.js';
 import { MESSAGES, renderLine } from './messages.js';
 import { runMenu } from './menu.js';
@@ -176,12 +176,13 @@ export async function runSetup(d) {
                 }
                 const { copies } = await d.mail.sendTest(a.address, passwords.get(a.name) ?? known?.[a.name] ?? '');
                 log.event({ type: 'mail', op: 'sendTest', provider: a.providerId, copies });
-                // One copy: the provider files it. None: Universal Mail must. Two: both did.
-                sent[a.name] = copies === 0 ? 'append' : 'yahoo';
+                // One copy: the provider files it. None: Universal Mail must (unless the
+                // provider files late, SET-86). Two: both did.
+                sent[a.name] = sentCopyMode(copies, a.providerId);
                 if (copies === 2)
                     ui.say('SENT-DUPLICATE', { address: a.address });
                 else
-                    ui.say(copies === 1 ? 'SENT-SAVED-BY-PROVIDER' : 'SENT-SAVED-BY-US', { name: a.name, provider: a.providerName });
+                    ui.say(sent[a.name] === 'yahoo' ? 'SENT-SAVED-BY-PROVIDER' : 'SENT-SAVED-BY-US', { name: a.name, provider: a.providerName });
             }
             await google.putSecret(project, STATE_SECRET, JSON.stringify(stateOf({ ...progress, sent })));
             // The running server still has the settings from before: step 8 must check these.

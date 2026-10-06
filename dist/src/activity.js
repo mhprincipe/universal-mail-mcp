@@ -67,7 +67,7 @@ const targets = (args) => args.uids ?? (args.uid !== undefined ? [args.uid] : []
 // What a successful organize or send tool did, or undefined when it's not an
 // action worth listing (a read, a failure, nothing changed).
 export function activityFor(tool, args, envelope) {
-    if (!envelope?.ok || envelope.code === 'ALREADY_THERE')
+    if (!envelope?.ok || envelope.code === 'ALREADY_THERE' || envelope.code === 'NOTHING_MATCHED')
         return undefined;
     const data = envelope.data ?? {};
     if (MOVES[tool]) {

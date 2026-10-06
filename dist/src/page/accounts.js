@@ -1,4 +1,4 @@
-import { appPassword } from '../providers.js';
+import { appPassword, sentCopyMode as sentCopyModeFor } from '../providers.js';
 import { problemText } from '../setup/messages.js';
 const NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
 // The mail engine needs at least this many (config.ts); app passwords are longer.
@@ -34,7 +34,7 @@ export function accountActions(tools, deps) {
                 }) });
         }
         // Setup's sending test: one email to the account itself, to learn who files the Sent copy.
-        const sentCopyMode = await mailCheck.sendTest(email, password).then(({ copies }) => copies === 0 ? 'append' : 'yahoo', () => 'unverified');
+        const sentCopyMode = await mailCheck.sendTest(email, password).then(({ copies }) => sentCopyModeFor(copies, provider.id), () => 'unverified');
         store.putAccount({
             name, email, provider: provider.id, imap: provider.imap, smtp: provider.smtp,
             sentCopyMode, safeMove: checked.safeMove, sending: true

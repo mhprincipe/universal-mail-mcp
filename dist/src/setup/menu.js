@@ -1,5 +1,6 @@
 import { CREDENTIALS_SECRET, STATE_SECRET } from './flow.js';
 import { Stop } from './stop.js';
+import { sentCopyMode } from '../providers.js';
 // How many times Check and fix repairs and checks again before handing over.
 const REPAIR_ROUNDS = 3;
 export async function runMenu(d, google, project) {
@@ -133,7 +134,7 @@ async function repair(d, google, project, state, result) {
         const { copies } = await d.mail.sendTest(account.email, credentials.passwords[account.name] ?? '');
         d.log.event({ type: 'mail', op: 'sendTest', provider: provider?.id ?? 'other', copies });
         const latest = JSON.parse((await google.readSecret(project, STATE_SECRET)) ?? '{}');
-        const accounts = latest.accounts.map(a => a.name === account.name ? { ...a, sentCopyMode: copies === 0 ? 'append' : 'yahoo' } : a);
+        const accounts = latest.accounts.map(a => a.name === account.name ? { ...a, sentCopyMode: sentCopyMode(copies, provider?.id) } : a);
         await google.putSecret(project, STATE_SECRET, JSON.stringify({ ...latest, accounts }));
         return true;
     }

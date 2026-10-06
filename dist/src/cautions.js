@@ -148,11 +148,20 @@ function addressIn(name) {
     }
     return undefined;
 }
+// Characters that show nothing (SCM-11, found live: a sender's name with an
+// invisible character between every letter, so no filter saw the brand).
+// Unicode's format characters, except the joiner that builds one emoji from
+// several. They're taken out before the name is checked.
+const INVISIBLE = /(?!\u200D)\p{Cf}/gu;
 export function cautionsFor(message) {
-    const sender = message.from?.[0];
-    if (!sender?.address)
+    const first = message.from?.[0];
+    if (!first?.address)
         return [];
     const cautions = [];
+    const hidden = Boolean(first.name && first.name.replace(INVISIBLE, '') !== first.name);
+    if (hidden)
+        cautions.push("The sender's name hides invisible characters between its letters, a common trick to slip past spam and scam filters.");
+    const sender = hidden ? { ...first, name: first.name.replace(INVISIBLE, '') } : first;
     const domain = domainOf(sender.address);
     const shown = addressIn(sender.name);
     if (shown && shown.toLowerCase() !== sender.address.toLowerCase()) {
