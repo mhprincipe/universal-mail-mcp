@@ -146,7 +146,7 @@ describe('what the answer says', () => {
   it('THR-10 on a provider whose header search misses mail, the answer says how the conversation was found and what can still be missed', async () => {
     const service = new MailService(config);
     const client = { capabilities: new Map<string, boolean>([['IMAP4REV1', true]]) };
-    vi.spyOn(service.imap, 'listFolders').mockResolvedValue([folder('INBOX', '\Inbox')]);
+    vi.spyOn(service.imap, 'listFolders').mockResolvedValue([folder('INBOX', '\\Inbox')]);
     vi.spyOn(service.imap, 'read').mockImplementation(fn => fn(client as any));
     vi.spyOn(service.imap, 'findThreadUids').mockResolvedValue([]);
     vi.spyOn(service.imap, 'threadCandidates').mockResolvedValue([]);
