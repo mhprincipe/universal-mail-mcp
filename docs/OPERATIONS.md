@@ -159,6 +159,8 @@ at once queue behind each other on the same account and blur the timings.
 |---|---|---|
 | Yahoo | header search misses new mail | a check of the newest 200 messages (ENG-21, ENG-22) |
 | Yahoo | answers nothing to a request for named header lines (HEADER.FIELDS), found live twice: no unsubscribe for any sender, threads only through Sent | the whole header block is read (UNS-12, 2.4.5) |
+| Yahoo | its search leaves out mail moved into a folder (found live: 4 of a sender's 16 in Trash, by any query) | a search by sender, recipient or subject also checks the newest 100 directly (FND-08, 2.4.6) |
+| Yahoo | about 40-70 ms per message read, whatever is read (measured 2026-10-06) | a conversation in every folder stops at 45 s (THR-08) |
 | Yahoo | batch moves report old/new UIDs mispaired | pairs checked by Message-ID (ENG-20) |
 | Yahoo | subject search ignores "Re:" | results checked against the subject (POL-13) |
 | Yahoo | files its own Sent copy a minute or two later | no lookup; the answer says so (ENG-24) |

@@ -679,6 +679,23 @@ what it says about the person's position is true.
 
 **Exit:** all of the above green; then tried live (not yet).
 
+### Phase 9 — Finding everything *(added 2026-10-06: 2.4.6, from the owner's logs and live checks)*
+
+| ID | Behavior | Tier |
+|---|---|---|
+| FND-08 | on a server whose search isn't trusted (not Gmail), a search by sender, recipient or subject that found less than a page also checks the folder's newest 100 messages directly (envelopes, by position, first page only), matching any part of a name or address in any case; read and flagged still apply; the answer says how many the server's search left out; a real server's finds aren't listed twice *(found live: Yahoo's search found 4 of a sender's 16 in Trash)* | U+P |
+| FND-10 | `search_email` with `allFolders`: every folder of one account but Trash and Junk (Gmail: All Mail once), newest first, each result naming its folder; the usual folders first, then the rest within 45 s, the answer saying how many were left; the direct check only in the usual folders; the folder list asked afresh *(the owner's choice)* | U+P |
+| THR-08 | a conversation looked for in every folder: Inbox, Sent, Archive and its own folder first and always; the rest while within 45 s, the answer saying how many folders weren't searched *(found in the server's log: 206 s and 231 s on 44 Yahoo folders, one call cut at 300 s)* | U |
+| THR-09 | in that search, the other folders check only their newest 50 messages directly (the usual ones 200) | U |
+| SCM-11 | a sender's name with invisible characters between its letters (Unicode format characters, but not the joiner inside an emoji) is cautioned, and the name is checked with them taken out *(found live: a brand's name split by tag characters)* | U |
+| BLK-01 | `matching` on the eight tools that take `uids` (move, archive, mark read/unread, flag, trash, junk, restore): acts on what a search finds; the answer says how many matched *(the owner's choice)* | U+P |
+| BLK-02 | more than 100 match: the newest 100 are acted on, and the answer says to call again | U |
+| BLK-03 | `matching` with nothing to match on is refused (`MAIL-MATCHING-EMPTY`), nothing changed; exactly one of `uid`, `uids` or `matching` | U |
+| BLK-04 | nothing matched: a plain answer (`NOTHING_MATCHED`), nothing for the activity log; what matching acted on is logged with its count and undo | U |
+| FOL-01 | `list_folders` with `counts`: each folder's messages and unread from the server (STATUS), a folder that holds no mail skipped, the list asked afresh; without it, none asked *(the owner's choice)* | U+P |
+
+**Exit:** all of the above green, mutation-checked; then tried live.
+
 ### Diagnostics — across phases
 
 | ID | Behavior | Tier |
@@ -773,8 +790,9 @@ also where a later reader finds out why a line of code exists.
 | Subscription | 33 |
 | Serving people (2.4) | 39 |
 | Files and clean-up (2.4.1-2.4.4) | 53 |
-| **New** | **432** |
-| **Total** | **587** |
+| Finding everything (2.4.6) | 10 |
+| **New** | **442** |
+| **Total** | **597** |
 
 Tests added during the build are marked in their tables, with the reason.
 Of the v1 baseline, 74 tests were retired in 2.3.1 with the v1 code they

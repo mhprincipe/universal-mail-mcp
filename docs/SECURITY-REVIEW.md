@@ -83,6 +83,15 @@ Reviewed the same way. The changes close three of the accepted items above
 Still open: the new-recipient confirmation. Its fix is designed, for the
 owner's decision: [DESIGN-CONFIRM-ON-PAGE.md](DESIGN-CONFIRM-ON-PAGE.md).
 
+# 2.4.6
+
+| Change | The trade-off | Why it's accepted |
+|---|---|---|
+| **matching** (BLK-01) | An AI can act on up to 100 messages from a description instead of a list it has seen, and a confused or misled AI could describe too much ("everything from my bank") | The same permission as `uids` (Organize), 100 at most per call, nothing to match on refused, every action in Recent activity with undo, and nothing is ever deleted for good. An email still can't instruct the AI (it's untrusted data), and matching acts only in the folder named. |
+| **The direct check** (FND-08) | Up to 100 more envelopes read per search on Yahoo (a few seconds) | Read-only, envelopes only, never marking mail read; only when the server's search found less than a page. |
+| **Every folder at once** (FND-10, THR-08) | Longer calls | Stopped at 45 s with the gaps said; the server's 300 s limit is never reached. |
+| **An npm override** (mammoth's argparse 1 to 2) | The Word reader's own command-line tool (bin/mammoth) would no longer start | Universal Mail uses only its library (lib/), which never loads argparse; the override removes sprintf-js, which has an advisory and no fixed version. |
+
 # 2.4.5
 
 | Change | The trade-off | Why it's accepted |

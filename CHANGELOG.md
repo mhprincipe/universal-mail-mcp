@@ -4,6 +4,32 @@ Every release, newest first. The test IDs point into
 [docs/TEST-PLAN-V2.md](docs/TEST-PLAN-V2.md); the full story of each is in
 [docs/TDD-JOURNAL.md](docs/TDD-JOURNAL.md).
 
+## 2.4.6 (2026-10-06): finding everything
+
+Three tools take a new option, so Claude and ChatGPT need their connector
+refreshed to use them (everything else works without one).
+
+- **Search every folder** (FND-10): `search_email` with `allFolders` searches
+  every folder of an account at once (not Trash or Junk; on Gmail, All Mail).
+- **Act on everything a search finds** (BLK-01..04): the eight tools that take
+  `uids` also take `matching`, such as "archive everything from this sender".
+  Up to 100 per call, the newest first, logged with undo like any other.
+- **Folder counts** (FOL-01): `list_folders` with `counts` says how many
+  messages and how many unread each folder holds.
+- **Yahoo's search, fixed** (FND-08): Yahoo's own search leaves out mail moved
+  into a folder (found live: 4 of a sender's 16 in Trash). A search by sender,
+  recipient or subject now also checks the folder's newest 100 messages itself.
+- **A conversation in every folder, fixed** (THR-08/09): on Yahoo it took over
+  200 s and once hit the server's 300 s limit (found in the server's log). Now
+  the usual folders come first and the rest stop at 45 s, saying what was left.
+- **Hidden characters in a sender's name** (SCM-11): cautioned, and the name is
+  checked without them (found live: a brand's name split by invisible
+  characters).
+- **Dependencies** (REL-08): two advisories published since 2.4.5. proxy-addr
+  (under Express, critical) updated to 2.0.8; sprintf-js (moderate, no fixed
+  version) removed: it came only through the command-line helper of the Word
+  reader, which Universal Mail never runs, now given a newer helper without it.
+
 ## 2.4.5 (2026-10-01): fixes from the final test
 
 No tool's name, inputs or description changed: no refresh needed.

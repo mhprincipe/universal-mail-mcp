@@ -55,8 +55,13 @@ Every tool answers with the same shape, as `structuredContent` and as JSON text:
   message moves, so every move answers with the new `destinationUid`, and the
   AI is told to re-find a message by **`messageId`** (which never changes) after
   any write.
-- Organize tools take **`uid`** (one) or **`uids`** (up to 100, sent as one
-  command). A batch move answers each message's own new UID, checked by
+- Organize tools take **`uid`** (one), **`uids`** (up to 100, sent as one
+  command), or **`matching`** (2.4.6): the fields of a search (`from`, `to`,
+  `subject`, `text`, `since`, `before`, `read`, `flagged`), acting on the
+  newest 100 messages in the folder that match all of them. The answer's
+  `matched` says how many (`count`), which (`uids`), and whether more match
+  (`more`: call again). Nothing to match on is refused; nothing matched
+  answers `NOTHING_MATCHED` and changes nothing. A batch move answers each message's own new UID, checked by
   Message-ID in the destination; one that can't be confirmed is left unmapped,
   with a warning, never guessed.
 
@@ -64,8 +69,8 @@ Every tool answers with the same shape, as `structuredContent` and as JSON text:
 
 | Tool | Takes (besides `account`) | Does |
 |---|---|---|
-| `list_folders` | | Folders and the roles the provider marks (Inbox, Sent, Drafts, Trash, Archive/All Mail, Junk, Flagged/Starred). |
-| `search_email` | `mailbox` (default INBOX), `messageId`, `text`, `from`, `to`, `subject`, `since`, `before` (ISO times, exact to the second), `read`, `flagged`, `hasAttachments`, `attachmentName`, `limit` (1-100, default 25), `cursor` | One folder, newest first. More than `limit`: a `cursor` for the next page. Without `account`: every account the app can read, each result naming its account (no cursor then). A subject search returns only subjects that really contain what was asked. Each result lists its `attachmentNames`; `hasAttachments` and `attachmentName` find mail with files (a text search doesn't look at attachment names). A search checked here after the server's (subject, times, attachments) reads 50 at a time and looks at 1,000 at most per page, then answers with a `cursor` and a warning. |
+| `list_folders` | `counts` | Folders and the roles the provider marks (Inbox, Sent, Drafts, Trash, Archive/All Mail, Junk, Flagged/Starred). With `counts`, each folder's `messages` and `unread`, from the server's own count (slower: one question per folder). |
+| `search_email` | `mailbox` (default INBOX), `messageId`, `text`, `from`, `to`, `subject`, `since`, `before` (ISO times, exact to the second), `read`, `flagged`, `hasAttachments`, `attachmentName`, `limit` (1-100, default 25), `cursor`, `allFolders` | One folder, newest first. `allFolders`: every folder of one account but Trash and Junk (Gmail: All Mail), the usual ones first and the rest within 45 s, no cursor. On a provider whose own search misses mail (Yahoo), a search by `from`, `to` or `subject` also checks the folder's newest 100 messages directly, and says when that found more. More than `limit`: a `cursor` for the next page. Without `account`: every account the app can read, each result naming its account (no cursor then). A subject search returns only subjects that really contain what was asked. Each result lists its `attachmentNames`; `hasAttachments` and `attachmentName` find mail with files (a text search doesn't look at attachment names). A search checked here after the server's (subject, times, attachments) reads 50 at a time and looks at 1,000 at most per page, then answers with a `cursor` and a warning. |
 | `get_email` | `mailbox`, `uid`, `format` (`text` default, or `full` with the HTML) | One message, never marked read by opening it. |
 | `get_attachment` | `mailbox`, `uid`, `index` (from `get_email`'s `attachments` list) | One attachment's content, never marking the email read: text, CSV, JSON, HTML, PDF and Word (.docx) as text, marked untrusted and clipped at 100,000 characters; PNG, JPEG, GIF and WebP images up to 3 MB as a picture the AI can look at; anything else described, not read. Read in the same sandbox as messages, with time, memory and structure limits. |
 | `summarize_senders` | `mailbox` (default INBOX), `messages` (how many of the newest to look at, 1-2,000, default 500), `top` (1-100, default 25) | Who sends the most mail there: counted by sender, most first, with how many are unread, the newest date, how it offers to unsubscribe (`unsubscribe`: `one-click`, `link`, `email` or `none`, the best any of its messages offers), and its cautions, Reply-To ones included. For planning a clean-up without opening each message. |
@@ -131,6 +136,7 @@ come from the server:
 | `ATTACHMENTS_TOO_LARGE` | the attachments come to more than one email can carry |
 | `MAIL-UNSUBSCRIBE-MANUAL` | the sender offers no one-click unsubscribe; the owner can use their mail app |
 | `MAIL-UNSUBSCRIBE-OWN` | the email is from the account itself: nothing to unsubscribe from |
+| `MAIL-MATCHING-EMPTY` | `matching` gave nothing to match on, which would be the whole folder |
 | `MAIL-UNSUBSCRIBE-CAUTION` | the email looks like a scam, so its unsubscribe wasn't used |
 | `MAIL-UNSUBSCRIBE-FAILED` | the sender's address wasn't safe to contact, didn't answer, or refused |
 | `MAIL-SEND-LIMIT` | the account reached its sending limit for the hour or the day (changed on your page) |

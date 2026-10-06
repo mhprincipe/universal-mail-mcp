@@ -17,4 +17,5 @@ export type MessageDetail = MessageSummary & {
   inReplyTo?: string; references: string[]; attachments: AttachmentMeta[];
   truncated?: true;
 };
-export type FolderInfo = { path: string; specialUse?: string; selectable: boolean; delimiter?: string };
+// messages and unread: only when counts were asked for (FOL-01).
+export type FolderInfo = { path: string; specialUse?: string; selectable: boolean; delimiter?: string; messages?: number; unread?: number };

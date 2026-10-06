@@ -51,6 +51,10 @@ function writableType(filename: string): string | undefined {
   return extension ? WRITABLE[extension] : undefined;
 }
 
+// How long a conversation looked for in every folder may search (THR-08): the
+// usual folders always; others while within this.
+const THREAD_SCAN_MS = 45_000;
+
 export class MailService {
   readonly imap: ImapGateway;
   private readonly smtp: ReturnType<typeof nodemailer.createTransport>;
@@ -86,12 +90,58 @@ export class MailService {
     return path;
   }
 
-  async listFolders() { return success(await this.imap.listFolders()); }
+  async listFolders(options: { counts?: boolean } = {}) { return success(await this.imap.listFolders(options)); }
+
+  // One search over every folder (FND-10): on Gmail, All Mail once; elsewhere
+  // folder by folder, the usual ones first, the rest within the time limit.
+  // Trash and Junk are left out, as Gmail's own search does. The direct check
+  // of the newest messages (FND-08) runs only in the usual folders: in every
+  // folder it would cost seconds each.
+  async searchEverywhere(input: Omit<SearchInput, 'mailbox' | 'beforeUid'>): Promise<ToolEnvelope<MessageSummary[]>> {
+    const folders = (await this.imap.listFolders({ fresh: true })).filter(f => f.selectable);
+    const allMail = folders.find(f => f.specialUse === '\\All');
+    const usual = (f: { path: string; specialUse?: string }) => f.path.toUpperCase() === 'INBOX' || ['\\Inbox', '\\Sent', '\\Archive'].includes(f.specialUse ?? '');
+    const left = ['\\Trash', '\\Junk'];
+    const wanted = allMail ? [allMail] : [...folders.filter(usual), ...folders.filter(f => !usual(f) && !left.includes(f.specialUse ?? ''))];
+    const started = this.clock.now();
+    const found: MessageSummary[] = [];
+    const notes = new Set<string>();
+    const warnings: string[] = [];
+    let searched = 0;
+    for (const folder of wanted) {
+      if (!usual(folder) && this.clock.now() - started > THREAD_SCAN_MS) {
+        warnings.push(`Searched ${searched} of ${wanted.length} folders before the time limit; ${wanted.length - searched} weren't searched. Search those folders one at a time to look further.`);
+        break;
+      }
+      searched++;
+      const page = await this.imap.searchPage({ ...input, mailbox: folder.path, directCheck: usual(folder) });
+      found.push(...page.messages);
+      if (page.note) notes.add(page.note);
+      if (page.next) warnings.push(`More matched in ${folder.path} than were looked at; search that folder with a cursor for the rest.`);
+    }
+    const newestFirst = found.sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')) || b.uid - a.uid).slice(0, input.limit);
+    const where = allMail ? `Searched All Mail, which holds every label.` : `Searched ${searched} folder${searched === 1 ? '' : 's'}, not Trash or Junk.`;
+    return success(newestFirst, [`Success. ${where}`, ...notes].join(' '), 'OK', warnings.length ? warnings : undefined);
+  }
+
+  // The messages a tool's matching describes (BLK-01): the newest 100 at most,
+  // and whether more match. Refused with nothing to match on: that would be
+  // the whole folder.
+  async matchingUids(mailbox: string, criteria: Omit<SearchInput, 'mailbox' | 'limit' | 'beforeUid'>): Promise<{ uids: number[]; more: boolean }> {
+    const given = Object.entries(criteria).filter(([, value]) => value !== undefined && value !== '');
+    if (!given.length) throw new MailError('MAIL-MATCHING-EMPTY', 'matching needs at least one thing to match on (from, to, subject, text, since, before, read or flagged).');
+    const page = await this.imap.searchPage({ ...criteria, mailbox, limit: 100 });
+    return { uids: page.messages.map(m => m.uid), more: page.next !== undefined };
+  }
   // One page of results; cursor, when more matched, asks for the next page.
   async searchEmail(input: SearchInput): Promise<ToolEnvelope<MessageSummary[]> & { cursor?: string }> {
     const page = await this.imap.searchPage(input);
     // Said when asked about attachments (FND-07, found live): newsletter pictures aren't files.
-    const message = input.hasAttachments !== undefined || input.attachmentName ? "Success. Pictures shown inside an email's text aren't counted as attachments." : 'Success';
+    const notes = [
+      ...(input.hasAttachments !== undefined || input.attachmentName ? ["Pictures shown inside an email's text aren't counted as attachments."] : []),
+      ...(page.note ? [page.note] : [])
+    ];
+    const message = notes.length ? `Success. ${notes.join(' ')}` : 'Success';
     return { ...success(page.messages, message, 'OK', page.warning ? [page.warning] : undefined), ...(page.next ? { cursor: String(page.next) } : {}) };
   }
 
@@ -131,8 +181,13 @@ export class MailService {
     // All Mail (Gmail's \All) holds a second copy of everything: scanning it
     // doubles the work and finds nothing new.
     const usual = ['\\Inbox', '\\Sent', '\\Archive'];
-    const scanned = options.allFolders ? folders.filter(f => f.specialUse !== '\\All')
-      : folders.filter(f => f.path === mailbox || f.path.toUpperCase() === 'INBOX' || usual.includes(f.specialUse ?? ''));
+    const isUsual = (f: { path: string; specialUse?: string }) => f.path === mailbox || f.path.toUpperCase() === 'INBOX' || usual.includes(f.specialUse ?? '');
+    // Every folder (THR-08, found live: 44 Yahoo folders took over 200 s): the
+    // usual ones first, the rest while time allows.
+    const scanned = options.allFolders
+      ? [...folders.filter(isUsual), ...folders.filter(f => !isUsual(f) && f.specialUse !== '\\All')]
+      : folders.filter(isUsual);
+    const started = this.clock.now();
     const warnings: string[] = [];
     let fromAllMail = false;
     const dedupe = new Map<string, MessageDetail>([[seed.data.messageId ?? `${mailbox}:${uid}`, seed.data]]);
@@ -151,8 +206,16 @@ export class MailService {
       } else {
         const scanRecent = this.unreliableHeaderSearch;
         if (scanRecent) warnings.push('Thread fallback checks only the 200 most recent messages per folder; older unindexed matches may be omitted.');
+        let searched = 0;
         for (const folder of scanned) {
-          const uids = await this.imap.findThreadUids(folder.path, root, { client, relatedMessageId: seed.data?.messageId, scanRecent }).catch(() => {
+          if (!isUsual(folder) && this.clock.now() - started > THREAD_SCAN_MS) {
+            warnings.push(`Searched ${searched} of ${scanned.length} folders before the time limit; ${scanned.length - searched} weren't searched. To look further, search the other folders by subject.`);
+            break;
+          }
+          searched++;
+          // THR-09: other folders check only their newest 50 directly.
+          const recent = isUsual(folder) ? 200 : 50;
+          const uids = await this.imap.findThreadUids(folder.path, root, { client, relatedMessageId: seed.data?.messageId, scanRecent, recent }).catch(() => {
             warnings.push('A folder could not be searched; the thread may be incomplete.');
             return [];
           });

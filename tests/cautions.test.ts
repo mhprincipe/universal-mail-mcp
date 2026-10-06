@@ -201,3 +201,25 @@ describe('where replies go', () => {
     expect(cautionsFor({ from: from('news@msn.com', 'MSN') })).toEqual([]);
   });
 });
+
+describe('hidden characters in a name', () => {
+  // A tag character (U+E0001) between letters, as in the live sample; a zero-width space; an emoji family joined by zero-width joiners.
+  const tag = String.fromCodePoint(0xE0001);
+  const zwsp = String.fromCodePoint(0x200B);
+  const zwj = String.fromCodePoint(0x200D);
+  const hidden = (word: string, mark: string) => [...word].join(mark);
+
+  it('SCM-11 a sender name with invisible characters between its letters is said, and the name is still checked (added: 2.4.6, found live)', () => {
+    const cautions = cautionsFor({ from: from('offers@deals.example', hidden('PayPal', tag)) });
+    expect(cautions).toContain("The sender's name hides invisible characters between its letters, a common trick to slip past spam and scam filters.");
+    expect(cautions.some(c => /name says PayPal/.test(c))).toBe(true);
+    expect(cautionsFor({ from: from('news@shop.example', `Spring${zwsp}Sale`) })[0]).toMatch(/invisible characters/);
+  });
+
+  it('SCM-11 ordinary names are quiet: emoji joined into one picture, accents, other alphabets', () => {
+    const family = [0x1F468, 0x1F469, 0x1F467].map(c => String.fromCodePoint(c)).join(zwj);
+    for (const name of [`Family ${family} News`, 'Café Müller', 'Ελληνικά Νέα', 'Shop']) {
+      expect(cautionsFor({ from: from('news@shop.example', name) }), name).toEqual([]);
+    }
+  });
+});

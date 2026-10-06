@@ -96,3 +96,74 @@ describe('a conversation on Gmail', () => {
     expect(result.message).toMatch(/All Mail.*mailbox and uid.*work/);
   });
 });
+
+// THR-08/09 (added: 2.4.6, found live 2026-10-05): a conversation looked for in
+// every folder of a Yahoo mailbox (44 folders) took 206 s and 231 s, and one
+// call ran into the server's 300 s limit. Each folder cost a search and a read
+// of its newest 200 messages (about 40 ms each on Yahoo).
+describe('a conversation looked for in every folder', () => {
+  function yahooLike(service: MailService, extra: number, clock: { t: number }, costMs: number) {
+    const client = { capabilities: new Map<string, boolean>([['IMAP4REV1', true]]) };
+    const folders = [folder('INBOX', '\\Inbox'), folder('Sent', '\\Sent'), folder('Archive', '\\Archive'), folder('Trash', '\\Trash'),
+      ...Array.from({ length: extra }, (_, i) => folder(`Folder ${i + 1}`))];
+    vi.spyOn(service.imap, 'listFolders').mockResolvedValue(folders);
+    vi.spyOn(service.imap, 'read').mockImplementation(fn => fn(client as any));
+    const seed = detail('Folder 3', 5, '<seed@x>', '2026-09-02', ['<root@x>']);
+    vi.spyOn(service, 'getEmail').mockResolvedValue({ ok: true, status: 'SUCCESS', code: 'OK', message: '', data: seed });
+    const scan = vi.spyOn(service.imap, 'findThreadUids').mockImplementation(async () => { clock.t += costMs; return []; });
+    return { scan, total: folders.length };
+  }
+
+  it('THR-08 the usual folders and the message\'s own come first; the search stops after 45 s and says how many folders it left (added: 2.4.6, found live)', async () => {
+    const clock = { t: 0 };
+    const service = new MailService(config, { clock: { now: () => clock.t } });
+    const { scan, total } = yahooLike(service, 40, clock, 5_000);
+    const result = await service.getThread('Folder 3', 5, { allFolders: true });
+    const order = scan.mock.calls.map(([path]) => path);
+    expect(order.slice(0, 4)).toEqual(['INBOX', 'Sent', 'Archive', 'Folder 3']);
+    expect(order.length).toBe(10);
+    expect(result.warnings).toContain(`Searched ${order.length} of ${total} folders before the time limit; ${total - order.length} weren't searched. To look further, search the other folders by subject.`);
+  });
+
+  it('THR-08 the usual folders are always searched, however long they take', async () => {
+    const clock = { t: 0 };
+    const service = new MailService(config, { clock: { now: () => clock.t } });
+    const { scan } = yahooLike(service, 5, clock, 60_000);
+    await service.getThread('Folder 3', 5, { allFolders: true });
+    expect(scan.mock.calls.map(([path]) => path)).toEqual(['INBOX', 'Sent', 'Archive', 'Folder 3']);
+  });
+
+  it('THR-09 a folder\'s direct check reads only as many of its newest messages as asked', async () => {
+    const { ImapGateway } = await import('../src/mail/imap.js');
+    const ranges: string[] = [];
+    const client = {
+      usable: true, mailbox: { path: 'Work', exists: 300, readOnly: true },
+      connect: async () => undefined, close: () => undefined, noop: async () => undefined,
+      getMailboxLock: async () => ({ release: () => undefined }),
+      search: async () => [],
+      fetchAll: async (range: string) => { ranges.push(range); return []; }
+    };
+    const gateway = new ImapGateway({ SEARCH_TIMEOUT_MS: 5_000 } as never, { createClient: () => client as never, unreliableHeaderSearch: true });
+    await gateway.findThreadUids('Work', '<root@x>', { recent: 50 });
+    await gateway.findThreadUids('Work', '<root@x>');
+    expect(ranges).toEqual(['251:*', '101:*']);
+  });
+
+  it('THR-08 when every folder fits in the time, nothing is said about a limit', async () => {
+    const clock = { t: 0 };
+    const service = new MailService(config, { clock: { now: () => clock.t } });
+    const { scan, total } = yahooLike(service, 5, clock, 1_000);
+    const result = await service.getThread('Folder 3', 5, { allFolders: true });
+    expect(scan.mock.calls.length).toBe(total);
+    expect((result.warnings ?? []).some(w => /time limit/.test(w))).toBe(false);
+  });
+
+  it('THR-09 other folders check only their newest 50 messages directly; the usual ones and the message\'s own keep 200', async () => {
+    const clock = { t: 0 };
+    const service = new MailService(config, { clock: { now: () => clock.t } });
+    const { scan } = yahooLike(service, 3, clock, 1);
+    await service.getThread('Folder 3', 5, { allFolders: true });
+    const recent = Object.fromEntries(scan.mock.calls.map(([path, , options]) => [path, options?.recent]));
+    expect(recent).toEqual({ INBOX: 200, Sent: 200, Archive: 200, 'Folder 3': 200, Trash: 50, 'Folder 1': 50, 'Folder 2': 50 });
+  });
+});

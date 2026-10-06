@@ -97,7 +97,7 @@ const targets = (args: { uid?: number; uids?: number[] }) => args.uids ?? (args.
 // What a successful organize or send tool did, or undefined when it's not an
 // action worth listing (a read, a failure, nothing changed).
 export function activityFor(tool: string, args: Record<string, any>, envelope: ToolEnvelope<any>): Described | undefined {
-  if (!envelope?.ok || envelope.code === 'ALREADY_THERE') return undefined;
+  if (!envelope?.ok || envelope.code === 'ALREADY_THERE' || envelope.code === 'NOTHING_MATCHED') return undefined;
   const data = envelope.data ?? {};
   if (MOVES[tool]) {
     const count = targets(args).length;
